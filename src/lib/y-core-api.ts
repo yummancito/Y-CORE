@@ -45,14 +45,16 @@ async function getToken(): Promise<{ accessToken: string; refreshToken: string }
 }
 
 const PUBLIC_ENDPOINTS = [
-  '/api/games',
-  '/api/search',
-  '/api/games/', // public game details and onlinefix-compat
-  '/api/auth/',
+  /^\/api\/auth\//, // all auth endpoints are public
+  /^\/api\/search$/, // search is public
+  /^\/api\/games$/, // game list is public
+  /^\/api\/games\/\d+$/, // game detail is public
+  /^\/api\/games\/\d+\/onlinefix-compat$/, // onlinefix compat is public
+  /^\/api\/games\/onlinefix-compat$/, // batch onlinefix compat is public
 ]
 
 function isPublicEndpoint(path: string): boolean {
-  return PUBLIC_ENDPOINTS.some((prefix) => path.startsWith(prefix))
+  return PUBLIC_ENDPOINTS.some((pattern) => pattern.test(path))
 }
 
 function setToken(session: { accessToken: string; refreshToken: string }): void {

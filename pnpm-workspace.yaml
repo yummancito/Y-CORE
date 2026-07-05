@@ -7,3 +7,5 @@ onlyBuiltDependencies:
   - electron
   - esbuild
   - msgpackr-extract
+overrides:
+  tar: ^7.5.10
