@@ -63,6 +63,9 @@ const es: Dict = {
   'nav.onlinefix': 'Online Fix',
   'nav.quickLaunch': 'Inicio rápido',
   'nav.recommended': 'Recomendado',
+  'sidebar.appName': 'Y-core',
+  'sidebar.discord': 'Discord',
+  'sidebar.joinCommunity': 'Unirse a la comunidad',
 
   // Command Palette
   'commandPalette.search': 'Buscar comandos o juegos...',
@@ -395,6 +398,7 @@ const es: Dict = {
   'signaturePending.message': 'Tu versión de Steam aún no está soportada. Los beta testers están validando la firma. Puedes unirte a Y-core Beta en Configuración > Cuenta para probarla antes.',
   'signaturePending.accept': 'Aceptar',
   'signaturePending.joinBeta': 'Unirme a beta',
+  'signaturePending.betaLabel': 'Y-core Beta',
 
   // Content
   'settings.content': 'Contenido',
@@ -606,6 +610,9 @@ const en: Dict = {
   'nav.tools': 'Tools',
   'nav.quickLaunch': 'Quick launch',
   'nav.recommended': 'Recommended',
+  'sidebar.appName': 'Y-core',
+  'sidebar.discord': 'Discord',
+  'sidebar.joinCommunity': 'Join community',
 
   // Command Palette
   'commandPalette.search': 'Search commands or games...',
@@ -912,6 +919,7 @@ const en: Dict = {
   'signaturePending.message': 'Your Steam version is not supported yet. Beta testers are validating the signature. You can join Y-core Beta in Settings > Account to test it earlier.',
   'signaturePending.accept': 'Accept',
   'signaturePending.joinBeta': 'Join beta',
+  'signaturePending.betaLabel': 'Y-core Beta',
 
   // Content
   'settings.content': 'Content',

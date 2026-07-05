@@ -115,7 +115,7 @@ export function EpicSidebar() {
       <nav className="flex-1 p-5 space-y-2 overflow-y-auto">
         {/* Library section */}
         <div className="space-y-1">
-          <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-text-bright">Y-core</p>
+          <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-text-bright">{t('sidebar.appName')}</p>
           <NavItem to="/" icon={Library20Regular} label={t('library.title')} />
           <NavItem to="/store" icon={BuildingShop20Regular} label={t('store.title')} />
           <NavItem to="/online-fix" icon={Wifi120Regular} label={t('nav.onlinefix')} />
@@ -232,10 +232,10 @@ export function EpicSidebar() {
             </div>
             <div className="flex-1 text-left">
               <p className="text-[#3BB2F7] font-bold text-sm group-hover:text-[#5BC3FF] transition-colors duration-300 drop-shadow-sm">
-                Discord
+                {t('sidebar.discord')}
               </p>
               <p className="text-[#3BB2F7]/60 text-xs group-hover:text-[#3BB2F7]/80 transition-colors duration-300">
-                Join community
+                {t('sidebar.joinCommunity')}
               </p>
             </div>
             <div className="opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300">

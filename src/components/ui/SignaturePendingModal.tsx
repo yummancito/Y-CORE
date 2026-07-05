@@ -32,7 +32,7 @@ export function SignaturePendingModal() {
           </div>
           <div>
             <h3 className="text-lg font-bold text-text-bright">{t('signaturePending.title')}</h3>
-            <p className="text-xs text-text-dim">Y-core Beta</p>
+            <p className="text-xs text-text-dim">{t('signaturePending.betaLabel')}</p>
           </div>
         </div>
 
