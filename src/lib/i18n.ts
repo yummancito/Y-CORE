@@ -323,6 +323,7 @@ const es: Dict = {
   'common.refresh': 'Actualizar',
   'common.clear': 'Limpiar',
   'common.close': 'Cerrar',
+  'common.dismiss': 'Descartar',
 
   // Settings extras
   'settings.background': 'Fondo animado',
@@ -530,6 +531,7 @@ const es: Dict = {
   'store.importProgress': 'Importando app {{appId}}... Estado: {{status}}',
   'store.loadingCatalog': 'Cargando catálogo...',
   'store.preparingStore': 'Preparando tienda...',
+  'store.appFallback': 'App {{id}}',
 
   // Settings extra
   'settings.themeLabel': 'Tema',
@@ -850,6 +852,7 @@ const en: Dict = {
   'common.refresh': 'Refresh',
   'common.clear': 'Clear',
   'common.close': 'Close',
+  'common.dismiss': 'Dismiss',
 
   // Settings extras
   'settings.background': 'Animated Background',
@@ -1081,6 +1084,7 @@ const en: Dict = {
   'store.importProgress': 'Importing app {{appId}}... Status: {{status}}',
   'store.loadingCatalog': 'Loading catalog...',
   'store.preparingStore': 'Preparing store...',
+  'store.appFallback': 'App {{id}}',
 
   // Settings extra
   'settings.themeLabel': 'Theme',

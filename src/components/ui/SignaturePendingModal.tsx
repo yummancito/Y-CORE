@@ -21,7 +21,7 @@ export function SignaturePendingModal() {
         <button
           onClick={close}
           className="absolute top-4 right-4 p-1.5 rounded-lg text-text-dim hover:text-text-bright hover:bg-white/[0.06] transition-colors"
-          aria-label="Close"
+          aria-label={t('common.close')}
         >
           <X className="w-4 h-4" />
         </button>

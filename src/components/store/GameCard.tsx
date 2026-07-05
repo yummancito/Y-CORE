@@ -38,7 +38,7 @@ export const GameCard = memo(function GameCard({
   const [hovered, setHovered] = useState(false)
   const rawName = game.name?.trim()
   const isGenericName = !rawName || rawName === game.app_id || /^app\s*\d*$/i.test(rawName) || rawName.toLowerCase() === 'appid'
-  const displayName = isGenericName ? `App ${game.app_id}` : rawName
+  const displayName = isGenericName ? t('store.appFallback').replace('{{id}}', game.app_id) : rawName
 
   return (
     <Card3D
