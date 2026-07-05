@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeAll } from 'vitest'
+import { setLanguage } from '../src/lib/i18n'
 import {
   getCompatibility,
   getCompatibilityReason,
@@ -6,6 +7,8 @@ import {
 } from '../src/lib/onlinefix-compatibility'
 
 describe('onlinefix-compatibility', () => {
+  beforeAll(() => setLanguage('en'))
+
   describe('getCompatibility', () => {
     it('returns "compatible" for known compatible games', () => {
       const result = getCompatibility('892970') // Valheim
