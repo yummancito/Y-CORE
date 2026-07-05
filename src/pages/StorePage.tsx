@@ -130,11 +130,11 @@ export default function StorePage() {
 
   const loadAllGames = useCallback(async (): Promise<MergedGame[]> => {
     const start = performance.now()
-    setSplash('Loading catalog...', 15)
+    setSplash(t('store.loadingCatalog'), 15)
 
     const cache = _gamesCache
     if (cache && Date.now() - cache.timestamp < GAMES_CACHE_TTL && cache.showAdult === showAdult) {
-      setSplash('Preparing store...', 75)
+      setSplash(t('store.preparingStore'), 75)
       return cache.games
     }
 
@@ -158,7 +158,7 @@ export default function StorePage() {
     _gamesCache = { games, timestamp: Date.now(), showAdult }
     window.steamtools?.addLog?.({ level: 'INFO', message: `[Perf] store catalog fetched: ${games.length} games in ${Math.ceil(offset / BATCH_SIZE)} batches` })?.catch?.(() => {})
 
-    setSplash('Preparing store...', 75)
+    setSplash(t('store.preparingStore'), 75)
     window.steamtools?.addLog?.({ level: 'INFO', message: `[Perf] loadAllGames took ${(performance.now() - start).toFixed(0)}ms, ${games.length} games ready` })?.catch?.(() => {})
     return games
   }, [installedAppIds, dedupeByAppId, setSplash, showAdult])

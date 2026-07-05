@@ -528,6 +528,8 @@ const es: Dict = {
   'store.importFailed': 'La importación falló',
   'store.importTimedOut': 'La importación expiró después de 10 minutos',
   'store.importProgress': 'Importando app {{appId}}... Estado: {{status}}',
+  'store.loadingCatalog': 'Cargando catálogo...',
+  'store.preparingStore': 'Preparando tienda...',
 
   // Settings extra
   'settings.themeLabel': 'Tema',
@@ -1077,6 +1079,8 @@ const en: Dict = {
   'store.importFailed': 'Import failed',
   'store.importTimedOut': 'Import timed out after 10 minutes',
   'store.importProgress': 'Importing app {{appId}}... Status: {{status}}',
+  'store.loadingCatalog': 'Loading catalog...',
+  'store.preparingStore': 'Preparing store...',
 
   // Settings extra
   'settings.themeLabel': 'Theme',
