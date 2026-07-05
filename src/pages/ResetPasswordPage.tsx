@@ -21,7 +21,7 @@ export default function ResetPasswordPage() {
       return
     }
     if (!token) {
-      setMessage('Invalid reset token')
+      setMessage(t('login.invalidResetToken'))
       return
     }
     setLoading(true)
@@ -30,7 +30,7 @@ export default function ResetPasswordPage() {
       setMessage(t('login.resetSuccess'))
       setTimeout(() => navigate('/login'), 2000)
     } catch (err: any) {
-      setMessage(err.message || 'Failed to reset password')
+      setMessage(err.message || t('login.failedResetPassword'))
     } finally {
       setLoading(false)
     }

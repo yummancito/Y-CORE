@@ -105,7 +105,7 @@ export default function AddGame() {
     // Filter out suspicious files from import
     const safeFiles = fileList.filter((f) => !checkSuspicious(f.name))
     if (safeFiles.length === 0) {
-      showToast('warning', 'All files flagged as suspicious')
+      showToast('warning', t('addgame.suspiciousAll'))
       return
     }
 
@@ -233,16 +233,16 @@ export default function AddGame() {
         setFiles((prev) => prev.map((f) => f.path === pendingConfirm.path ? {
           ...f,
           status: 'imported' as const,
-          message: 'Imported successfully',
+          message: t('addgame.importedSuccess'),
         } : f))
-        showToast('success', `Game confirmed: ${pendingConfirm.gameName}`)
+        showToast('success', t('addgame.gameConfirmed').replace('{{name}}', pendingConfirm.gameName || t('common.unknown')))
       } else {
         setFiles((prev) => prev.map((f) => f.path === pendingConfirm.path ? {
           ...f,
           status: 'error' as const,
-          message: result.error || 'Import failed',
+          message: result.error || t('addgame.importFailed'),
         } : f))
-        showToast('error', result.error || 'Import failed')
+        showToast('error', result.error || t('addgame.importFailed'))
       }
     } catch (err: any) {
       setClosingSteam(false)
@@ -262,10 +262,10 @@ export default function AddGame() {
     setFiles((prev) => prev.map((f) => f.path === pendingConfirm.path ? {
       ...f,
       status: 'rejected' as const,
-      message: 'Rejected by user',
+      message: t('addgame.rejectedByUser'),
     } : f))
     setPendingConfirm(null)
-    showToast('info', 'Game rejected')
+    showToast('info', t('addgame.gameRejected'))
   }
 
   const removeSuspicious = (index: number) => {

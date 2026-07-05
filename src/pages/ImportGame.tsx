@@ -78,11 +78,11 @@ export default function ImportGame() {
         }
       }
 
-      actions.push({ type: 'success', message: `Imported ${result.luaCount} Lua file(s) and ${result.manifestCount} manifest file(s)` })
+      actions.push({ type: 'success', message: t('importgame.importSummary').replace('{{luaCount}}', String(result.luaCount)).replace('{{manifestCount}}', String(result.manifestCount)) })
 
       setResults(actions)
       setImportedGames(result.importedGames || [])
-      showToast('success', 'Import completed')
+      showToast('success', t('importgame.importCompleted'))
     } catch (err: any) {
       setResults([{ type: 'error', message: err.message }])
     } finally {
@@ -91,14 +91,14 @@ export default function ImportGame() {
   }
 
   const handleRestartSteam = async () => {
-    showToast('info', 'Restarting Steam...')
+    showToast('info', t('importgame.restartingSteam'))
     const result = await restartSteam()
     if (result.success) {
-      setResults(prev => [...prev, { type: 'success', message: 'Steam restarted successfully' }])
+      setResults(prev => [...prev, { type: 'success', message: t('importgame.steamRestarted') }])
       showToast('success', t('library.steamRestarted'))
     } else {
-      setResults(prev => [...prev, { type: 'error', message: result.error || 'Failed to restart Steam' }])
-      showToast('error', result.error || 'Failed to restart Steam')
+      setResults(prev => [...prev, { type: 'error', message: result.error || t('importgame.failedRestartSteam') }])
+      showToast('error', result.error || t('importgame.failedRestartSteam'))
     }
   }
 

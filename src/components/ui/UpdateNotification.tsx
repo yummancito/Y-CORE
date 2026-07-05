@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Download, RefreshCw, X } from 'lucide-react'
+import { t } from '../../lib/i18n'
 
 interface UpdateInfo {
   version?: string
@@ -33,15 +34,15 @@ export function UpdateNotification() {
         <RefreshCw className="w-5 h-5 text-green-400" />
         <div className="min-w-0">
           <p className="text-sm font-medium text-text-bright">
-            Update ready — v{updateDownloaded.version ?? 'new'}
+            {t('update.updateReady').replace('{{version}}', updateDownloaded.version ?? t('common.unknown'))}
           </p>
-          <p className="text-xs text-text-dim">Restart to install the new version.</p>
+          <p className="text-xs text-text-dim">{t('update.restartToInstall')}</p>
         </div>
         <button
           onClick={() => window.steamtools?.installUpdate?.()}
           className="rounded-lg bg-green-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-green-500"
         >
-          Install & Restart
+          {t('update.installAndRestart')}
         </button>
         <button
           onClick={() => setDismissed(true)}
@@ -59,9 +60,9 @@ export function UpdateNotification() {
         <Download className="w-5 h-5 text-blue-400 animate-pulse" />
         <div className="min-w-0">
           <p className="text-sm font-medium text-text-bright">
-            Downloading update — v{updateAvailable.version ?? 'new'}
+            {t('update.downloading').replace('{{version}}', updateAvailable.version ?? t('common.unknown'))}
           </p>
-          <p className="text-xs text-text-dim">You'll be notified when it's ready.</p>
+          <p className="text-xs text-text-dim">{t('update.notifiedWhenReady')}</p>
         </div>
         <button
           onClick={() => setDismissed(true)}

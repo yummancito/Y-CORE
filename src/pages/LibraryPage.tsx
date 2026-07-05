@@ -170,9 +170,9 @@ export default function LibraryPage() {
   const handleLaunchGame = async (appId: string) => {
     const result = await window.steamtools.launchGame(appId)
     if (result.success) {
-      showToast('success', 'Launching game via Steam...')
+      showToast('success', t('library.launching'))
     } else {
-      showToast('error', result.error || 'Failed to launch')
+      showToast('error', result.error || t('library.failedLaunch'))
     }
   }
 
@@ -191,16 +191,16 @@ export default function LibraryPage() {
   const handleOpenLocation = async (game: InstalledGame) => {
     const result = await window.steamtools.openGameLocation(game.appId, game.installDir)
     if (!result.success) {
-      showToast('error', result.error || 'Failed to open location')
+      showToast('error', result.error || t('library.failedOpenLocation'))
     }
   }
 
   const handleVerifyGame = async (game: InstalledGame) => {
     const result = await window.steamtools.verifyGame(game.appId)
     if (result.success) {
-      showToast('info', 'Steam verification started')
+      showToast('info', t('library.verificationStarted'))
     } else {
-      showToast('error', result.error || 'Failed to verify game')
+      showToast('error', result.error || t('library.failedVerify'))
     }
   }
 

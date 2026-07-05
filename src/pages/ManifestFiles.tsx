@@ -50,18 +50,18 @@ export default function ManifestFiles() {
 
   const handleImport = async () => {
     if (!importPath.trim()) {
-      showToast('error', 'Please enter a file path')
+      showToast('error', t('manifests.enterFilePath'))
       return
     }
     setImporting(true)
     const result = await window.steamtools.importManifest({ manifestPath: importPath.trim() })
     if (result.success) {
-      showToast('success', result.message || 'Manifest imported')
+      showToast('success', result.message || t('manifests.manifestImported'))
       setShowImportModal(false)
       setImportPath('')
       await loadManifests()
     } else {
-      showToast('error', result.error || 'Failed to import')
+      showToast('error', result.error || t('manifests.failedImport'))
     }
     setImporting(false)
   }
@@ -69,10 +69,10 @@ export default function ManifestFiles() {
   const handleDelete = async (fileName: string) => {
     const result = await window.steamtools.deleteManifestFile(fileName)
     if (result.success) {
-      showToast('success', result.message || 'Manifest deleted')
+      showToast('success', result.message || t('manifests.manifestDeleted'))
       await loadManifests()
     } else {
-      showToast('error', result.error || 'Failed to delete')
+      showToast('error', result.error || t('manifests.failedDelete'))
     }
   }
 
@@ -82,7 +82,7 @@ export default function ManifestFiles() {
     if (dropImportingRef.current) return
     const droppedFiles = Array.from(e.dataTransfer.files).filter((f) => f.name.endsWith('.manifest'))
     if (droppedFiles.length === 0) {
-      showToast('info', 'No .manifest files found in drop')
+      showToast('info', t('manifests.noManifestFiles'))
       return
     }
     dropImportingRef.current = true
@@ -91,14 +91,14 @@ export default function ManifestFiles() {
         const filePath = await window.steamtools.getPathForFile(file)
         const result = await window.steamtools.importManifest({ manifestPath: filePath })
         if (result.success) {
-          showToast('success', result.message || `Imported ${file.name}`)
+          showToast('success', result.message || t('manifests.importedFile').replace('{{name}}', file.name))
         } else {
-          showToast('error', result.error || `Failed to import ${file.name}`)
+          showToast('error', result.error || t('manifests.failedImportFile').replace('{{name}}', file.name))
         }
       }
       await loadManifests()
     } catch (err: any) {
-      showToast('error', err.message || 'Drop import failed')
+      showToast('error', err.message || t('manifests.dropImportFailed'))
     } finally {
       dropImportingRef.current = false
     }
@@ -125,22 +125,22 @@ export default function ManifestFiles() {
       <Modal open={showImportModal} onClose={() => setShowImportModal(false)} title={t('manifests.importManifest')} width="400px">
         <div className="p-6 space-y-4">
           <div>
-            <label className="text-sm font-medium text-text-primary block mb-2">File Path *</label>
+            <label className="text-sm font-medium text-text-primary block mb-2">{t('manifests.filePath')}</label>
             <Input
               type="text"
               value={importPath}
               onChange={(e) => setImportPath(e.target.value)}
-              placeholder="C:\Users\...\2406771_100473726127154370.manifest"
+              placeholder={t('manifests.pathExample')}
               autoFocus
               className="w-full"
             />
             <p className="text-xs text-text-dim mt-1">
-              Binary .manifest file (depotId_manifestId.manifest format)
+              {t('manifests.fileHint')}
             </p>
           </div>
           <div className="flex gap-2 pt-2">
             <Button variant="secondary" className="flex-1" onClick={() => setShowImportModal(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -150,7 +150,7 @@ export default function ManifestFiles() {
               disabled={importing || !importPath.trim()}
               loading={importing}
             >
-              {importing ? 'Importing...' : 'Import'}
+              {importing ? t('addgame.importing') : t('manifests.importButton')}
             </Button>
           </div>
         </div>
@@ -166,9 +166,9 @@ export default function ManifestFiles() {
         }`}
       >
         <Upload className="w-10 h-10 text-text-dim mx-auto mb-3" />
-        <p className="text-sm text-text-primary font-medium">Drag and drop manifest files here</p>
+        <p className="text-sm text-text-primary font-medium">{t('manifests.dragDrop')}</p>
         <p className="text-xs text-text-dim mt-1">
-          Supports .manifest files (depotId_manifestId.manifest format) - copied to steamapps directory
+          {t('manifests.dropHint')}
         </p>
       </div>
 
@@ -181,7 +181,7 @@ export default function ManifestFiles() {
             </div>
             <div>
               <p className="text-xl font-bold text-text-bright">{manifests.length}</p>
-              <p className="text-xs text-text-dim">Total Manifests</p>
+              <p className="text-xs text-text-dim">{t('manifests.totalManifests')}</p>
             </div>
           </div>
         </Card>
@@ -194,7 +194,7 @@ export default function ManifestFiles() {
               <p className="text-xl font-bold text-text-bright">
                 {new Set(manifests.map((m) => m.depotId)).size}
               </p>
-              <p className="text-xs text-text-dim">Unique Depots</p>
+              <p className="text-xs text-text-dim">{t('manifests.uniqueDepots')}</p>
             </div>
           </div>
         </Card>
@@ -207,7 +207,7 @@ export default function ManifestFiles() {
               <p className="text-xl font-bold text-text-bright">
                 {formatSize(manifests.reduce((acc, m) => acc + m.size, 0))}
               </p>
-              <p className="text-xs text-text-dim">Total Size</p>
+              <p className="text-xs text-text-dim">{t('manifests.totalSize')}</p>
             </div>
           </div>
         </Card>
@@ -216,7 +216,7 @@ export default function ManifestFiles() {
       {/* Manifests table */}
       <Card>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-text-bright">Manifest Library</h3>
+          <h3 className="text-sm font-semibold text-text-bright">{t('manifests.manifestLibrary')}</h3>
           <Input
             variant="search"
             placeholder={t('manifests.searchManifests')}

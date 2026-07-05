@@ -103,15 +103,15 @@ export default function LogsPage() {
   const handleClear = async () => {
     await window.steamtools.clearLogs()
     setLogs([])
-    showToast('success', 'Logs cleared')
+    showToast('success', t('logs.cleared'))
   }
 
   const handleExport = async () => {
     const result = await window.steamtools.exportLogs()
     if (result.success) {
-      showToast('success', 'Logs exported')
+      showToast('success', t('logs.exported'))
     } else {
-      showToast('error', result.error || 'Export failed')
+      showToast('error', result.error || t('logs.exportFailed'))
     }
   }
 
@@ -120,10 +120,10 @@ export default function LogsPage() {
     try {
       await navigator.clipboard.writeText(text)
       setCopied(true)
-      showToast('success', 'Logs copied to clipboard')
+      showToast('success', t('logs.copiedToClipboard'))
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      showToast('error', 'Failed to copy')
+      showToast('error', t('logs.copyFailed'))
     }
   }
 
@@ -212,7 +212,7 @@ export default function LogsPage() {
             <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
             <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
           </div>
-          <span className="text-xs text-text-dim font-mono ml-2">y-core — log — {filtered.length} entries</span>
+          <span className="text-xs text-text-dim font-mono ml-2">{t('logs.logHeader').replace('{{count}}', String(filtered.length))}</span>
         </div>
 
         {/* Terminal body */}

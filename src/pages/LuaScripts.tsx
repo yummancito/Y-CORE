@@ -72,32 +72,32 @@ export default function LuaScripts() {
   const handleDelete = async (fileName: string) => {
     const result = await window.steamtools.deleteLuaScript(fileName)
     if (result.success) {
-      showToast('success', result.message || 'Script deleted')
+      showToast('success', result.message || t('luascripts.scriptDeleted'))
       if (selectedScript?.fileName === fileName) {
         setSelectedScript(null)
         setCode('')
       }
       await loadScripts()
     } else {
-      showToast('error', result.error || 'Failed to delete')
+      showToast('error', result.error || t('luascripts.failedDelete'))
     }
   }
 
   const handleImport = async () => {
     if (!importPath.trim()) {
-      showToast('error', 'Please enter a file path')
+      showToast('error', t('luascripts.enterFilePath'))
       return
     }
 
     setImporting(true)
     const result = await window.steamtools.importLuaScript({ luaPath: importPath.trim() })
     if (result.success) {
-      showToast('success', result.message || 'Lua script imported')
+      showToast('success', result.message || t('luascripts.scriptImported'))
       setShowImportModal(false)
       setImportPath('')
       await loadScripts()
     } else {
-      showToast('error', result.error || 'Failed to import')
+      showToast('error', result.error || t('luascripts.failedImport'))
     }
     setImporting(false)
   }
@@ -127,7 +127,7 @@ export default function LuaScripts() {
           <div className="flex-1">
             <p className="text-sm font-medium text-text-primary">Lua Scripting Engine</p>
             <p className="text-xs text-text-dim mt-0.5">
-              Scripts use addappid() and setManifestid() functions. Stored in Steam/plugins/stplug-in/ directory.
+              {t('luascripts.scriptsDescription')}
             </p>
           </div>
         </div>
@@ -136,19 +136,19 @@ export default function LuaScripts() {
       <Modal open={showImportModal} onClose={() => setShowImportModal(false)} title={t('luascripts.importScript')} width="400px">
         <div className="p-6 space-y-4">
           <div>
-            <label className="text-sm font-medium text-text-primary block mb-2">File Path *</label>
+            <label className="text-sm font-medium text-text-primary block mb-2">{t('luascripts.filePath')}</label>
             <Input
               type="text"
               value={importPath}
               onChange={(e) => setImportPath(e.target.value)}
-              placeholder="C:\Users\...\2406770.lua"
+              placeholder={t('luascripts.pathExample')}
               autoFocus
               className="w-full"
             />
-            <p className="text-xs text-text-dim mt-1">Full path to the .lua file to import</p>
+            <p className="text-xs text-text-dim mt-1">{t('luascripts.filePathHint')}</p>
           </div>
           <div className="flex gap-2 pt-2">
-            <Button variant="secondary" className="flex-1" onClick={() => setShowImportModal(false)}>Cancel</Button>
+            <Button variant="secondary" className="flex-1" onClick={() => setShowImportModal(false)}>{t('common.cancel')}</Button>
             <Button
               variant="primary"
               icon={Download}
@@ -157,7 +157,7 @@ export default function LuaScripts() {
               disabled={importing || !importPath.trim()}
               loading={importing}
             >
-              {importing ? 'Importing...' : 'Import'}
+              {importing ? t('addgame.importing') : t('luascripts.importButton')}
             </Button>
           </div>
         </div>

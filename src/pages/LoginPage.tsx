@@ -63,11 +63,11 @@ export default function LoginPage() {
           setCodeSent(true)
           setResetMessage(t('login.codeSent'))
         } catch (err: any) {
-          const msg = err.message || 'Failed to send reset email'
+          const msg = err.message || t('login.failedSendReset')
           if (msg.includes('Email service not configured')) {
-            setResetMessage('El servicio de email no está configurado. Revisa RESEND_API_KEY en el backend.')
+            setResetMessage(t('login.emailNotConfigured'))
           } else if (err.status === 429) {
-            setResetMessage('Demasiados intentos. Espera 1 hora antes de volver a intentarlo.')
+            setResetMessage(t('login.tooManyAttempts'))
           } else {
             setResetMessage(msg)
           }
@@ -86,7 +86,7 @@ export default function LoginPage() {
           setCodeVerified(true)
           setResetMessage('')
         } catch (err: any) {
-          setResetMessage(err.message || 'Invalid code')
+          setResetMessage(err.message || t('login.invalidCode'))
         } finally {
           setForgotLoading(false)
         }
@@ -108,7 +108,7 @@ export default function LoginPage() {
             setConfirmPassword('')
           }, 2000)
         } catch (err: any) {
-          setResetMessage(err.message || 'Failed to reset password')
+          setResetMessage(err.message || t('login.failedResetPassword'))
         }
       }
     }
@@ -172,7 +172,7 @@ export default function LoginPage() {
                     </p>
                     {mode === 'forgot' && emailConfigured === false && (
                       <p className="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded-lg px-3 py-2">
-                        El servicio de email no está configurado en el backend. No se podrán enviar códigos de recuperación.
+                        {t('login.emailNotConfigured')}
                       </p>
                     )}
                   </div>
@@ -198,7 +198,7 @@ export default function LoginPage() {
                         pattern="[a-zA-Z0-9_-]+"
                         autoComplete="username"
                         className="w-full h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none transition-all duration-200 focus:border-zinc-500 focus:bg-zinc-800 focus:ring-2 focus:ring-zinc-700/50 focus:shadow-[0_0_20px_rgba(255,255,255,0.05)]"
-                        placeholder="player123"
+                        placeholder={t('login.usernamePlaceholder')}
                       />
                     </motion.div>
                   )}

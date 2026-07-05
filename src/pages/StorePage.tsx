@@ -177,7 +177,7 @@ export default function StorePage() {
       })
       .catch((err) => {
         if (abortController.signal.aborted) return
-        showToast('error', `Failed to load store: ${err.message}`)
+        showToast('error', `${t('store.failedLoadStore')}: ${err.message}`)
       })
       .finally(() => {
         if (!abortController.signal.aborted) setSectionsLoading(false)
@@ -198,7 +198,7 @@ export default function StorePage() {
       })
       .catch((err) => {
         if (abortController.signal.aborted) return
-        showToast('error', `Failed to load browse: ${err.message}`)
+        showToast('error', `${t('store.failedLoadBrowse')}: ${err.message}`)
       })
       .finally(() => {
         if (!abortController.signal.aborted) setBrowseLoading(false)
@@ -286,7 +286,7 @@ export default function StorePage() {
       setSearchResults(allResults)
     } catch (err: any) {
       if (abortController.signal.aborted) return
-      showToast('error', `Search failed: ${err.message}`)
+      showToast('error', `${t('store.searchFailed')}: ${err.message}`)
     } finally {
       if (!abortController.signal.aborted) setSearching(false)
     }
@@ -306,12 +306,12 @@ export default function StorePage() {
     try {
       const closeResult = await window.steamtools.closeSteam()
       if (closeResult && !closeResult.success) {
-        showToast('error', closeResult.error || 'Failed to close Steam. Please close it manually and try again.')
+        showToast('error', closeResult.error || t('store.failedCloseSteamManual'))
         return
       }
 
       if (GOLDSRC_MOD_APP_IDS.has(game.app_id)) {
-        showToast('info', 'Installing Half-Life base engine...')
+        showToast('info', t('store.installingHalfLifeBase'))
         const baseResp = await installGame('70')
         if (baseResp.status === 'ready' && baseResp.game) {
           const result = await window.steamtools.storeInstallGame({
@@ -322,19 +322,19 @@ export default function StorePage() {
             depot_keys: baseResp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
           })
           if (!result.success) {
-            showToast('error', result.errors?.[0] || result.error || 'Failed to install Half-Life base')
+            showToast('error', result.errors?.[0] || result.error || t('store.failedHalfLifeBase'))
             return
           }
           try { await reportDownloaded('70') } catch {}
         } else if (baseResp.status === 'queued') {
-          showToast('info', 'Half-Life base is being imported, please wait...')
+          showToast('info', t('store.halfLifeBaseImporting'))
           await pollJob(baseResp.job_id!, '70')
         } else {
-          showToast('warning', 'Half-Life base not available. Mod may not launch without it.')
+          showToast('warning', t('store.halfLifeBaseNotAvailable'))
         }
       }
 
-      showToast('info', `Installing ${game.name}...`)
+      showToast('info', t('store.installingNamed').replace('{{name}}', game.name))
       const resp = await installGame(game.app_id)
 
       if (resp.status === 'ready' && resp.game) {
@@ -350,7 +350,7 @@ export default function StorePage() {
         if (result.actions) for (const a of result.actions) actions.push({ type: 'info', message: a })
         if (result.errors) for (const e of result.errors) actions.push({ type: 'error', message: e })
         if (result.success) {
-          actions.push({ type: 'success', message: `${game.name} installed` })
+          actions.push({ type: 'success', message: t('store.installSuccess').replace('{{name}}', game.name) })
           try { await reportDownloaded(game.app_id) } catch {}
           consumeGame(game.app_id)
         }
@@ -361,15 +361,15 @@ export default function StorePage() {
           }).catch(() => {})
         }
         if (result.success) {
-          showToast('success', `${game.name} installed`)
+          showToast('success', t('store.installSuccess').replace('{{name}}', game.name))
           try { await window.steamtools.restartSteam() } catch {}
         } else {
-          showToast('error', result.errors?.[0] || result.error || 'Install failed')
+          showToast('error', result.errors?.[0] || result.error || t('store.installFailed'))
         }
       } else if (resp.status === 'queued' && resp.job_id) {
         await pollJob(resp.job_id, game.app_id, game.name)
       } else {
-        showToast('error', 'Unexpected response from server')
+        showToast('error', t('store.unexpectedResponse'))
       }
     } catch (err: any) {
       window.steamtools.addLog({ level: 'ERROR', message: `[Store] Install failed: ${err.message}` }).catch(() => {})
@@ -382,7 +382,7 @@ export default function StorePage() {
 
   const pollJob = async (jobId: string, appId: string, gameName?: string) => {
     setImportProgress({ appId, status: 'queued' })
-    showToast('info', `${gameName || `App ${appId}`} is being imported. This may take a minute...`)
+    showToast('info', t('store.importing').replace('{{name}}', gameName || `App ${appId}`))
 
     let attempts = 0
     const maxAttempts = 200
@@ -410,17 +410,17 @@ export default function StorePage() {
         if (result.success) {
           try { await reportDownloaded(appId) } catch {}
           consumeGame(appId)
-          showToast('success', `${job.result.name} installed`)
+          showToast('success', t('store.installSuccess').replace('{{name}}', job.result.name))
           try { await window.steamtools.restartSteam() } catch {}
         } else {
-          showToast('error', result.errors?.[0] || result.error || 'Install failed after import')
+          showToast('error', result.errors?.[0] || result.error || t('store.installFailedAfterImport'))
         }
         return
       }
 
       if (job.status === 'failed') {
         setImportProgress(null)
-        showToast('error', job.error_message || 'Import failed')
+        showToast('error', job.error_message || t('store.importFailed'))
         return
       }
 
@@ -428,7 +428,7 @@ export default function StorePage() {
     }
 
     setImportProgress(null)
-    showToast('error', 'Import timed out after 10 minutes')
+    showToast('error', t('store.importTimedOut'))
   }
 
   const cardProps = { onInstall: handleInstall, installing, onSelect: setSelectedGame }
@@ -501,7 +501,7 @@ export default function StorePage() {
         <div className="flex items-center gap-3 p-3 rounded-xl border border-accent/20 bg-accent/5 backdrop-blur-sm">
           <Loader2 className="w-4 h-4 text-accent animate-spin" />
           <span className="text-sm text-text-dim">
-            Importing app {importProgress.appId}... Status: {importProgress.status}
+            {t('store.importProgress').replace('{{appId}}', importProgress.appId).replace('{{status}}', importProgress.status)}
           </span>
         </div>
       )}

@@ -274,7 +274,7 @@ export default function SettingsPage() {
                 <label className="avatar avatar-online cursor-pointer group relative">
                   <div className="w-32 rounded-full ring-2 ring-white/[0.08] ring-offset-4 ring-offset-bg-primary">
                     {profileImage ? (
-                      <img src={profileImage} alt="Profile" />
+                      <img src={profileImage} alt={t('settings.profileImageAlt')} />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-accent to-accent-dark flex items-center justify-center text-4xl font-bold text-white">
                         {(user?.email?.[0] || '?').toUpperCase()}
