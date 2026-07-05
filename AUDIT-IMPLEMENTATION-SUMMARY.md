@@ -75,7 +75,12 @@ Se tradujeron strings hardcoded en inglés y español en los diccionarios `es` e
 - **CommandPalette**: comandos, categorías, placeholder, tecla Esc, sin resultados.
 - **UpdateNotification**: actualización lista, descargando, instalar y reiniciar.
 - **EpicSidebar**: nombre de la app, Discord, unirse a la comunidad.
-- **SignaturePendingModal**: etiqueta de beta.
+- **SignaturePendingModal**: etiqueta de beta, aria-label de cierre.
+- **Toast / Modal / Input**: aria-labels de descartar, cerrar y limpiar.
+- **GameCard**: nombre fallback genérico `App {{id}}`.
+- **onlinefix-compatibility.ts**: razones de incompatibilidad (servidores dedicados, Photon, autenticación, etc.).
+- **useLibraryStore**: error de carga de juegos.
+- **StorePage**: mensajes del splash screen (`Loading catalog...`, `Preparing store...`).
 - **y-core-api.ts**: errores de sesión expirada, solicitud fallida, job polling timeout.
 
 #### Nuevas claves principales (ejemplos)
@@ -97,6 +102,10 @@ commandPalette.*, update.*, sidebar.*, api.*
 - `ddb53fb` — i18n de páginas principales
 - `c73eccf` — i18n de EpicSidebar y SignaturePendingModal
 - `8eae2f7` — i18n de mensajes de API
+- `43899e0` — i18n de splash screen de Store y resumen de auditoría
+- `adc684a` — i18n de GameCard fallback y aria-labels de UI
+- `fc64cda` — i18n de razones de compatibilidad de Online Fix
+- `9d434d6` — i18n de error de carga en useLibraryStore
 
 ---
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { useMemo } from 'react'
+import { t } from '../lib/i18n'
 import type { InstalledGame } from '../domain/types'
 
 type SortOption = 'nameAsc' | 'nameDesc' | 'recentlyPlayed' | 'recentlyInstalled' | 'largest'
@@ -33,7 +34,7 @@ export const useLibraryStore = create<LibraryStore>((set) => ({
       const filtered = (result.games || []).filter((g) => g.appId !== '228980')
       set({ games: filtered, loading: false })
     } else {
-      set({ error: result.error || 'Failed to load games', loading: false })
+      set({ error: result.error || t('library.failedLoad'), loading: false })
     }
   },
 
