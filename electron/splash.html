@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Y-core</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 100vw;
+      height: 100vh;
+      background: transparent;
+      color: #f0f6fc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 26px;
+    }
+    .brand svg {
+      width: 56px;
+      height: 56px;
+      transform: translateX(-1px);
+      filter: drop-shadow(0 0 12px rgba(255,255,255,0.15));
+    }
+
+    .loader {
+      position: relative;
+      width: 52px;
+      height: 52px;
+    }
+    .loader-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 2.5px solid transparent;
+      border-top-color: #3b82f6;
+      animation: spin 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+    .loader-ring:nth-child(2) {
+      inset: 7px;
+      border-top-color: #60a5fa;
+      border-right-color: rgba(96, 165, 250, 0.2);
+      animation-duration: 1.8s;
+      animation-direction: reverse;
+    }
+    .loader-glow {
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(59, 130, 246, 0.22) 0%, transparent 70%);
+      animation: pulseGlow 2.2s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.35; transform: scale(1); }
+      50% { opacity: 0.75; transform: scale(1.08); }
+    }
+
+    .loading {
+      color: #9ca3af;
+      font-size: 11px;
+      margin-top: 22px;
+      letter-spacing: 0.02em;
+    }
+
+    body.fade-out {
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="loader" id="spinner">
+    <div class="loader-glow"></div>
+    <div class="loader-ring"></div>
+    <div class="loader-ring"></div>
+  </div>
+
+  <div class="loading" id="loadingText">Cargando...</div>
+
+  <script>
+    const loadingText = document.getElementById('loadingText')
+    const spinner = document.getElementById('spinner')
+
+    window.splash.onReady(() => {
+      spinner.style.opacity = '0'
+      spinner.style.transition = 'opacity 0.3s ease'
+      loadingText.textContent = 'Listo'
+      loadingText.style.color = '#22c55e'
+      document.body.classList.add('fade-out')
+      setTimeout(() => window.close(), 400)
+    })
+
+    window.splash.onStatus((status, percent) => {
+      loadingText.textContent = status
+    })
+  </script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+{
+  "name": "y-core",
+  "version": "2.0.0",
+  "description": "Y-core - Steam game management tool",
+  "main": "dist-electron/main.js",
+  "author": "Y-core",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && tsc -p electron/tsconfig.json",
+    "dist": "electron-builder",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit && tsc -p electron/tsconfig.json --noEmit",
+    "electron:dev": "concurrently -n vite,electron -c green,magenta \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "electron:dev:local": "concurrently -n api,vite,electron -c blue,green,magenta \"pnpm --filter @y-core/api dev\" \"vite\" \"wait-on tcp:5173 && wait-on tcp:3000 && electron .\"",
+    "electron:build": "tsc && vite build && tsc -p electron/tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:dll": "npx tsx tests/dll-smoke-test.ts"
+  },
+  "dependencies": {
+    "@fluentui/react-icons": "^2.0.331",
+    "dotenv": "^16.4.7",
+    "electron": "^31.7.7",
+    "electron-updater": "^6.8.9",
+    "framer-motion": "^12.42.2",
+    "lucide-react": "^0.400.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.24.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "electron-builder": "^24.13.3",
+    "jsdom": "^25.0.1",
+    "png-to-ico": "^3.0.1",
+    "postcss": "^8.4.38",
+    "sharp": "^0.35.3",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.5.0",
+    "vite": "^5.3.0",
+    "vite-plugin-electron": "^0.28.0",
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "^2.1.9",
+    "wait-on": "^7.2.0"
+  },
+  "pnpm": {
+    "allowBuild": [
+      "electron",
+      "esbuild",
+      "msgpackr-extract"
+    ]
+  },
+  "build": {
+    "appId": "com.ycore.desktop",
+    "productName": "Y-core",
+    "icon": "public/logo.ico",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "public/logo.ico",
+      "public/logo.svg"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "y-core",
+      "repo": "y-core"
+    }
+  }
+}

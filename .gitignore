@@ -1,0 +1,56 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+dist-electron
+release
+*.tsbuildinfo
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.sw?
+.DS_Store
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Temp runtime files
+path.txt
+
+# Backups
+src_backup_*
+*.bak
+
+# Native binaries (keep source, ignore built)
+native/*.dll
+native/*.exe
+native/*.obj
+native/steamless/*.exe
+native/steamless/*.dll
+
+# Test outputs
+coverage
+
+# Electron builder
+.electron-builder.env
+
+# Native build outputs
+native/opensteamtool-src/build/
+native/opensteamtool-src/.deps/
+
+# Steamless tool (external)
+tools/steamless/
+
+# OS files
+Thumbs.db
+ehthumbs.db

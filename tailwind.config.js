@@ -1,0 +1,137 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    './index.html',
+    './src/**/*.{js,ts,jsx,tsx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // Semantic colors mapped to CSS variables (theme-aware)
+        accent: 'var(--accent)',
+        'accent-hover': 'var(--accent-hover)',
+        'accent-dark': 'var(--accent-dark)',
+        surface: 'var(--bg-card)',
+        'surface-light': 'var(--bg-card-light)',
+        'surface-darker': 'var(--bg-darker)',
+        'surface-1': 'var(--surface-1)',
+        'surface-2': 'var(--surface-2)',
+        'surface-3': 'var(--surface-3)',
+        'bg-primary': 'var(--bg-primary)',
+        'bg-input': 'var(--bg-input)',
+        border: 'var(--border-color)',
+        'border-hover': 'var(--border-hover)',
+        'text-primary': 'var(--text-primary)',
+        'text-dim': 'var(--text-dim)',
+        'text-bright': 'var(--text-bright)',
+        'text-secondary': 'var(--text-secondary)',
+        'text-muted': 'var(--text-muted)',
+        'status-success': 'var(--green)',
+        'status-info': 'var(--accent)',
+        'status-warning': 'var(--amber)',
+        'status-error': 'var(--red)',
+        green: 'var(--green)',
+        'green-hover': 'var(--green-hover)',
+        // Keep steam-* for backward compat during migration
+        steam: {
+          dark: '#1b2838',
+          darker: '#171a21',
+          panel: '#1b2838',
+          card: '#2a475e',
+          'card-light': '#316282',
+          border: '#3d4450',
+          hover: '#316282',
+          accent: '#1a9fff',
+          'accent-hover': '#27B9F2',
+          'accent-dark': '#2a72a8',
+          green: '#5ba32b',
+          'green-hover': '#75b822',
+          blue: '#1a9fff',
+          'blue-dark': '#0d8ae8',
+          text: '#c6d4df',
+          'text-dim': '#8f98a0',
+          'text-bright': '#ffffff',
+          'text-link': '#66c0f4',
+        },
+      },
+      spacing: {
+        '4': '4px',
+        '8': '8px',
+        '12': '12px',
+        '16': '16px',
+        '24': '24px',
+        '32': '32px',
+      },
+      borderRadius: {
+        sm: '6px',
+        md: '10px',
+        lg: '16px',
+      },
+      boxShadow: {
+        card: '0 8px 32px rgba(0, 0, 0, 0.35)',
+        'card-hover': '0 12px 40px rgba(0, 0, 0, 0.45)',
+        popover: '0 4px 16px rgba(0, 0, 0, 0.4)',
+        modal: '0 16px 48px rgba(0, 0, 0, 0.5)',
+      },
+      fontFamily: {
+        sans: ['Inter', 'Segoe UI', 'system-ui', 'sans-serif'],
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.2s ease-in-out',
+        'slide-up': 'slideUp 0.2s ease-out',
+        'slide-right': 'slideRight 0.2s ease-out',
+        'float-up': 'floatUp 0.3s ease-out',
+        'bounce-in': 'bounceIn 0.3s ease-out',
+        'pulse-slow': 'pulseSlow 2s ease-in-out infinite',
+        'drop-pulse': 'dropPulse 1s ease-in-out infinite',
+        'bubble-up': 'bubbleUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'scale-in': 'scaleIn 0.2s ease-out',
+        'spin-neu': 'spin 0.8s linear infinite',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(10px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        slideRight: {
+          '0%': { transform: 'translateX(-10px)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        floatUp: {
+          '0%': { transform: 'translateY(15px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
+        bounceIn: {
+          '0%': { transform: 'scale(0.95)', opacity: '0' },
+          '50%': { transform: 'scale(1.02)' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        pulseSlow: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.5' },
+        },
+        dropPulse: {
+          '0%, 100%': { borderColor: '#f97316', borderWidth: '2px' },
+          '50%': { borderColor: '#ea580c', borderWidth: '3px' },
+        },
+        bubbleUp: {
+          '0%': { transform: 'translateY(40px) scale(0.8)', opacity: '0' },
+          '60%': { transform: 'translateY(-4px) scale(1.03)', opacity: '1' },
+          '100%': { transform: 'translateY(0) scale(1)' },
+        },
+        scaleIn: {
+          '0%': { transform: 'scale(0.9)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        spin: {
+          'to': { transform: 'rotate(360deg)' },
+        },
+      },
+    },
+  },
+  plugins: [],
+}

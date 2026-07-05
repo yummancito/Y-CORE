@@ -1,0 +1,8 @@
+[log]
+level = "debug"
+
+[manifest]
+url = "opensteamtool"
+
+[stats]
+enable_api = true
