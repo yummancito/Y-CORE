@@ -10,6 +10,7 @@ import type {
   DepotKey,
   InstallGameData,
 } from '@y-core/shared'
+import { t } from './i18n'
 
 const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'https://y-core-render-api.onrender.com'
 
@@ -89,7 +90,7 @@ async function refreshAccessToken(): Promise<string> {
     const newToken = await window.steamtools.refreshToken()
     if (!newToken) {
       clearToken()
-      throw new Error('Session expired')
+      throw new Error(t('api.sessionExpired'))
     }
     cachedAccessToken = newToken
     return newToken
@@ -110,7 +111,7 @@ async function apiFetch<T>(
   const isAuthEndpoint = path.startsWith('/api/auth')
   const isPublic = isPublicEndpoint(path)
   if (!session?.accessToken && !isAuthEndpoint && !isPublic) {
-    const err = new Error('Session expired. Please log in again.') as any
+    const err = new Error(t('api.sessionExpiredLogin')) as any
     err.status = 401
     throw err
   }
@@ -137,7 +138,7 @@ async function apiFetch<T>(
   }
 
   if (!resp.ok) {
-    const errorBody = await resp.json().catch(() => ({ error: 'Request failed' }))
+    const errorBody = await resp.json().catch(() => ({ error: t('api.requestFailed') }))
     const err = new Error(errorBody.error || `HTTP ${resp.status}`)
     ;(err as any).status = resp.status
     throw err
@@ -335,7 +336,7 @@ export async function pollJobUntilDone(
     attempts++
   }
 
-  throw new Error('Job polling timed out')
+  throw new Error(t('api.jobPollingTimeout'))
 }
 
 // ===== Manifests =====

@@ -549,6 +549,10 @@ const es: Dict = {
   'update.downloading': 'Descargando actualización — v{{version}}',
   'update.notifiedWhenReady': 'Te notificaremos cuando esté lista.',
   'update.installAndRestart': 'Instalar y reiniciar',
+  'api.sessionExpired': 'Sesión expirada',
+  'api.sessionExpiredLogin': 'Sesión expirada. Vuelve a iniciar sesión.',
+  'api.requestFailed': 'La solicitud falló',
+  'api.jobPollingTimeout': 'La espera del trabajo expiró',
 }
 
 const en: Dict = {
@@ -1094,6 +1098,10 @@ const en: Dict = {
   'update.downloading': 'Downloading update — v{{version}}',
   'update.notifiedWhenReady': "You'll be notified when it's ready.",
   'update.installAndRestart': 'Install & Restart',
+  'api.sessionExpired': 'Session expired',
+  'api.sessionExpiredLogin': 'Session expired. Please log in again.',
+  'api.requestFailed': 'Request failed',
+  'api.jobPollingTimeout': 'Job polling timed out',
 }
 
 const fr: Dict = {
