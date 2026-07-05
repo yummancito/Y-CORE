@@ -33,6 +33,19 @@ const resetPasswordSchema = z.object({
   password: z.string().min(8).max(72).regex(/[a-zA-Z]/, 'Password must contain at least one letter').regex(/[0-9]/, 'Password must contain at least one number'),
 })
 
+const MAX_RESET_ATTEMPTS = 5
+
+async function incrementResetAttempts(code: string, current: number | null): Promise<void> {
+  try {
+    await getSupabase()
+      .from('password_resets')
+      .update({ attempts: (current || 0) + 1 })
+      .eq('code', code)
+  } catch (err: any) {
+    // Non-fatal — do not leak database errors to the client
+  }
+}
+
 export default async function authRoutes(fastify: FastifyInstance) {
   // GET /api/auth/config
   fastify.get('/api/auth/config', async (req, reply) => {
@@ -293,6 +306,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     if (reset.used_at) {
       fastify.log.warn({ code, used_at: reset.used_at }, 'verify-reset-code: code already used')
+      await incrementResetAttempts(code, reset.attempts)
       return reply.code(400).send({ error: 'Invalid or expired reset code' })
     }
 
@@ -300,11 +314,13 @@ export default async function authRoutes(fastify: FastifyInstance) {
     const now = new Date()
     if (expiresAt < now) {
       fastify.log.warn({ code, expiresAt: expiresAt.toISOString(), now: now.toISOString() }, 'verify-reset-code: code expired')
+      await incrementResetAttempts(code, reset.attempts)
       return reply.code(400).send({ error: 'Invalid or expired reset code' })
     }
 
-    if ((reset.attempts || 0) > 5) {
+    if ((reset.attempts || 0) >= MAX_RESET_ATTEMPTS) {
       fastify.log.warn({ code, attempts: reset.attempts }, 'verify-reset-code: too many attempts')
+      await incrementResetAttempts(code, reset.attempts)
       return reply.code(400).send({ error: 'Too many attempts, code is locked' })
     }
 
@@ -326,11 +342,23 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     const { data: reset } = await getSupabase()
       .from('password_resets')
-      .select('user_id, expires_at, used_at')
+      .select('user_id, expires_at, used_at, attempts')
       .eq('code', code)
       .single()
 
-    if (!reset || reset.used_at || new Date(reset.expires_at) < new Date()) {
+    if (!reset) {
+      return reply.code(400).send({ error: 'Invalid or expired reset code' })
+    }
+
+    if ((reset.attempts || 0) >= MAX_RESET_ATTEMPTS) {
+      fastify.log.warn({ code, attempts: reset.attempts }, 'reset-password: too many attempts')
+      await incrementResetAttempts(code, reset.attempts)
+      return reply.code(400).send({ error: 'Too many attempts, code is locked' })
+    }
+
+    if (reset.used_at || new Date(reset.expires_at) < new Date()) {
+      fastify.log.warn({ code, used_at: reset.used_at }, 'reset-password: code already used or expired')
+      await incrementResetAttempts(code, reset.attempts)
       return reply.code(400).send({ error: 'Invalid or expired reset code' })
     }
 
@@ -341,13 +369,14 @@ export default async function authRoutes(fastify: FastifyInstance) {
 
     if (updateError) {
       fastify.log.error({ updateError }, 'Failed to reset password')
+      await incrementResetAttempts(code, reset.attempts)
       return reply.code(500).send({ error: 'Failed to reset password' })
     }
 
-    // Mark token as used
+    // Mark token as used and clear attempts
     await getSupabase()
       .from('password_resets')
-      .update({ used_at: new Date().toISOString() })
+      .update({ used_at: new Date().toISOString(), attempts: 0 })
       .eq('code', code)
 
     // Revoke all existing refresh tokens so sessions on other devices are invalidated
