@@ -124,7 +124,23 @@ Además, se verificó que:
 
 ---
 
-## 5. Pendientes menores / notas
+## 5. Revisión de dependencias (`pnpm audit`)
+
+Se ejecutó `pnpm audit` sobre el workspace. Se encontraron **5 advisories**, todos en **devDependencies** (no afectan el binario de producción):
+
+| ID | Severidad | Paquete | Título | Impacto |
+|----|-----------|---------|--------|---------|
+| 1102341 | Moderate | esbuild | `esbuild` enables any website to send requests to dev server | Solo afecta el servidor de desarrollo |
+| 1116229 | Moderate | vite | Vite path traversal in optimized deps `.map` handling | Solo afecta el servidor de desarrollo |
+| 1120126 | **Critical** | vitest | Vitest UI server: arbitrary file read/execute | **Solo cuando Vitest UI está activo** (dev/test) |
+| 1120784 | Moderate | launch-editor | NTLMv2 hash disclosure via UNC path on Windows | Dev-only |
+| 1120789 | High | vite | `server.fs.deny` bypass on Windows alternate paths | Solo afecta el servidor de desarrollo |
+
+**Recomendación**: actualizar `vite` a `>=6.4.3` y `esbuild` a `>=0.24.3` cuando sea viable. Como Vitest UI no se ejecuta en producción, la criticidad operativa es baja, pero conviene mantener las dev dependencies actualizadas.
+
+---
+
+## 6. Pendientes menores / notas
 
 Algunos textos técnicos o de desarrollo se dejaron sin traducir intencionalmente:
 
@@ -137,7 +153,7 @@ Si en una revisión posterior se requiere traducir también estos elementos, se 
 
 ---
 
-## 6. Archivos de referencia
+## 7. Archivos de referencia
 
 - `SECURITY-AUDIT-REPORT.md` — reporte detallado de hallazgos de seguridad y correcciones.
 - `AUDIT-REPORT-v2.md` — resumen de auditoría y tareas pendientes.
@@ -148,9 +164,10 @@ Si en una revisión posterior se requiere traducir también estos elementos, se 
 
 ---
 
-## 7. Recomendaciones
+## 8. Recomendaciones
 
 1. **Testing manual**: probar el flujo completo de reset de contraseña y verificar que tras 5 intentos fallidos el código se bloquea.
 2. **Testing manual de Electron**: lanzar la app en modo producción y verificar que el binario `39.8.10` arranca correctamente.
 3. **Testing manual de i18n**: cambiar el idioma en Configuración y revisar que los nuevos textos se reflejan en las páginas traducidas.
-4. **Sync**: cuando se desee, sincronizar los cambios de `security-audit-staging` con la rama principal.
+4. **Actualizar devDependencies**: considerar actualizar `vite` y `esbuild` para resolver los advisories de `pnpm audit` (aunque solo afectan desarrollo).
+5. **Sync**: cuando se desee, sincronizar los cambios de `security-audit-staging` con la rama principal.
