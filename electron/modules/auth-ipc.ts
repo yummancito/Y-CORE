@@ -1,30 +1,19 @@
-import { app, ipcMain, safeStorage, BrowserWindow } from 'electron'
+import { app, ipcMain } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { logger } from '../logger'
 import { state } from '../state'
 
-const AUTH_FILE = path.join(app.getPath('userData'), 'ycore-auth.json')
+const USERNAME_FILE = path.join(app.getPath('userData'), 'ycore-username.json')
 
-export function loadAuthSession(): void {
+export function loadUsername(): void {
   try {
-    if (fs.existsSync(AUTH_FILE)) {
-      const raw = fs.readFileSync(AUTH_FILE)
-      let jsonStr: string
-      if (safeStorage.isEncryptionAvailable()) {
-        try {
-          jsonStr = safeStorage.decryptString(raw)
-        } catch {
-          jsonStr = raw.toString('utf-8')
-          logger.info('Auth file was plaintext, will re-encrypt on next save', 'auth')
-        }
-      } else {
-        jsonStr = raw.toString('utf-8')
-      }
-      const data = JSON.parse(jsonStr)
-      if (data && data.access_token && data.refresh_token) {
-        state.authSession = { access_token: data.access_token, refresh_token: data.refresh_token }
-        logger.info('Auth session loaded from disk', 'auth')
+    if (fs.existsSync(USERNAME_FILE)) {
+      const raw = fs.readFileSync(USERNAME_FILE, 'utf-8')
+      const data = JSON.parse(raw)
+      if (data && data.username) {
+        state.username = data.username
+        logger.info(`Username loaded from disk: ${data.username}`, 'auth')
       }
     }
   } catch {
@@ -32,28 +21,24 @@ export function loadAuthSession(): void {
   }
 }
 
-export function saveAuthSession(): void {
+export function saveUsername(): void {
   try {
-    if (state.authSession) {
-      const jsonStr = JSON.stringify(state.authSession)
-      if (safeStorage.isEncryptionAvailable()) {
-        const encrypted = safeStorage.encryptString(jsonStr)
-        fs.writeFileSync(AUTH_FILE, encrypted, { mode: 0o600 })
-      } else {
-        fs.writeFileSync(AUTH_FILE, jsonStr, { encoding: 'utf-8', mode: 0o600 })
-      }
+    if (state.username) {
+      fs.writeFileSync(USERNAME_FILE, JSON.stringify({ username: state.username }), { encoding: 'utf-8', mode: 0o600 })
     } else {
-      if (fs.existsSync(AUTH_FILE)) {
-        fs.unlinkSync(AUTH_FILE)
+      if (fs.existsSync(USERNAME_FILE)) {
+        fs.unlinkSync(USERNAME_FILE)
       }
     }
   } catch {
-    // Non-fatal — session won't persist across restarts
+    // Non-fatal — username won't persist across restarts
   }
 }
 
 export function getApiUrl(): string {
-  const DEFAULT_API_URL = process.env.VITE_YCORE_API_URL || 'http://localhost:3000'
+  const DEFAULT_API_URL = app.isPackaged
+    ? 'https://y-core-render-api.onrender.com'
+    : (process.env.VITE_YCORE_API_URL || 'http://localhost:3000')
   try {
     const configPath = path.join(app.getPath('userData'), 'ycore-config.json')
     if (fs.existsSync(configPath)) {
@@ -66,44 +51,6 @@ export function getApiUrl(): string {
   return DEFAULT_API_URL
 }
 
-export async function refreshAuthToken(): Promise<boolean> {
-  if (state.refreshInProgress) return state.refreshInProgress
-  if (!state.authSession?.refresh_token) return false
-
-  state.refreshInProgress = (async () => {
-    try {
-      const resp = await fetch(`${getApiUrl()}/api/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: state.authSession!.refresh_token }),
-      })
-
-      if (!resp.ok) {
-        logger.warn(`Token refresh failed: HTTP ${resp.status}`, 'auth')
-        return false
-      }
-
-      const data = await resp.json() as { access_token: string; refresh_token: string }
-      state.authSession = { access_token: data.access_token, refresh_token: data.refresh_token }
-      saveAuthSession()
-      logger.info('Token refreshed in Electron main process', 'auth')
-
-      state.mainWindow?.webContents.send('auth:tokenRefreshed', {
-        access_token: data.access_token,
-      })
-
-      return true
-    } catch (err: any) {
-      logger.error(`Token refresh error: ${err.message}`, 'auth')
-      return false
-    } finally {
-      state.refreshInProgress = null
-    }
-  })()
-
-  return state.refreshInProgress
-}
-
 export function registerAuthHandlers(
   callbacks: {
     showMainWindow: () => void
@@ -113,22 +60,8 @@ export function registerAuthHandlers(
   ipcMain.removeHandler('auth:logout')
   ipcMain.handle('auth:logout', async () => {
     logger.info('Logout requested, hiding main window and showing login', 'auth')
-    if (state.authSession?.refresh_token) {
-      try {
-        await fetch(`${getApiUrl()}/api/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${state.authSession.access_token}`,
-          },
-          body: JSON.stringify({ refresh_token: state.authSession.refresh_token }),
-        })
-      } catch {
-        // Non-fatal — token will expire naturally
-      }
-    }
-    state.authSession = null
-    saveAuthSession()
+    state.username = null
+    saveUsername()
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.hide()
     }
@@ -151,34 +84,24 @@ export function registerAuthHandlers(
     callbacks.showMainWindow()
   })
 
-  ipcMain.removeHandler('auth:setSession')
-  ipcMain.handle('auth:setSession', (_event, session: { access_token: string; refresh_token: string } | null) => {
-    state.authSession = session
-    saveAuthSession()
-    if (session) {
-      logger.info('Auth session stored in main process', 'auth')
+  ipcMain.removeHandler('auth:setUsername')
+  ipcMain.handle('auth:setUsername', (_event, username: string | null) => {
+    state.username = username
+    saveUsername()
+    if (username) {
+      logger.info(`Username set: ${username}`, 'auth')
     } else {
-      logger.info('Auth session cleared from main process', 'auth')
+      logger.info('Username cleared', 'auth')
     }
   })
 
-  ipcMain.removeHandler('auth:getAccessToken')
-  ipcMain.handle('auth:getAccessToken', async () => {
-    if (!state.authSession) return null
-    return state.authSession.access_token
+  ipcMain.removeHandler('auth:getUsername')
+  ipcMain.handle('auth:getUsername', () => {
+    return state.username || null
   })
 
   ipcMain.removeHandler('auth:isAuthenticated')
   ipcMain.handle('auth:isAuthenticated', () => {
-    return state.authSession !== null
-  })
-
-  ipcMain.removeHandler('auth:refreshToken')
-  ipcMain.handle('auth:refreshToken', async () => {
-    const success = await refreshAuthToken()
-    if (success && state.authSession) {
-      return state.authSession.access_token
-    }
-    return null
+    return state.username !== null
   })
 }

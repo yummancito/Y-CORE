@@ -10,9 +10,7 @@ import {
   Eye,
   EyeOff,
   Wrench,
-  Mail,
   Camera,
-  FlaskConical,
   Globe,
   PlusCircle,
 } from 'lucide-react'
@@ -20,7 +18,6 @@ import { t } from '../lib/i18n'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useToastStore } from '../stores/useToastStore'
 import { useSettingsStore } from '../stores/useSettingsStore'
-import { updateBetaStatus } from '../lib/y-core-api'
 import { usePageHeader } from '../components/layout/AppShell'
 import { Card } from '../components/ui/Card'
 import { CustomizationPanel } from '../components/settings/CustomizationPanel'
@@ -107,7 +104,7 @@ function SettingRow({
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const { user, logout, isBetaTester, setIsBetaTester } = useAuthStore()
+  const { username, logout } = useAuthStore()
   const { showToast } = useToastStore()
   const { showAdult, showTools, showAddGame, logsVisible, colorTheme, language, setShowAdult, setShowTools, setShowAddGame, setLogsVisible, setColorTheme, setLanguage, loadFromConfig } = useSettingsStore()
   const [activeTab, setActiveTab] = useState<SettingsTab>('account')
@@ -229,16 +226,6 @@ export default function SettingsPage() {
     navigate('/login')
   }
 
-  const handleBetaToggle = async (v: boolean) => {
-    try {
-      const updated = await updateBetaStatus(v)
-      setIsBetaTester(updated.is_beta_tester ?? false)
-      showToast('success', v ? t('settings.betaEnabled') : t('settings.betaDisabled'))
-    } catch {
-      showToast('error', t('common.failed'))
-    }
-  }
-
   return (
     <div className="max-w-5xl mx-auto p-8 space-y-8">
       {/* Tab selector */}
@@ -280,7 +267,7 @@ export default function SettingsPage() {
                       <img src={profileImage} alt="Profile" />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-accent to-accent-dark flex items-center justify-center text-4xl font-bold text-white">
-                        {(user?.email?.[0] || '?').toUpperCase()}
+                        {(username?.[0] || '?').toUpperCase()}
                       </div>
                     )}
                   </div>
@@ -296,10 +283,7 @@ export default function SettingsPage() {
                 </label>
                 <div className="min-w-0 flex-1">
                   <p className="text-base font-semibold text-text-bright truncate">
-                    {user?.email || '—'}
-                  </p>
-                  <p className="text-xs text-text-dim mt-1">
-                    {t('settings.username')}: {user?.username || user?.id?.slice(0, 12) || '—'}
+                    {username || '—'}
                   </p>
                   <span className="inline-flex items-center mt-2 px-3 py-1 rounded-full text-xs font-medium bg-green-500/15 text-green-400 border border-green-500/20">
                     {t('settings.activeAccount')}
@@ -307,28 +291,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Account details */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-3 p-4 rounded-xl bg-white/[0.03] border border-white/[0.04]">
-                  <div className="w-10 h-10 rounded-lg bg-white/[0.06] flex items-center justify-center flex-shrink-0">
-                    <Mail className="w-5 h-5 text-text-secondary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-text-dim">{t('settings.email')}</p>
-                    <p className="text-sm font-medium text-text-bright truncate">
-                      {user?.email || '—'}
-                    </p>
-                  </div>
-                </div>
-
-                <SettingRow
-                  icon={FlaskConical}
-                  title={t('settings.betaTitle')}
-                  description={t('settings.betaDesc')}
-                >
-                  <Toggle checked={isBetaTester} onChange={handleBetaToggle} />
-                </SettingRow>
-              </div>
 
               {/* Logout */}
               <button

@@ -10,21 +10,13 @@ contextBridge.exposeInMainWorld('steamtools', {
   readImageAsDataURL: (filePath: string) => ipcRenderer.invoke('app:readImageAsDataURL', filePath),
   openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
 
-  // Auth session (tokens stored securely in main process, not localStorage)
-  // Renderer only gets access to the access token (15min expiry) and isAuthenticated flag.
-  // The refresh token NEVER leaves the main process.
-  setAuthSession: (session: { access_token: string; refresh_token: string } | null) =>
-    ipcRenderer.invoke('auth:setSession', session),
-  getAccessToken: () => ipcRenderer.invoke('auth:getAccessToken'),
+  // Auth (username only — no tokens, no passwords)
+  setUsername: (username: string | null) =>
+    ipcRenderer.invoke('auth:setUsername', username),
+  getUsername: () => ipcRenderer.invoke('auth:getUsername'),
   isAuthenticated: () => ipcRenderer.invoke('auth:isAuthenticated'),
-  refreshToken: () => ipcRenderer.invoke('auth:refreshToken'),
   loginSuccess: () => ipcRenderer.invoke('auth:loginSuccess'),
   logout: () => ipcRenderer.invoke('auth:logout'),
-  onTokenRefreshed: (callback: (accessToken: string) => void) => {
-    const handler = (_event: any, session: { access_token: string }) => callback(session.access_token)
-    ipcRenderer.on('auth:tokenRefreshed', handler)
-    return () => ipcRenderer.removeListener('auth:tokenRefreshed', handler)
-  },
 
   // File path resolution for drag & drop (Electron 31+ with context isolation)
   getPathForFile: (file: File) => webUtils.getPathForFile(file),

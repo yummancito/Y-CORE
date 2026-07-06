@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAuthStore } from '../stores/useAuthStore'
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, initialized, init } = useAuthStore()
+  const { username, initialized, init } = useAuthStore()
   const appReadySent = useRef(false)
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!user) {
+  if (!username) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black">
         <div className="text-zinc-500">Waiting for login...</div>

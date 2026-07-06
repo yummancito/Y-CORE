@@ -7,8 +7,7 @@ export const state = {
   loginWindow: null as BrowserWindow | null,
   splashWindow: null as BrowserWindow | null,
   tray: null as Tray | null,
-  authSession: null as { access_token: string; refresh_token: string } | null,
-  refreshInProgress: null as Promise<boolean> | null,
+  username: null as string | null,
   isQuitting: false,
   gamesCache: null as any[] | null,
 }

@@ -8,7 +8,7 @@ import { autoUpdater } from 'electron-updater'
 import { state, setIsQuitting } from './state'
 
 // Modular IPC handlers
-import { loadAuthSession, registerAuthHandlers, saveAuthSession } from './modules/auth-ipc'
+import { loadUsername, registerAuthHandlers, saveUsername } from './modules/auth-ipc'
 import {
   createSplashWindow,
   createLoginWindow,
@@ -17,15 +17,13 @@ import {
   showMainWindow,
   registerAppHandlers,
 } from './modules/windows'
+import { registerSteamHandlers, invalidateGamesCache } from './modules/steam-ipc'
+import { registerStoreHandlers } from './modules/store-ipc'
 import { registerLogHandlers } from './modules/logs'
 import { registerConfigHandlers } from './modules/config'
 import { registerStoreImageHandlers } from './modules/store-images'
 import { registerOnlineFixHandlers } from './modules/onlinefix'
-
-// Private modules — not included in public release
-// import { registerSteamHandlers, invalidateGamesCache } from './modules/steam-ipc'
-// import { registerStoreHandlers } from './modules/store-ipc'
-// import { startAcfWatcher } from './modules/manifest-sync'
+import { startAcfWatcher } from './modules/manifest-sync'
 
 // ============================================
 // Crash Handling — log errors and notify user
@@ -76,8 +74,8 @@ if (!gotTheLock) {
 }
 
 if (gotTheLock) {
-// Load persisted auth session on startup
-loadAuthSession()
+// Load persisted username on startup
+loadUsername()
 
 app.whenReady().then(async () => {
   logger.init()
@@ -89,12 +87,12 @@ app.whenReady().then(async () => {
   // before they are registered (especially after login reload).
   registerLogHandlers(() => state.mainWindow)
   registerConfigHandlers()
-  registerOnlineFixHandlers(() => { /* invalidateGamesCache() — private module */ })
+  registerOnlineFixHandlers(() => { invalidateGamesCache() })
   registerStoreImageHandlers()
   registerAuthHandlers({ showMainWindow, createLoginWindow })
   registerAppHandlers({ showMainWindow, createLoginWindow })
-  // registerSteamHandlers() — private module
-  // registerStoreHandlers(invalidateGamesCache) — private module
+  registerSteamHandlers()
+  registerStoreHandlers(invalidateGamesCache)
 
   createSplashWindow()
   createWindow()
@@ -103,7 +101,7 @@ app.whenReady().then(async () => {
   createLoginWindow()
 
   // Keep ACFs for Y-core Tool games in update-required state so downloads don't stall
-  // startAcfWatcher() — private module
+  startAcfWatcher()
 
   // Focus existing window when second instance is attempted
   app.on('second-instance', () => {
@@ -177,7 +175,7 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   setIsQuitting(true)
-  saveAuthSession()
+  saveUsername()
 })
 
 app.on('window-all-closed', () => {

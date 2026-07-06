@@ -1,6 +1,4 @@
 import type {
-  AuthSession,
-  AuthUser,
   GameSummary,
   GameDetail,
   GameListResponse,
@@ -11,157 +9,47 @@ import type {
   InstallGameData,
 } from '@y-core/shared'
 
-const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'http://localhost:3000'
+const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'https://y-core-render-api.onrender.com'
 
-let cachedAccessToken: string | null = null
-let tokenLoadPromise: Promise<string | null> | null = null
+let cachedUsername: string | null = null
 
-// Called when the Electron main process refreshes the token on its own,
-// so the renderer's cached access token stays in sync (avoids stale-token 401s).
-export function updateCachedToken(token: string): void {
-  cachedAccessToken = token
+export function setUsername(username: string | null): void {
+  cachedUsername = username
 }
 
-function getJwtExpiryMs(token: string): number | null {
+async function getUsername(): Promise<string | null> {
+  if (cachedUsername) return cachedUsername
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
-    return typeof payload.exp === 'number' ? payload.exp * 1000 : null
+    const username = await window.steamtools.getUsername()
+    if (username) {
+      cachedUsername = username
+      return username
+    }
   } catch {
-    return null
-  }
-}
-
-async function getToken(): Promise<{ accessToken: string; refreshToken: string } | null> {
-  // Renderer only gets access token from main process — refresh token never leaves main
-  if (cachedAccessToken) {
-    return { accessToken: cachedAccessToken, refreshToken: '' }
-  }
-
-  if (!tokenLoadPromise) {
-    tokenLoadPromise = (async () => {
-      try {
-        const token = await window.steamtools.getAccessToken()
-        if (token) {
-          cachedAccessToken = token
-          return token
-        }
-      } catch {
-        // Non-Electron environment or IPC not available
-      }
-      return null
-    })()
-  }
-  const result = await tokenLoadPromise
-  tokenLoadPromise = null
-  if (result) {
-    return { accessToken: result, refreshToken: '' }
+    // Non-Electron environment
   }
   return null
-}
-
-const PUBLIC_ENDPOINTS = [
-  '/api/games',
-  '/api/search',
-  '/api/games/', // public game details and onlinefix-compat
-  '/api/auth/',
-]
-
-function isPublicEndpoint(path: string): boolean {
-  return PUBLIC_ENDPOINTS.some((prefix) => path.startsWith(prefix))
-}
-
-function setToken(session: { accessToken: string; refreshToken: string }): void {
-  cachedAccessToken = session.accessToken
-  // Store both tokens in Electron main process (refresh token stays in main, never in renderer)
-  try {
-    window.steamtools.setAuthSession({
-      access_token: session.accessToken,
-      refresh_token: session.refreshToken,
-    })
-  } catch {
-    // Non-Electron environment
-  }
-}
-
-function clearToken(): void {
-  cachedAccessToken = null
-  try {
-    window.steamtools.setAuthSession(null)
-  } catch {
-    // Non-Electron environment
-  }
-}
-
-let refreshPromise: Promise<string> | null = null
-
-async function refreshAccessToken(): Promise<string> {
-  if (refreshPromise) return refreshPromise
-
-  refreshPromise = (async () => {
-    // Delegate token refresh to main process — refresh token never leaves main
-    const newToken = await window.steamtools.refreshToken()
-    if (!newToken) {
-      clearToken()
-      throw new Error('Session expired')
-    }
-    cachedAccessToken = newToken
-    return newToken
-  })()
-
-  try {
-    return await refreshPromise
-  } finally {
-    refreshPromise = null
-  }
 }
 
 async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  let session = await getToken()
-  const isAuthEndpoint = path.startsWith('/api/auth')
-  const isPublic = isPublicEndpoint(path)
-  if (!session?.accessToken && !isAuthEndpoint && !isPublic) {
-    const err = new Error('Session expired. Please log in again.') as any
-    err.status = 401
-    throw err
-  }
-
-  // Proactively refresh the token if it is about to expire, to avoid a
-  // guaranteed 401 + retry round-trip on the next protected request.
-  if (session?.accessToken && !isAuthEndpoint) {
-    const expMs = getJwtExpiryMs(session.accessToken)
-    if (expMs !== null && expMs - Date.now() < 30_000) {
-      try {
-        const newToken = await refreshAccessToken()
-        session = { accessToken: newToken, refreshToken: '' }
-      } catch {
-        // Fall through — the 401 handler below will attempt a final refresh
-      }
-    }
-  }
+  const username = await getUsername()
 
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string> || {}),
   }
 
-  if (session?.accessToken) {
-    headers['Authorization'] = `Bearer ${session.accessToken}`
+  if (username) {
+    headers['X-Username'] = username
   }
 
   if (options.body && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json'
   }
 
-  let resp = await fetch(`${API_BASE}${path}`, { ...options, headers })
-
-  if (resp.status === 401 && session?.accessToken) {
-    // Token expired — ask main process to refresh using the refresh token it holds
-    const newToken = await refreshAccessToken()
-    headers['Authorization'] = `Bearer ${newToken}`
-    resp = await fetch(`${API_BASE}${path}`, { ...options, headers })
-  }
+  const resp = await fetch(`${API_BASE}${path}`, { ...options, headers })
 
   if (!resp.ok) {
     const errorBody = await resp.json().catch(() => ({ error: 'Request failed' }))
@@ -176,95 +64,21 @@ async function apiFetch<T>(
 
 // ===== Auth =====
 
-export async function register(email: string, password: string, username: string): Promise<AuthSession> {
-  const data = await apiFetch<AuthSession>('/api/auth/register', {
-    method: 'POST',
-    body: JSON.stringify({ email, password, username }),
-  })
-  setToken({ accessToken: data.access_token, refreshToken: data.refresh_token })
-  return data
-}
-
-export async function login(email: string, password: string): Promise<AuthSession> {
-  const data = await apiFetch<AuthSession>('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  })
-  setToken({ accessToken: data.access_token, refreshToken: data.refresh_token })
-  return data
-}
-
-export async function getAuthConfig(): Promise<{ emailConfigured: boolean; fromEmail: string }> {
-  return apiFetch<{ emailConfigured: boolean; fromEmail: string }>('/api/auth/config')
-}
-
-export async function forgotPassword(email: string): Promise<{ message: string }> {
-  console.log(`[forgotPassword] Calling ${API_BASE}/api/auth/forgot-password for ${email}`)
+export async function isAuthenticated(): Promise<boolean> {
   try {
-    const result = await apiFetch<{ message: string }>('/api/auth/forgot-password', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    })
-    console.log('[forgotPassword] Success:', result)
-    return result
-  } catch (err: any) {
-    console.error('[forgotPassword] Failed:', err.status, err.message)
-    throw err
+    return await window.steamtools.isAuthenticated()
+  } catch {
+    return cachedUsername !== null
   }
 }
 
-export async function verifyResetCode(code: string): Promise<{ message: string }> {
-  return apiFetch<{ message: string }>('/api/auth/verify-reset-code', {
-    method: 'POST',
-    body: JSON.stringify({ code }),
-  })
-}
-
-export async function resetPassword(code: string, password: string): Promise<{ message: string }> {
-  return apiFetch<{ message: string }>('/api/auth/reset-password', {
-    method: 'POST',
-    body: JSON.stringify({ code, password }),
-  })
-}
-
 export async function logout(): Promise<void> {
-  // Logout is handled by main process which has the refresh token
   try {
     await window.steamtools.logout()
   } catch {
     // Non-Electron environment
   }
-  clearToken()
-}
-
-export async function getCurrentUser(): Promise<AuthUser | null> {
-  try {
-    return await apiFetch<AuthUser>('/api/users/me')
-  } catch (err: any) {
-    // 401 simply means no valid session; anything else is worth surfacing in logs
-    if (err?.status !== 401) {
-      console.error('[getCurrentUser] Failed to fetch profile:', err?.status, err?.message)
-    }
-    return null
-  }
-}
-
-export async function updateBetaStatus(isBetaTester: boolean): Promise<AuthUser> {
-  return apiFetch<AuthUser>('/api/users/beta', {
-    method: 'PATCH',
-    body: JSON.stringify({ is_beta_tester: isBetaTester }),
-  })
-}
-
-export async function isAuthenticated(): Promise<boolean> {
-  // Fast check via main process IPC — no token needed
-  try {
-    return await window.steamtools.isAuthenticated()
-  } catch {
-    // Non-Electron environment — fall back to token check
-    const session = await getToken()
-    return session !== null
-  }
+  cachedUsername = null
 }
 
 // ===== Games =====
@@ -380,20 +194,14 @@ export async function downloadManifest(
   depotId: string,
   manifestGid: string
 ): Promise<Buffer> {
-  const session = await getToken()
+  const username = await getUsername()
   const headers: Record<string, string> = {}
 
-  if (session?.accessToken) {
-    headers['Authorization'] = `Bearer ${session.accessToken}`
+  if (username) {
+    headers['X-Username'] = username
   }
 
-  let resp = await fetch(getManifestDownloadUrl(appId, depotId, manifestGid), { headers })
-
-  if (resp.status === 401 && session?.accessToken) {
-    const newToken = await refreshAccessToken()
-    headers['Authorization'] = `Bearer ${newToken}`
-    resp = await fetch(getManifestDownloadUrl(appId, depotId, manifestGid), { headers })
-  }
+  const resp = await fetch(getManifestDownloadUrl(appId, depotId, manifestGid), { headers })
 
   if (!resp.ok) {
     throw new Error(`Failed to download manifest: ${resp.status}`)
@@ -405,8 +213,6 @@ export async function downloadManifest(
 
 // Re-export types for convenience
 export type {
-  AuthSession,
-  AuthUser,
   GameSummary,
   GameDetail,
   GameListResponse,

@@ -228,7 +228,7 @@ export function createWindow(): void {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self' http://localhost:5173 ws://localhost:5173 http://localhost:3000",
+        "connect-src 'self' http://localhost:5173 ws://localhost:5173 http://localhost:3000 https://y-core-render-api.onrender.com",
       ].join('; ')
     : [
         "default-src 'self'",
@@ -236,7 +236,7 @@ export function createWindow(): void {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self' https:",
+        "connect-src 'self' https://api.ycore.app https://y-core-render-api.onrender.com",
       ].join('; ')
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -409,7 +409,7 @@ export function registerAppHandlers(
 
   ipcMain.handle('app:ready', () => {
     logger.info('Renderer signaled app ready', 'app')
-    if (state.authSession) {
+    if (state.username) {
       if (state.loginWindow && !state.loginWindow.isDestroyed()) {
         state.loginWindow.close()
         setLoginWindow(null)

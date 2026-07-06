@@ -110,13 +110,11 @@ interface Window {
     openImageDialog: () => Promise<string | null>
     readImageAsDataURL: (filePath: string) => Promise<string | null>
     openExternal: (url: string) => Promise<{ success: boolean; error?: string }>
-    setAuthSession: (session: { access_token: string; refresh_token: string } | null) => Promise<void>
-    getAccessToken: () => Promise<string | null>
+    setUsername: (username: string | null) => Promise<void>
+    getUsername: () => Promise<string | null>
     isAuthenticated: () => Promise<boolean>
-    refreshToken: () => Promise<string | null>
     loginSuccess: () => Promise<void>
     logout: () => Promise<void>
-    onTokenRefreshed: (callback: (accessToken: string) => void) => () => void
     getPathForFile: (file: File) => string
     getSteamPath: () => Promise<SteamResult>
     getLibraryFolders: () => Promise<LibraryFoldersResult>
