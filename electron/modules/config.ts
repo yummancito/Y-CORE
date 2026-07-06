@@ -9,12 +9,19 @@ const ALLOWED_CONFIG_KEYS = new Set([
   'steamGridDbApiKey',
   'depotBoxApiKey',
   'theme',
+  'colorTheme',
   'language',
   'showAdult',
+  'showTools',
+  'showAddGame',
+  'logsVisible',
+  'profileImage',
   'defaultInstallDir',
   'minimizeToTray',
   'autoStartSteam',
   'lastWindowBounds',
+  'apiUrl',
+  'customization',
 ])
 
 const MAX_CONFIG_DEPTH = 3
@@ -44,7 +51,10 @@ export function registerConfigHandlers() {
     try {
       if (!fs.existsSync(CONFIG_PATH)) return null
       const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
-      return JSON.parse(raw)
+      return JSON.parse(raw, (key, value) => {
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') return undefined
+        return value
+      })
     } catch {
       return null
     }

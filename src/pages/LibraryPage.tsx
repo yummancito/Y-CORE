@@ -172,7 +172,7 @@ export default function LibraryPage() {
     if (result.success) {
       showToast('success', t('library.launching'))
     } else {
-      showToast('error', result.error || t('library.failedLaunch'))
+      showToast('error', result.error || t('library.launchFailed'))
     }
   }
 
@@ -191,16 +191,16 @@ export default function LibraryPage() {
   const handleOpenLocation = async (game: InstalledGame) => {
     const result = await window.steamtools.openGameLocation(game.appId, game.installDir)
     if (!result.success) {
-      showToast('error', result.error || t('library.failedOpenLocation'))
+      showToast('error', result.error || t('library.openFailed'))
     }
   }
 
   const handleVerifyGame = async (game: InstalledGame) => {
     const result = await window.steamtools.verifyGame(game.appId)
     if (result.success) {
-      showToast('info', t('library.verificationStarted'))
+      showToast('info', t('library.verifyStart'))
     } else {
-      showToast('error', result.error || t('library.failedVerify'))
+      showToast('error', result.error || t('library.verifyFailed'))
     }
   }
 
@@ -270,6 +270,7 @@ export default function LibraryPage() {
                     ) : (
                       <CoverImage
                         src={getCoverUrl(game.appId)}
+                        fallbackSrc={`https://depotbox.org/api/images/steam-header/${game.appId}`}
                         alt={game.name}
                         className="absolute inset-0 w-full h-full object-cover"
                         onError={() => onCoverError(game.appId)}
@@ -322,7 +323,10 @@ export default function LibraryPage() {
       {contextMenu && (
         <div
           className="fixed z-[300] w-[220px] rounded-xl bg-surface-1 border border-white/[0.10] shadow-2xl overflow-hidden py-2"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={{
+            left: Math.min(contextMenu.x, window.innerWidth - 240),
+            top: Math.min(contextMenu.y, window.innerHeight - 320),
+          }}
         >
           <div className="px-4 py-2 border-b border-white/[0.08]">
             <p className="text-xs font-semibold text-text-bright truncate">{contextMenu.game.name}</p>

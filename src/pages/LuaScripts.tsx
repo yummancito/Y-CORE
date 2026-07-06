@@ -79,7 +79,7 @@ export default function LuaScripts() {
       }
       await loadScripts()
     } else {
-      showToast('error', result.error || t('luascripts.failedDelete'))
+      showToast('error', result.error || t('luascripts.deleteFailed'))
     }
   }
 
@@ -97,7 +97,7 @@ export default function LuaScripts() {
       setImportPath('')
       await loadScripts()
     } else {
-      showToast('error', result.error || t('luascripts.failedImport'))
+      showToast('error', result.error || t('luascripts.importFailed'))
     }
     setImporting(false)
   }
@@ -107,7 +107,7 @@ export default function LuaScripts() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-text-bright">{t('luascripts.title')}</h2>
-          <p className="text-xs mt-0.5 text-text-dim">{t('luascripts.title')}</p>
+          <p className="text-xs mt-0.5 text-text-dim">{t('luascripts.subtitle')}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" icon={RefreshCw} onClick={loadScripts}>
@@ -125,9 +125,9 @@ export default function LuaScripts() {
             <Terminal className="w-5 h-5 text-accent" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium text-text-primary">Lua Scripting Engine</p>
+            <p className="text-sm font-medium text-text-primary">{t('luascripts.scriptingEngine')}</p>
             <p className="text-xs text-text-dim mt-0.5">
-              {t('luascripts.scriptsDescription')}
+              {t('luascripts.scriptingDesc')}
             </p>
           </div>
         </div>
@@ -136,12 +136,12 @@ export default function LuaScripts() {
       <Modal open={showImportModal} onClose={() => setShowImportModal(false)} title={t('luascripts.importScript')} width="400px">
         <div className="p-6 space-y-4">
           <div>
-            <label className="text-sm font-medium text-text-primary block mb-2">{t('luascripts.filePath')}</label>
+            <label className="text-sm font-medium text-text-primary block mb-2">{t('luascripts.filePathRequired')}</label>
             <Input
               type="text"
               value={importPath}
               onChange={(e) => setImportPath(e.target.value)}
-              placeholder={t('luascripts.pathExample')}
+              placeholder="C:\Users\...\2406770.lua"
               autoFocus
               className="w-full"
             />
@@ -157,7 +157,7 @@ export default function LuaScripts() {
               disabled={importing || !importPath.trim()}
               loading={importing}
             >
-              {importing ? t('addgame.importing') : t('luascripts.importButton')}
+              {importing ? t('common.importing') : t('common.import')}
             </Button>
           </div>
         </div>
@@ -166,8 +166,8 @@ export default function LuaScripts() {
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-1 card">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-text-bright">Installed Scripts</h3>
-            <span className="text-xs text-text-dim">{filteredScripts.length} scripts</span>
+            <h3 className="text-sm font-semibold text-text-bright">{t('luascripts.installedScripts')}</h3>
+            <span className="text-xs text-text-dim">{filteredScripts.length} {t('luascripts.scriptsCount')}</span>
           </div>
 
           <div className="relative mb-3">
@@ -177,7 +177,7 @@ export default function LuaScripts() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('luascripts.searchScripts')}
-              className="w-full bg-input border border-border rounded-lg pl-9 pr-3 py-2 text-xs text-text-primary placeholder-text-dim focus:outline-none focus:border-accent"
+              className="w-full bg-input border border-border rounded-lg pl-9 pr-3 py-2 text-xs text-text-primary placeholder:text-text-dim focus:outline-none focus:border-accent"
             />
           </div>
 
@@ -188,8 +188,8 @@ export default function LuaScripts() {
           ) : filteredScripts.length === 0 ? (
             <div className="text-center py-8">
               <FileCode className="w-8 h-8 text-text-dim mx-auto mb-2" />
-              <p className="text-xs text-text-dim">No Lua scripts found</p>
-              <p className="text-xs text-text-dim mt-1">Import .lua files to get started</p>
+              <p className="text-xs text-text-dim">{t('luascripts.noScriptsFound')}</p>
+              <p className="text-xs text-text-dim mt-1">{t('luascripts.importToStart')}</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
@@ -209,7 +209,7 @@ export default function LuaScripts() {
                   </div>
                   {script.parsed.appIds.length > 0 && (
                     <div className="flex items-center gap-2 mt-1 ml-6">
-                      <span className="text-xs text-text-dim">AppIDs:</span>
+                      <span className="text-xs text-text-dim">{t('luascripts.appIds')}:</span>
                       {script.parsed.appIds.slice(0, 3).map((a, idx) => (
                         <span key={`${script.fileName}-${a.id}-${idx}`} className="text-xs text-accent font-mono">{a.id}</span>
                       ))}
@@ -221,7 +221,7 @@ export default function LuaScripts() {
                   {script.parsed.manifestIds.length > 0 && (
                     <div className="flex items-center gap-1 mt-1 ml-6">
                       <Package className="w-3 h-3 text-text-dim" />
-                      <span className="text-xs text-text-dim">{script.parsed.manifestIds.length} manifests</span>
+                      <span className="text-xs text-text-dim">{script.parsed.manifestIds.length} {t('luascripts.manifests')}</span>
                     </div>
                   )}
                 </div>
@@ -239,18 +239,18 @@ export default function LuaScripts() {
                   <div>
                     <h3 className="text-sm font-semibold text-text-bright">{selectedScript.fileName}</h3>
                     <p className="text-xs text-text-dim">
-                      {selectedScript.parsed.appIds.length} AppIDs - {selectedScript.parsed.manifestIds.length} Manifests
+                      {selectedScript.parsed.appIds.length} {t('luascripts.appIds')} - {selectedScript.parsed.manifestIds.length} {t('luascripts.manifestsCount')}
                     </p>
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={handleCopy} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1">
                     {copied ? <CheckCircle className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
-                    {copied ? 'Copied' : 'Copy'}
+                    {copied ? t('common.copied') : t('logs.copy')}
                   </button>
                   <button onClick={() => setShowEditor(!showEditor)} className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1">
                     <Edit3 className="w-3 h-3" />
-                    {showEditor ? 'Preview' : 'Edit'}
+                    {showEditor ? t('luascripts.preview') : t('common.edit')}
                   </button>
                   <button onClick={() => handleDelete(selectedScript.fileName)} className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors">
                     <Trash2 className="w-4 h-4 text-red-400" />
@@ -260,7 +260,7 @@ export default function LuaScripts() {
 
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="rounded-lg p-3 border border-border bg-surface-darker/40">
-                  <p className="text-xs text-text-dim mb-2">AppIDs</p>
+                  <p className="text-xs text-text-dim mb-2">{t('luascripts.appIds')}</p>
                   <div className="space-y-1">
                     {selectedScript.parsed.appIds.map((a, idx) => (
                       <div key={`${selectedScript.fileName}-${a.id}-${idx}`} className="flex items-center gap-2 text-xs">
@@ -268,18 +268,18 @@ export default function LuaScripts() {
                         {a.key && (
                           <span className="flex items-center gap-1 text-yellow-400">
                             <Key className="w-2.5 h-2.5" />
-                            has key
+                            {t('luascripts.hasKey')}
                           </span>
                         )}
                         {a.type !== undefined && a.type !== '' && (
-                          <span className="text-text-dim">type: {a.type}</span>
+                          <span className="text-text-dim">{t('luascripts.type')}: {a.type}</span>
                         )}
                       </div>
                     ))}
                   </div>
                 </div>
                 <div className="rounded-lg p-3 border border-border bg-surface-darker/40">
-                  <p className="text-xs text-text-dim mb-2">Manifest IDs</p>
+                  <p className="text-xs text-text-dim mb-2">{t('luascripts.manifestIds')}</p>
                   <div className="space-y-1">
                     {selectedScript.parsed.manifestIds.length > 0 ? (
                       selectedScript.parsed.manifestIds.map((m, idx) => (
@@ -291,7 +291,7 @@ export default function LuaScripts() {
                         </div>
                       ))
                     ) : (
-                      <p className="text-xs text-text-dim">No manifest IDs</p>
+                      <p className="text-xs text-text-dim">{t('luascripts.noManifestIds')}</p>
                     )}
                   </div>
                 </div>
@@ -314,7 +314,7 @@ export default function LuaScripts() {
             <div className="flex items-center justify-center h-[500px]">
               <div className="text-center">
                 <FileCode className="w-12 h-12 text-text-dim mx-auto mb-3" />
-                <p className="text-sm text-text-dim">Select a script to view its content</p>
+                <p className="text-sm text-text-dim">{t('luascripts.selectScript')}</p>
               </div>
             </div>
           )}

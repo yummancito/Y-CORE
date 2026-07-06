@@ -36,15 +36,15 @@ export function CommandPalette() {
 
   const commands: Command[] = useMemo(() => {
     const cmds: Command[] = [
-      { id: 'go-library', label: t('commandPalette.goLibrary'), icon: Library, category: t('commandPalette.categoryNavigation'), action: () => navigate('/') },
-      { id: 'go-add-game', label: t('commandPalette.addGame'), icon: PlusCircle, category: t('commandPalette.categoryActions'), action: () => navigate('/add-game') },
-      { id: 'go-import', label: t('commandPalette.importGameFolder'), icon: UploadCloud, category: t('commandPalette.categoryActions'), action: () => navigate('/import-game') },
-      { id: 'go-logs', label: t('commandPalette.viewLogs'), icon: ScrollText, category: t('commandPalette.categoryNavigation'), action: () => navigate('/logs') },
+      { id: 'go-library', label: 'Go to Library', icon: Library, category: 'Navigation', action: () => navigate('/') },
+      { id: 'go-add-game', label: 'Add Game', icon: PlusCircle, category: 'Actions', action: () => navigate('/add-game') },
+      { id: 'go-import', label: 'Import Game Folder', icon: UploadCloud, category: 'Actions', action: () => navigate('/import-game') },
+      { id: 'go-logs', label: 'View Logs', icon: ScrollText, category: 'Navigation', action: () => navigate('/logs') },
       {
         id: 'restart-steam',
-        label: t('commandPalette.restartSteam'),
+        label: 'Restart Steam',
         icon: Power,
-        category: t('commandPalette.categoryActions'),
+        category: 'Actions',
         action: async () => {
           showToast('info', t('library.restarting'))
           const result = await restartSteam()
@@ -62,7 +62,7 @@ export function CommandPalette() {
           id: `game-${g.appId}`,
           label: `${g.name} (${g.appId})`,
           icon: Library,
-          category: t('commandPalette.categoryGames'),
+          category: 'Games',
           action: () => {
             setSelectedGame(g)
             navigate('/')
@@ -139,7 +139,7 @@ export function CommandPalette() {
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label={t('commandPalette.commandPalette')}
+        aria-label="Command Palette"
       >
         {/* Search input */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
@@ -149,17 +149,17 @@ export function CommandPalette() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('commandPalette.search')}
+            placeholder="Search commands or games..."
             className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-dim focus:outline-none"
-            aria-label={t('commandPalette.searchAria')}
+            aria-label="Search"
           />
-          <kbd className="text-xs text-text-dim bg-surface-light/50 px-1.5 py-0.5 rounded">{t('commandPalette.esc')}</kbd>
+          <kbd className="text-xs text-text-dim bg-surface-light/50 px-1.5 py-0.5 rounded">Esc</kbd>
         </div>
 
         {/* Results */}
         <div ref={listRef} className="max-h-80 overflow-y-auto py-2">
           {filtered.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-text-dim">{t('commandPalette.noResults')}</div>
+            <div className="px-4 py-8 text-center text-sm text-text-dim">No results found</div>
           ) : (
             categories.map((category) => (
               <div key={category}>

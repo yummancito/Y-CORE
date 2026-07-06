@@ -1,6 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
-import { t } from '../../lib/i18n'
 
 interface ModalProps {
   open: boolean
@@ -76,7 +75,7 @@ export function Modal({ open, onClose, children, width = '520px', title }: Modal
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08] bg-white/[0.03]">
             <h2 className="text-base font-bold text-text-bright">{title}</h2>
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-text-dim hover:text-white hover:bg-white/10" aria-label={t('common.close')}>
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-text-dim hover:text-white hover:bg-white/10" aria-label="Close">
               <X className="w-5 h-5" />
             </button>
           </div>

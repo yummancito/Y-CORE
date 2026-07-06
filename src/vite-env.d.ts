@@ -106,6 +106,9 @@ interface Window {
     appReady: () => Promise<void>
     setSplashStatus: (status: string, percent: number) => Promise<void>
     getLocale: () => Promise<string>
+    getVersion: () => Promise<string>
+    openImageDialog: () => Promise<string | null>
+    readImageAsDataURL: (filePath: string) => Promise<string | null>
     openExternal: (url: string) => Promise<{ success: boolean; error?: string }>
     setAuthSession: (session: { access_token: string; refresh_token: string } | null) => Promise<void>
     getAccessToken: () => Promise<string | null>

@@ -49,7 +49,7 @@ export function EpicSidebar() {
   const { restartSteam, verifySteam } = useSteamStore()
   const { showToast } = useToastStore()
   const { recommendations, selectGame } = useRecommendationStore()
-  const { logsVisible, showAddGame } = useSettingsStore()
+  const { logsVisible, showAddGame, customization } = useSettingsStore()
   const location = useLocation()
   const [coverErrors, setCoverErrors] = useState<Set<string>>(new Set())
   const [verificationStatus, setVerificationStatus] = useState<{ installed: boolean; missing: string[] } | null>(null)
@@ -100,6 +100,24 @@ export function EpicSidebar() {
 
   const quickGames = games.slice(0, 5)
 
+  // Build dynamic nav items from customization config
+  const NAV_ITEM_MAP: Record<string, { to: string; icon: React.ComponentType<{ className?: string }>; label: string; conditional?: boolean }> = {
+    library: { to: '/', icon: Library20Regular, label: t('library.title') },
+    store: { to: '/store', icon: BuildingShop20Regular, label: t('store.title') },
+    onlinefix: { to: '/online-fix', icon: Wifi120Regular, label: t('nav.onlinefix') },
+    addgame: { to: '/add-game', icon: AddCircle20Regular, label: t('nav.addGame'), conditional: showAddGame },
+    logs: { to: '/logs', icon: DocumentText20Regular, label: t('nav.logs'), conditional: logsVisible },
+    settings: { to: '/settings', icon: Settings20Regular, label: t('nav.settings') },
+  }
+  const sortedNavItems = [...customization.navItems].sort((a, b) => a.order - b.order)
+  const visibleNavItems = sortedNavItems.filter((item) => {
+    if (!item.visible) return false
+    const config = NAV_ITEM_MAP[item.id]
+    if (!config) return false
+    if (config.conditional === false) return false
+    return true
+  })
+
   const isLibrary = location.pathname === '/'
   const isStore = location.pathname === '/store'
   useEffect(() => {
@@ -109,18 +127,19 @@ export function EpicSidebar() {
   return (
     <aside
       data-section="Sidebar"
-      className="flex flex-col flex-shrink-0 h-full w-[260px] select-none bg-white/[0.06] backdrop-blur-xl"
+      className="flex flex-col flex-shrink-0 h-full w-[260px] select-none backdrop-blur-xl"
+      style={{ backgroundColor: `rgba(255, 255, 255, var(--sidebar-opacity, 0.06))` }}
     >
       {/* Main nav */}
       <nav className="flex-1 p-5 space-y-2 overflow-y-auto">
-        {/* Library section */}
+        {/* Dynamic nav items */}
         <div className="space-y-1">
-          <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-text-bright">{t('sidebar.appName')}</p>
-          <NavItem to="/" icon={Library20Regular} label={t('library.title')} />
-          <NavItem to="/store" icon={BuildingShop20Regular} label={t('store.title')} />
-          <NavItem to="/online-fix" icon={Wifi120Regular} label={t('nav.onlinefix')} />
-          {showAddGame && <NavItem to="/add-game" icon={AddCircle20Regular} label={t('nav.addGame')} />}
-          {logsVisible && <NavItem to="/logs" icon={DocumentText20Regular} label={t('nav.logs')} />}
+          <p className="px-3 text-[10px] font-semibold uppercase tracking-wider text-text-bright">Y-core</p>
+          {visibleNavItems.filter((item) => item.id !== 'settings').map((item) => {
+            const config = NAV_ITEM_MAP[item.id]
+            if (!config) return null
+            return <NavItem key={item.id} to={config.to} icon={config.icon} label={config.label} />
+          })}
         </div>
 
         {/* Quick launch section */}
@@ -204,7 +223,9 @@ export function EpicSidebar() {
 
       {/* Bottom actions */}
       <div className="p-5 border-t border-white/[0.08] space-y-1">
-        <NavItem to="/settings" icon={Settings20Regular} label={t('nav.settings')} />
+        {visibleNavItems.find((item) => item.id === 'settings') && (
+          <NavItem to="/settings" icon={Settings20Regular} label={t('nav.settings')} />
+        )}
 
         {/* Discord CTA */}
         <button
@@ -232,10 +253,10 @@ export function EpicSidebar() {
             </div>
             <div className="flex-1 text-left">
               <p className="text-[#3BB2F7] font-bold text-sm group-hover:text-[#5BC3FF] transition-colors duration-300 drop-shadow-sm">
-                {t('sidebar.discord')}
+                Discord
               </p>
               <p className="text-[#3BB2F7]/60 text-xs group-hover:text-[#3BB2F7]/80 transition-colors duration-300">
-                {t('sidebar.joinCommunity')}
+                Join community
               </p>
             </div>
             <div className="opacity-40 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300">

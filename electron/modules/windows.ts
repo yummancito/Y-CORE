@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, screen, session } from 'electron'
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, screen, session, dialog } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { exec, spawn } from 'child_process'
@@ -6,7 +6,7 @@ import { logger } from '../logger'
 import { state, setMainWindow, setLoginWindow, setSplashWindow, setIsQuitting, getIsQuitting } from '../state'
 import { getSteamPath } from './steam-helpers'
 
-const appIconPath = path.join(__dirname, '..', 'public', 'logo.ico')
+const appIconPath = path.join(app.getAppPath(), 'public', 'logo.ico')
 const appIcon = fs.existsSync(appIconPath) ? appIconPath : undefined
 
 export function createSplashWindow(): void {
@@ -46,7 +46,7 @@ export function createSplashWindow(): void {
     win.show()
   })
 
-  win.loadFile(path.join(__dirname, '../electron/splash.html'))
+  win.loadFile(path.join(app.getAppPath(), 'electron/splash.html'))
 
   win.on('closed', () => {
     setSplashWindow(null)
@@ -91,6 +91,9 @@ export function createLoginWindow(): void {
   win.once('ready-to-show', () => {
     win.show()
     win.focus()
+    if (!app.isPackaged) {
+      win.webContents.openDevTools({ mode: 'detach' })
+    }
   })
 
   win.on('show', () => {
@@ -109,7 +112,7 @@ export function createLoginWindow(): void {
   if (process.env.VITE_DEV_SERVER_URL || !app.isPackaged) {
     win.loadURL(`${devServerUrl}#/login`)
   } else {
-    win.loadFile(path.join(__dirname, '../dist/index.html'), { hash: 'login' })
+    win.loadFile(path.join(app.getAppPath(), 'dist/index.html'), { hash: 'login' })
   }
 
   win.on('closed', () => {
@@ -213,7 +216,7 @@ export function createWindow(): void {
     win.loadURL(devServerUrl)
     win.webContents.openDevTools()
   } else {
-    win.loadFile(path.join(__dirname, '../dist/index.html'))
+    win.loadFile(path.join(app.getAppPath(), 'dist/index.html'))
   }
 
   // Content Security Policy
@@ -225,7 +228,7 @@ export function createWindow(): void {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self' http://localhost:5173 ws://localhost:5173 http://localhost:3000 https://y-core-render-api.onrender.com",
+        "connect-src 'self' http://localhost:5173 ws://localhost:5173 http://localhost:3000",
       ].join('; ')
     : [
         "default-src 'self'",
@@ -233,7 +236,7 @@ export function createWindow(): void {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self' https://api.ycore.app https://y-core-render-api.onrender.com",
+        "connect-src 'self' https:",
       ].join('; ')
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -333,6 +336,52 @@ export function registerAppHandlers(
 ): void {
   ipcMain.handle('app:getLocale', () => {
     return app.getLocale()
+  })
+
+  ipcMain.handle('app:getVersion', () => {
+    return app.getVersion()
+  })
+
+  ipcMain.handle('dialog:openImageFile', async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Select background image',
+      filters: [
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'] },
+      ],
+      properties: ['openFile'],
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+
+    // Copy image to app data folder so it persists even if original is deleted
+    const srcPath = result.filePaths[0]
+    const bgDir = path.join(app.getPath('userData'), 'backgrounds')
+    if (!fs.existsSync(bgDir)) fs.mkdirSync(bgDir, { recursive: true })
+
+    const ext = path.extname(srcPath).toLowerCase()
+    const destPath = path.join(bgDir, `background${ext}`)
+    try {
+      fs.copyFileSync(srcPath, destPath)
+      return destPath
+    } catch {
+      return srcPath
+    }
+  })
+
+  ipcMain.handle('app:readImageAsDataURL', async (_event, filePath: string) => {
+    try {
+      if (!filePath || typeof filePath !== 'string') return null
+      if (!fs.existsSync(filePath)) return null
+      const ext = path.extname(filePath).toLowerCase().slice(1)
+      const mimeMap: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png',
+        webp: 'image/webp', gif: 'image/gif', bmp: 'image/bmp',
+      }
+      const mime = mimeMap[ext] || 'image/jpeg'
+      const data = fs.readFileSync(filePath)
+      return `data:${mime};base64,${data.toString('base64')}`
+    } catch {
+      return null
+    }
   })
 
   const ALLOWED_EXTERNAL_PROTOCOLS = ['https:', 'http:', 'mailto:', 'steam:']

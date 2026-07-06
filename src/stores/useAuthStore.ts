@@ -50,8 +50,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     if (tokenRefreshUnsub) tokenRefreshUnsub()
     try {
       tokenRefreshUnsub = window.steamtools.onTokenRefreshed((accessToken) => {
-        // Main process already persisted the new tokens — just invalidate cache
-        // The next apiFetch call will pick up the new access token from main process
+        // Main process refreshed the token — keep the renderer's cached token in sync
+        // so subsequent requests don't send the stale (expired) token.
+        api.updateCachedToken(accessToken)
       })
     } catch {
       // Non-Electron environment

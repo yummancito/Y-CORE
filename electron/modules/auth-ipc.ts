@@ -52,24 +52,13 @@ export function saveAuthSession(): void {
   }
 }
 
-function isValidHttpUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
 export function getApiUrl(): string {
-  const DEFAULT_API_URL = app.isPackaged
-    ? 'https://y-core-render-api.onrender.com'
-    : (process.env.VITE_YCORE_API_URL || 'http://localhost:3000')
+  const DEFAULT_API_URL = process.env.VITE_YCORE_API_URL || 'http://localhost:3000'
   try {
     const configPath = path.join(app.getPath('userData'), 'ycore-config.json')
     if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-      if (config.apiUrl && typeof config.apiUrl === 'string' && isValidHttpUrl(config.apiUrl)) {
+      if (config.apiUrl && typeof config.apiUrl === 'string') {
         return config.apiUrl
       }
     }

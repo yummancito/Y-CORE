@@ -30,23 +30,23 @@ export default function ResetPasswordPage() {
       setMessage(t('login.resetSuccess'))
       setTimeout(() => navigate('/login'), 2000)
     } catch (err: any) {
-      setMessage(err.message || t('login.failedResetPassword'))
+      setMessage(err.message || t('login.resetFailed'))
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col items-center justify-center bg-black p-6">
+    <div className="flex h-screen w-screen flex-col items-center justify-center p-6" style={{ background: 'var(--bg-darker)' }}>
       <div className="w-full max-w-[420px]">
         <div className="overflow-hidden rounded-2xl bg-transparent p-0">
           <form onSubmit={handleSubmit} className="p-8 flex flex-col gap-5">
             <div className="flex flex-col items-center gap-2 text-center">
               <h1 className="text-2xl font-bold text-white">{t('login.resetPassword')}</h1>
-              <p className="text-sm text-zinc-400">{t('login.newPassword')}</p>
+              <p className="text-sm text-text-dim">{t('login.newPassword')}</p>
             </div>
             <div className="flex flex-col gap-2">
-              <label htmlFor="password" className="text-sm font-medium text-zinc-300">{t('login.newPassword')}</label>
+              <label htmlFor="password" className="text-sm font-medium text-text-primary">{t('login.newPassword')}</label>
               <input
                 id="password"
                 type="password"
@@ -54,12 +54,13 @@ export default function ResetPasswordPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
-                className="w-full h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-zinc-600"
+                className="w-full h-10 rounded-xl px-3 py-2 text-sm text-text-bright placeholder:text-text-muted outline-none focus:border-accent transition-colors"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
                 placeholder="••••••••"
               />
             </div>
             <div className="flex flex-col gap-2">
-              <label htmlFor="confirmPassword" className="text-sm font-medium text-zinc-300">{t('login.confirmPassword')}</label>
+              <label htmlFor="confirmPassword" className="text-sm font-medium text-text-primary">{t('login.confirmPassword')}</label>
               <input
                 id="confirmPassword"
                 type="password"
@@ -67,7 +68,8 @@ export default function ResetPasswordPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 minLength={8}
-                className="w-full h-10 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-white placeholder-zinc-500 outline-none focus:border-zinc-600"
+                className="w-full h-10 rounded-xl px-3 py-2 text-sm text-text-bright placeholder:text-text-muted outline-none focus:border-accent transition-colors"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)' }}
                 placeholder="••••••••"
               />
             </div>
@@ -79,13 +81,14 @@ export default function ResetPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-10 flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black transition-all hover:bg-zinc-200 disabled:opacity-50"
+              className="w-full h-10 flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:opacity-50"
+              style={{ background: 'var(--accent)' }}
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {loading ? t('login.loading') : t('login.resetPassword')}
             </button>
-            <div className="text-center text-sm text-zinc-500">
-              <button type="button" onClick={() => navigate('/login')} className="text-zinc-400 hover:text-white font-medium transition-colors">
+            <div className="text-center text-sm text-text-muted">
+              <button type="button" onClick={() => navigate('/login')} className="text-text-dim hover:text-text-bright font-medium transition-colors">
                 {t('login.backToLogin')}
               </button>
             </div>

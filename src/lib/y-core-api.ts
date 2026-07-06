@@ -10,12 +10,26 @@ import type {
   DepotKey,
   InstallGameData,
 } from '@y-core/shared'
-import { t } from './i18n'
 
-const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'https://y-core-render-api.onrender.com'
+const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'http://localhost:3000'
 
 let cachedAccessToken: string | null = null
 let tokenLoadPromise: Promise<string | null> | null = null
+
+// Called when the Electron main process refreshes the token on its own,
+// so the renderer's cached access token stays in sync (avoids stale-token 401s).
+export function updateCachedToken(token: string): void {
+  cachedAccessToken = token
+}
+
+function getJwtExpiryMs(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
 
 async function getToken(): Promise<{ accessToken: string; refreshToken: string } | null> {
   // Renderer only gets access token from main process — refresh token never leaves main
@@ -46,16 +60,14 @@ async function getToken(): Promise<{ accessToken: string; refreshToken: string }
 }
 
 const PUBLIC_ENDPOINTS = [
-  /^\/api\/auth\//, // all auth endpoints are public
-  /^\/api\/search$/, // search is public
-  /^\/api\/games$/, // game list is public
-  /^\/api\/games\/\d+$/, // game detail is public
-  /^\/api\/games\/\d+\/onlinefix-compat$/, // onlinefix compat is public
-  /^\/api\/games\/onlinefix-compat$/, // batch onlinefix compat is public
+  '/api/games',
+  '/api/search',
+  '/api/games/', // public game details and onlinefix-compat
+  '/api/auth/',
 ]
 
 function isPublicEndpoint(path: string): boolean {
-  return PUBLIC_ENDPOINTS.some((pattern) => pattern.test(path))
+  return PUBLIC_ENDPOINTS.some((prefix) => path.startsWith(prefix))
 }
 
 function setToken(session: { accessToken: string; refreshToken: string }): void {
@@ -90,7 +102,7 @@ async function refreshAccessToken(): Promise<string> {
     const newToken = await window.steamtools.refreshToken()
     if (!newToken) {
       clearToken()
-      throw new Error(t('api.sessionExpired'))
+      throw new Error('Session expired')
     }
     cachedAccessToken = newToken
     return newToken
@@ -107,13 +119,27 @@ async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const session = await getToken()
+  let session = await getToken()
   const isAuthEndpoint = path.startsWith('/api/auth')
   const isPublic = isPublicEndpoint(path)
   if (!session?.accessToken && !isAuthEndpoint && !isPublic) {
-    const err = new Error(t('api.sessionExpiredLogin')) as any
+    const err = new Error('Session expired. Please log in again.') as any
     err.status = 401
     throw err
+  }
+
+  // Proactively refresh the token if it is about to expire, to avoid a
+  // guaranteed 401 + retry round-trip on the next protected request.
+  if (session?.accessToken && !isAuthEndpoint) {
+    const expMs = getJwtExpiryMs(session.accessToken)
+    if (expMs !== null && expMs - Date.now() < 30_000) {
+      try {
+        const newToken = await refreshAccessToken()
+        session = { accessToken: newToken, refreshToken: '' }
+      } catch {
+        // Fall through — the 401 handler below will attempt a final refresh
+      }
+    }
   }
 
   const headers: Record<string, string> = {
@@ -138,7 +164,7 @@ async function apiFetch<T>(
   }
 
   if (!resp.ok) {
-    const errorBody = await resp.json().catch(() => ({ error: t('api.requestFailed') }))
+    const errorBody = await resp.json().catch(() => ({ error: 'Request failed' }))
     const err = new Error(errorBody.error || `HTTP ${resp.status}`)
     ;(err as any).status = resp.status
     throw err
@@ -214,7 +240,11 @@ export async function logout(): Promise<void> {
 export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     return await apiFetch<AuthUser>('/api/users/me')
-  } catch {
+  } catch (err: any) {
+    // 401 simply means no valid session; anything else is worth surfacing in logs
+    if (err?.status !== 401) {
+      console.error('[getCurrentUser] Failed to fetch profile:', err?.status, err?.message)
+    }
     return null
   }
 }
@@ -320,7 +350,7 @@ export async function pollJobUntilDone(
   jobId: string,
   onUpdate: (job: JobResponse) => void,
   intervalMs = 3000,
-  maxAttempts = 100
+  maxAttempts = 300 // ~15 min — large DepotBox imports (download + extract + upload) can be slow
 ): Promise<JobResponse> {
   let attempts = 0
 
@@ -336,7 +366,7 @@ export async function pollJobUntilDone(
     attempts++
   }
 
-  throw new Error(t('api.jobPollingTimeout'))
+  throw new Error('Job polling timed out')
 }
 
 // ===== Manifests =====

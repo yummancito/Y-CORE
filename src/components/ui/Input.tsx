@@ -1,6 +1,5 @@
 import { type InputHTMLAttributes, forwardRef } from 'react'
 import { Search, X } from 'lucide-react'
-import { t } from '../../lib/i18n'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   variant?: 'text' | 'search'
@@ -25,7 +24,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             <button
               onClick={onClear}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-text-dim hover:text-text-bright"
-              aria-label={t('common.clear')}
+              aria-label="Clear"
             >
               <X className="w-4 h-4" />
             </button>

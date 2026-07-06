@@ -1,6 +1,5 @@
 import { CheckCircle, AlertCircle, Info, AlertTriangle, X } from 'lucide-react'
 import { useToastStore } from '../../stores/useToastStore'
-import { t } from '../../lib/i18n'
 
 const icons = {
   success: CheckCircle,
@@ -33,7 +32,7 @@ export function ToastContainer() {
           >
             <Icon className="w-5 h-5 flex-shrink-0" />
             <span className="text-sm flex-1">{toast.message}</span>
-            <button onClick={() => dismissToast(toast.id)} className="flex-shrink-0 opacity-70 hover:opacity-100 transition-opacity" aria-label={t('common.dismiss')}>
+            <button onClick={() => dismissToast(toast.id)} className="flex-shrink-0 opacity-70 hover:opacity-100 transition-opacity" aria-label="Dismiss">
               <X className="w-4 h-4" />
             </button>
           </div>

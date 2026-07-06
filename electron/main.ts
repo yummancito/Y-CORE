@@ -8,7 +8,7 @@ import { autoUpdater } from 'electron-updater'
 import { state, setIsQuitting } from './state'
 
 // Modular IPC handlers
-import { loadAuthSession, registerAuthHandlers } from './modules/auth-ipc'
+import { loadAuthSession, registerAuthHandlers, saveAuthSession } from './modules/auth-ipc'
 import {
   createSplashWindow,
   createLoginWindow,
@@ -17,13 +17,15 @@ import {
   showMainWindow,
   registerAppHandlers,
 } from './modules/windows'
-import { registerSteamHandlers, invalidateGamesCache } from './modules/steam-ipc'
-import { registerStoreHandlers } from './modules/store-ipc'
 import { registerLogHandlers } from './modules/logs'
 import { registerConfigHandlers } from './modules/config'
 import { registerStoreImageHandlers } from './modules/store-images'
 import { registerOnlineFixHandlers } from './modules/onlinefix'
-import { startAcfWatcher } from './modules/manifest-sync'
+
+// Private modules — not included in public release
+// import { registerSteamHandlers, invalidateGamesCache } from './modules/steam-ipc'
+// import { registerStoreHandlers } from './modules/store-ipc'
+// import { startAcfWatcher } from './modules/manifest-sync'
 
 // ============================================
 // Crash Handling — log errors and notify user
@@ -73,6 +75,7 @@ if (!gotTheLock) {
   app.quit()
 }
 
+if (gotTheLock) {
 // Load persisted auth session on startup
 loadAuthSession()
 
@@ -86,12 +89,12 @@ app.whenReady().then(async () => {
   // before they are registered (especially after login reload).
   registerLogHandlers(() => state.mainWindow)
   registerConfigHandlers()
-  registerOnlineFixHandlers(() => { invalidateGamesCache() })
+  registerOnlineFixHandlers(() => { /* invalidateGamesCache() — private module */ })
   registerStoreImageHandlers()
   registerAuthHandlers({ showMainWindow, createLoginWindow })
   registerAppHandlers({ showMainWindow, createLoginWindow })
-  registerSteamHandlers()
-  registerStoreHandlers(invalidateGamesCache)
+  // registerSteamHandlers() — private module
+  // registerStoreHandlers(invalidateGamesCache) — private module
 
   createSplashWindow()
   createWindow()
@@ -100,7 +103,7 @@ app.whenReady().then(async () => {
   createLoginWindow()
 
   // Keep ACFs for Y-core Tool games in update-required state so downloads don't stall
-  startAcfWatcher()
+  // startAcfWatcher() — private module
 
   // Focus existing window when second instance is attempted
   app.on('second-instance', () => {
@@ -136,13 +139,28 @@ app.whenReady().then(async () => {
       }
     })
 
+    autoUpdater.on('checking-for-update', () => {
+      logger.info('Checking for updates...', 'updater')
+    })
+
+    autoUpdater.on('update-not-available', (info: { version?: string }) => {
+      logger.info(`No update available (current: ${info.version ?? 'unknown'})`, 'updater')
+    })
+
     autoUpdater.on('error', (err: Error) => {
       logger.error(`Auto-updater error: ${err.message}`, 'updater')
     })
 
-    autoUpdater.checkForUpdates().catch((err: Error) => {
-      logger.warn(`Update check failed: ${err.message}`, 'updater')
-    })
+    const checkForUpdates = () => {
+      autoUpdater.checkForUpdates().catch((err: Error) => {
+        logger.warn(`Update check failed: ${err.message}`, 'updater')
+      })
+    }
+
+    // Check on startup, then periodically (the app runs long in the tray)
+    checkForUpdates()
+    const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000 // 4 hours
+    setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL)
 
     ipcMain.handle('app:installUpdate', () => {
       logger.info('User requested update install — quitting and installing', 'updater')
@@ -155,9 +173,11 @@ app.whenReady().then(async () => {
     })
   }
 })
+}
 
 app.on('before-quit', () => {
   setIsQuitting(true)
+  saveAuthSession()
 })
 
 app.on('window-all-closed', () => {

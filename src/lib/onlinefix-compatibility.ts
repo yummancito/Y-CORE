@@ -1,5 +1,3 @@
-import { t } from './i18n'
-
 export type CompatibilityStatus = 'compatible' | 'incompatible' | 'unknown'
 
 export interface CompatibilityEntry {
@@ -87,12 +85,12 @@ export function getCompatibility(appId: string): CompatibilityEntry {
 export function getCompatibilityReason(reason: string | undefined): string {
   if (!reason) return ''
   const reasons: Record<string, string> = {
-    dedicated_servers: t('onlinefix.reasonDedicatedServers'),
-    photon: t('onlinefix.reasonPhoton'),
-    authentication: t('onlinefix.reasonAuthentication'),
-    microsoft_auth: t('onlinefix.reasonMicrosoftAuth'),
-    eos: t('onlinefix.reasonEOS'),
-    compatibility: t('onlinefix.reasonCompatibility'),
+    dedicated_servers: 'Uses dedicated servers',
+    photon: 'Uses Photon networking',
+    authentication: 'Requires external authentication',
+    microsoft_auth: 'Requires Microsoft account',
+    eos: 'Uses Epic Online Services',
+    compatibility: 'Known compatibility issues',
   }
   return reasons[reason] || reason
 }

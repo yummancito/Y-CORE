@@ -89,6 +89,4 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
-  logLevel: 'warn',
-  clearScreen: false,
 })

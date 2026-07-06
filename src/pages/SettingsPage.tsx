@@ -23,6 +23,7 @@ import { useSettingsStore } from '../stores/useSettingsStore'
 import { updateBetaStatus } from '../lib/y-core-api'
 import { usePageHeader } from '../components/layout/AppShell'
 import { Card } from '../components/ui/Card'
+import { CustomizationPanel } from '../components/settings/CustomizationPanel'
 import type { LogConfig } from '../domain/types'
 
 type SettingsTab = 'account' | 'content' | 'logs' | 'personalization'
@@ -117,6 +118,7 @@ export default function SettingsPage() {
 
   // Profile image
   const [profileImage, setProfileImage] = useState<string | null>(null)
+  const [appVersion, setAppVersion] = useState('')
 
   usePageHeader(
     <div className="flex items-center gap-4 h-11">
@@ -135,6 +137,7 @@ export default function SettingsPage() {
     window.steamtools?.readConfig?.().then((cfg: any) => {
       if (cfg?.profileImage) setProfileImage(cfg.profileImage)
     }).catch(() => {})
+    window.steamtools?.getVersion?.().then((v) => setAppVersion(v)).catch(() => {})
   }, [loadFromConfig])
 
   const saveConfig = useCallback(async (partial: Record<string, unknown>) => {
@@ -274,7 +277,7 @@ export default function SettingsPage() {
                 <label className="avatar avatar-online cursor-pointer group relative">
                   <div className="w-32 rounded-full ring-2 ring-white/[0.08] ring-offset-4 ring-offset-bg-primary">
                     {profileImage ? (
-                      <img src={profileImage} alt={t('settings.profileImageAlt')} />
+                      <img src={profileImage} alt="Profile" />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-accent to-accent-dark flex items-center justify-center text-4xl font-bold text-white">
                         {(user?.email?.[0] || '?').toUpperCase()}
@@ -498,11 +501,14 @@ export default function SettingsPage() {
               <div className="pt-2 border-t border-white/[0.06]">
                 <div className="flex items-center justify-between p-3">
                   <span className="text-sm text-text-dim">{t('settings.version')}</span>
-                  <span className="text-sm font-mono text-text-secondary">2.0.0</span>
+                  <span className="text-sm font-mono text-text-secondary">{appVersion || '—'}</span>
                 </div>
               </div>
             </div>
           </Card>
+
+          {/* Advanced customization */}
+          <CustomizationPanel />
         </div>
       )}
 

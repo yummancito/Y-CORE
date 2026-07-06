@@ -21,7 +21,7 @@ export function SignaturePendingModal() {
         <button
           onClick={close}
           className="absolute top-4 right-4 p-1.5 rounded-lg text-text-dim hover:text-text-bright hover:bg-white/[0.06] transition-colors"
-          aria-label={t('common.close')}
+          aria-label="Close"
         >
           <X className="w-4 h-4" />
         </button>
@@ -32,7 +32,7 @@ export function SignaturePendingModal() {
           </div>
           <div>
             <h3 className="text-lg font-bold text-text-bright">{t('signaturePending.title')}</h3>
-            <p className="text-xs text-text-dim">{t('signaturePending.betaLabel')}</p>
+            <p className="text-xs text-text-dim">Y-core Beta</p>
           </div>
         </div>
 

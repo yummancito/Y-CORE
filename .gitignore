@@ -6,6 +6,7 @@ node_modules
 dist
 dist-electron
 release
+release2
 *.tsbuildinfo
 
 # Local env files
@@ -54,3 +55,45 @@ tools/steamless/
 # OS files
 Thumbs.db
 ehthumbs.db
+
+# ===== Public Release Exclusions =====
+
+# API backend (private — not open source)
+apps/
+
+# Native DLLs and injection logic (private)
+native/
+electron/modules/dll-inject.ts
+electron/modules/depot-keys.ts
+electron/modules/manifest-sync.ts
+electron/modules/signature-cache.ts
+electron/modules/signature-report.ts
+electron/modules/goldsrc.ts
+electron/modules/store-ipc.ts
+electron/modules/steam-ipc.ts
+
+# Database schema (private)
+supabase/
+
+# Internal documentation
+docs/
+SECURITY-AUDIT-REPORT.md
+AUDIT_REPORT.md
+AUDIT-IMPLEMENTATION-SUMMARY.md
+AUDIT-REPORT-v2.md
+DOWNLOAD_FIX_RESEARCH.md
+DEPOTBOX_IMAGES.md
+
+# Release builds
+release2/
+
+# Internal scripts
+scripts/fix-exe.js
+scripts/fix-lua-orphan-depots.js
+scripts/dev/
+
+# Dev config
+.devin/
+
+# Signing tools (external binaries)
+$dir/

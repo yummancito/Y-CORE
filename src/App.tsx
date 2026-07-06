@@ -1,5 +1,5 @@
 import { useEffect, lazy, Suspense } from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { ToastContainer } from './components/ui/Toast'
@@ -26,27 +26,13 @@ function PageLoader() {
   )
 }
 
-function StorePageWrapper() {
-  window.steamtools?.addLog?.({
-    level: 'INFO',
-    message: `[App] StorePageWrapper rendering`,
-  })?.catch?.(() => {})
-  return <StorePage />
-}
-
 function AppRoutes() {
-  const location = useLocation()
-  window.steamtools?.addLog?.({
-    level: 'INFO',
-    message: `[App] current location=${location.pathname}`,
-  })?.catch?.(() => {})
-
   return (
     <AppShell>
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<LibraryPage />} />
-          <Route path="/store" element={<StorePageWrapper />} />
+          <Route path="/store" element={<StorePage />} />
           <Route path="/add-game" element={<AddGame />} />
           <Route path="/import-game" element={<ImportGame />} />
           <Route path="/logs" element={<LogsPage />} />

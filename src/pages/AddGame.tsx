@@ -40,18 +40,18 @@ interface SuspiciousFile {
   severity: 'high' | 'medium' | 'low'
 }
 
-const SUSPICIOUS_PATTERNS: { pattern: RegExp; reason: string; severity: 'high' | 'medium' | 'low' }[] = [
-  { pattern: /\.(exe|scr|com|bat|cmd|ps1|vbs|js|jar)$/i, reason: 'Executable script file', severity: 'high' },
-  { pattern: /\.(dll|sys|drv)$/i, reason: 'System library file', severity: 'medium' },
-  { pattern: /\.(tmp|log|cache)$/i, reason: 'Temporary/cache file', severity: 'low' },
-  { pattern: /crack|patch|keygen|serial|activator|loader/i, reason: 'Suspicious name (crack/keygen)', severity: 'high' },
-  { pattern: /\.(zip|rar|7z|tar|gz)$/i, reason: 'Archive file — should not be in Steam dir', severity: 'medium' },
+const SUSPICIOUS_PATTERNS: { pattern: RegExp; reasonKey: string; severity: 'high' | 'medium' | 'low' }[] = [
+  { pattern: /\.(exe|scr|com|bat|cmd|ps1|vbs|js|jar)$/i, reasonKey: 'addgame.executableScript', severity: 'high' },
+  { pattern: /\.(dll|sys|drv)$/i, reasonKey: 'addgame.systemLibrary', severity: 'medium' },
+  { pattern: /\.(tmp|log|cache)$/i, reasonKey: 'addgame.tempCache', severity: 'low' },
+  { pattern: /crack|patch|keygen|serial|activator|loader/i, reasonKey: 'addgame.suspiciousName', severity: 'high' },
+  { pattern: /\.(zip|rar|7z|tar|gz)$/i, reasonKey: 'addgame.archiveFile', severity: 'medium' },
 ]
 
 function checkSuspicious(fileName: string): SuspiciousFile | null {
-  for (const { pattern, reason, severity } of SUSPICIOUS_PATTERNS) {
+  for (const { pattern, reasonKey, severity } of SUSPICIOUS_PATTERNS) {
     if (pattern.test(fileName)) {
-      return { name: fileName, path: '', reason, severity }
+      return { name: fileName, path: '', reason: t(reasonKey), severity }
     }
   }
   return null
@@ -105,7 +105,7 @@ export default function AddGame() {
     // Filter out suspicious files from import
     const safeFiles = fileList.filter((f) => !checkSuspicious(f.name))
     if (safeFiles.length === 0) {
-      showToast('warning', t('addgame.suspiciousAll'))
+      showToast('warning', t('addgame.allFilesSuspicious'))
       return
     }
 
@@ -140,7 +140,7 @@ export default function AddGame() {
                 status: 'awaiting-confirm' as const,
                 appId,
                 gameName,
-                message: 'Awaiting confirmation',
+                message: t('addgame.awaitingConfirm'),
               } : f))
 
               setPendingConfirm({
@@ -148,7 +148,7 @@ export default function AddGame() {
                 status: 'awaiting-confirm' as const,
                 appId,
                 gameName,
-                message: 'Awaiting confirmation',
+                message: t('addgame.awaitingConfirm'),
               })
               setCoverError(false)
             } catch {
@@ -157,14 +157,14 @@ export default function AddGame() {
                 status: 'awaiting-confirm' as const,
                 appId,
                 gameName: `App ${appId}`,
-                message: 'Awaiting confirmation',
+                message: t('addgame.awaitingConfirm'),
               } : f))
               setPendingConfirm({
                 ...file,
                 status: 'awaiting-confirm' as const,
                 appId,
                 gameName: `App ${appId}`,
-                message: 'Awaiting confirmation',
+                message: t('addgame.awaitingConfirm'),
               })
               setCoverError(false)
             }
@@ -172,7 +172,7 @@ export default function AddGame() {
             setFiles((prev) => prev.map((f) => f.path === file.path ? {
               ...f,
               status: 'error' as const,
-              message: parseResult.error || 'Failed to parse Lua script',
+              message: parseResult.error || t('addgame.parseFailed'),
             } : f))
           }
         } else if (file.type === 'manifest') {
@@ -180,20 +180,20 @@ export default function AddGame() {
           setFiles((prev) => prev.map((f) => f.path === file.path ? {
             ...f,
             status: result.success ? 'imported' as const : 'error' as const,
-            message: result.success ? 'Copied to depotcache' : result.error,
+            message: result.success ? t('addgame.copiedToDepotcache') : result.error,
           } : f))
         } else if (file.type === 'acf') {
           const result = await window.steamtools.importManifest({ manifestPath: file.path })
           setFiles((prev) => prev.map((f) => f.path === file.path ? {
             ...f,
             status: result.success ? 'imported' as const : 'error' as const,
-            message: result.success ? 'Copied to steamapps' : result.error,
+            message: result.success ? t('addgame.copiedToSteamapps') : result.error,
           } : f))
         } else {
           setFiles((prev) => prev.map((f) => f.path === file.path ? {
             ...f,
             status: 'error' as const,
-            message: 'Unsupported file type',
+            message: t('addgame.unsupportedFile'),
           } : f))
         }
       } catch (err: any) {
@@ -233,9 +233,9 @@ export default function AddGame() {
         setFiles((prev) => prev.map((f) => f.path === pendingConfirm.path ? {
           ...f,
           status: 'imported' as const,
-          message: t('addgame.importedSuccess'),
+          message: t('addgame.imported'),
         } : f))
-        showToast('success', t('addgame.gameConfirmed').replace('{{name}}', pendingConfirm.gameName || t('common.unknown')))
+        showToast('success', `${t('addgame.gameConfirmed')}: ${pendingConfirm.gameName}`)
       } else {
         setFiles((prev) => prev.map((f) => f.path === pendingConfirm.path ? {
           ...f,
@@ -262,7 +262,7 @@ export default function AddGame() {
     setFiles((prev) => prev.map((f) => f.path === pendingConfirm.path ? {
       ...f,
       status: 'rejected' as const,
-      message: t('addgame.rejectedByUser'),
+      message: t('addgame.gameRejected'),
     } : f))
     setPendingConfirm(null)
     showToast('info', t('addgame.gameRejected'))
@@ -296,10 +296,10 @@ export default function AddGame() {
         <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 space-y-3">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-red-400" />
-            <span className="text-sm font-semibold text-red-400">Suspicious Files Detected ({suspiciousFiles.length})</span>
+            <span className="text-sm font-semibold text-red-400">{t('addgame.suspiciousDetected')} ({suspiciousFiles.length})</span>
           </div>
           <p className="text-xs text-red-300/80">
-            These files may contain malware or are not typical Steam game files. We recommend removing them.
+            {t('addgame.suspiciousDesc')}
           </p>
           <div className="space-y-2">
             {suspiciousFiles.map((sf, i) => (
@@ -307,12 +307,12 @@ export default function AddGame() {
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${sf.severity === 'high' ? 'bg-red-500' : sf.severity === 'medium' ? 'bg-yellow-500' : 'bg-blue-500'}`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-text-primary truncate">{sf.name}</p>
-                  <p className="text-[10px] text-text-dim">{sf.reason} · {sf.severity} severity</p>
+                  <p className="text-[10px] text-text-dim">{sf.reason} · {sf.severity === 'high' ? t('addgame.highSeverity') : sf.severity === 'medium' ? t('addgame.mediumSeverity') : t('addgame.lowSeverity')}</p>
                 </div>
                 <button
                   onClick={() => removeSuspicious(i)}
                   className="p-1.5 rounded-lg text-text-dim hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                  title="Dismiss"
+                  title={t('common.dismiss')}
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -417,20 +417,20 @@ export default function AddGame() {
               {closingSteam ? (
                 <div className="flex items-center gap-3 py-4">
                   <Loader className="w-5 h-5 animate-spin text-accent" />
-                  <span className="text-sm text-text-primary">Importing...</span>
+                  <span className="text-sm text-text-primary">{t('common.importing')}</span>
                 </div>
               ) : (
                 <>
-                  <p className="text-sm text-text-primary mb-1">Is this your game?</p>
+                  <p className="text-sm text-text-primary mb-1">{t('addgame.isThisGame')}</p>
                   <p className="text-xs text-text-dim mb-2">
-                    Confirm that this is the correct game before importing the Lua script.
+                    {t('addgame.confirmDesc')}
                   </p>
                   <div className="flex gap-3">
                     <Button variant="danger" className="flex-1 justify-center" icon={X} onClick={rejectGame}>
-                      No, reject
+                      {t('addgame.noReject')}
                     </Button>
                     <Button variant="primary" className="flex-1 justify-center" icon={CheckCircle} onClick={confirmGame}>
-                      Yes, import it
+                      {t('addgame.yesImport')}
                     </Button>
                   </div>
                 </>
@@ -438,7 +438,7 @@ export default function AddGame() {
               {steamClosed && !closingSteam && (
                 <div className="mt-3 p-2.5 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span className="text-xs text-green-400">Import complete — restart Steam to apply.</span>
+                  <span className="text-xs text-green-400">{t('addgame.importComplete')}</span>
                 </div>
               )}
             </div>
@@ -476,7 +476,7 @@ export default function AddGame() {
                     )}
                     {file.status === 'awaiting-confirm' && (
                       <span className="flex items-center gap-1 text-xs text-yellow-400">
-                        <AlertCircle className="w-3 h-3" /> Awaiting confirmation
+                        <AlertCircle className="w-3 h-3" /> {t('addgame.awaitingConfirm')}
                       </span>
                     )}
                     {file.status === 'imported' && (

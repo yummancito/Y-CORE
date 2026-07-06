@@ -212,7 +212,7 @@ export default function LogsPage() {
             <div className="w-3 h-3 rounded-full bg-[#ffbd2e]" />
             <div className="w-3 h-3 rounded-full bg-[#27c93f]" />
           </div>
-          <span className="text-xs text-text-dim font-mono ml-2">{t('logs.logHeader').replace('{{count}}', String(filtered.length))}</span>
+          <span className="text-xs text-text-dim font-mono ml-2">y-core — log — {filtered.length} entries</span>
         </div>
 
         {/* Terminal body */}

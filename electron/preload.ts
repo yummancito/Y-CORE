@@ -5,6 +5,9 @@ contextBridge.exposeInMainWorld('steamtools', {
   appReady: () => ipcRenderer.invoke('app:ready'),
   setSplashStatus: (status: string, percent: number) => ipcRenderer.invoke('splash:setStatus', { status, percent }),
   getLocale: () => ipcRenderer.invoke('app:getLocale'),
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
+  openImageDialog: () => ipcRenderer.invoke('dialog:openImageFile'),
+  readImageAsDataURL: (filePath: string) => ipcRenderer.invoke('app:readImageAsDataURL', filePath),
   openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
 
   // Auth session (tokens stored securely in main process, not localStorage)

@@ -61,7 +61,7 @@ export default function ManifestFiles() {
       setImportPath('')
       await loadManifests()
     } else {
-      showToast('error', result.error || t('manifests.failedImport'))
+      showToast('error', result.error || t('manifests.importFailed'))
     }
     setImporting(false)
   }
@@ -72,7 +72,7 @@ export default function ManifestFiles() {
       showToast('success', result.message || t('manifests.manifestDeleted'))
       await loadManifests()
     } else {
-      showToast('error', result.error || t('manifests.failedDelete'))
+      showToast('error', result.error || t('manifests.deleteFailed'))
     }
   }
 
@@ -82,7 +82,7 @@ export default function ManifestFiles() {
     if (dropImportingRef.current) return
     const droppedFiles = Array.from(e.dataTransfer.files).filter((f) => f.name.endsWith('.manifest'))
     if (droppedFiles.length === 0) {
-      showToast('info', t('manifests.noManifestFiles'))
+      showToast('info', t('manifests.noManifestsInDrop'))
       return
     }
     dropImportingRef.current = true
@@ -91,9 +91,9 @@ export default function ManifestFiles() {
         const filePath = await window.steamtools.getPathForFile(file)
         const result = await window.steamtools.importManifest({ manifestPath: filePath })
         if (result.success) {
-          showToast('success', result.message || t('manifests.importedFile').replace('{{name}}', file.name))
+          showToast('success', result.message || `Imported ${file.name}`)
         } else {
-          showToast('error', result.error || t('manifests.failedImportFile').replace('{{name}}', file.name))
+          showToast('error', result.error || `${t('manifests.importFailed')} ${file.name}`)
         }
       }
       await loadManifests()
@@ -109,7 +109,7 @@ export default function ManifestFiles() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-text-bright">{t('manifests.title')}</h2>
-          <p className="text-xs mt-0.5 text-text-dim">{t('manifests.title')}</p>
+          <p className="text-xs mt-0.5 text-text-dim">{t('manifests.subtitle')}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" icon={RefreshCw} onClick={loadManifests}>
@@ -125,17 +125,17 @@ export default function ManifestFiles() {
       <Modal open={showImportModal} onClose={() => setShowImportModal(false)} title={t('manifests.importManifest')} width="400px">
         <div className="p-6 space-y-4">
           <div>
-            <label className="text-sm font-medium text-text-primary block mb-2">{t('manifests.filePath')}</label>
+            <label className="text-sm font-medium text-text-primary block mb-2">{t('manifests.filePathRequired')}</label>
             <Input
               type="text"
               value={importPath}
               onChange={(e) => setImportPath(e.target.value)}
-              placeholder={t('manifests.pathExample')}
+              placeholder="C:\Users\...\2406771_100473726127154370.manifest"
               autoFocus
               className="w-full"
             />
             <p className="text-xs text-text-dim mt-1">
-              {t('manifests.fileHint')}
+              {t('manifests.filePathHint')}
             </p>
           </div>
           <div className="flex gap-2 pt-2">
@@ -150,7 +150,7 @@ export default function ManifestFiles() {
               disabled={importing || !importPath.trim()}
               loading={importing}
             >
-              {importing ? t('addgame.importing') : t('manifests.importButton')}
+              {importing ? t('common.importing') : t('common.import')}
             </Button>
           </div>
         </div>
@@ -166,9 +166,9 @@ export default function ManifestFiles() {
         }`}
       >
         <Upload className="w-10 h-10 text-text-dim mx-auto mb-3" />
-        <p className="text-sm text-text-primary font-medium">{t('manifests.dragDrop')}</p>
+        <p className="text-sm text-text-primary font-medium">{t('manifests.dragDropHint')}</p>
         <p className="text-xs text-text-dim mt-1">
-          {t('manifests.dropHint')}
+          {t('manifests.dragDropDesc')}
         </p>
       </div>
 
@@ -228,22 +228,22 @@ export default function ManifestFiles() {
         </div>
 
         {loading ? (
-          <LoadingState message="Loading manifest files..." />
+          <LoadingState message={t('manifests.loadingManifests')} />
         ) : filtered.length === 0 ? (
           <EmptyState
             icon={Package}
-            title={manifests.length === 0 ? 'No manifest files found' : 'No manifests match your search'}
-            description={manifests.length === 0 ? 'No manifest files found in steamapps' : 'Try a different search term'}
+            title={manifests.length === 0 ? t('manifests.noManifestsFound') : t('manifests.noManifestsMatch')}
+            description={manifests.length === 0 ? t('manifests.noManifestsFound') : t('manifests.tryDifferentSearch')}
           />
         ) : (
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left text-xs font-medium text-text-dim pb-3">File Name</th>
-                <th className="text-left text-xs font-medium text-text-dim pb-3">Depot ID</th>
-                <th className="text-left text-xs font-medium text-text-dim pb-3">Manifest ID</th>
-                <th className="text-left text-xs font-medium text-text-dim pb-3">Size</th>
-                <th className="text-right text-xs font-medium text-text-dim pb-3">Actions</th>
+                <th className="text-left text-xs font-medium text-text-dim pb-3">{t('manifests.fileName')}</th>
+                <th className="text-left text-xs font-medium text-text-dim pb-3">{t('manifests.depotId')}</th>
+                <th className="text-left text-xs font-medium text-text-dim pb-3">{t('manifests.manifestId')}</th>
+                <th className="text-left text-xs font-medium text-text-dim pb-3">{t('manifests.size')}</th>
+                <th className="text-right text-xs font-medium text-text-dim pb-3">{t('manifests.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -264,7 +264,7 @@ export default function ManifestFiles() {
                     <button
                       onClick={() => handleDelete(manifest.fileName)}
                       className="p-1.5 rounded hover:bg-red-500/10 transition-colors"
-                      title="Delete"
+                      title={t('common.delete')}
                     >
                       <Trash2 className="w-4 h-4 text-red-400" />
                     </button>

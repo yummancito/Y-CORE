@@ -177,7 +177,7 @@ export default function StorePage() {
       })
       .catch((err) => {
         if (abortController.signal.aborted) return
-        showToast('error', `${t('store.failedLoadStore')}: ${err.message}`)
+        showToast('error', `${t('store.failedLoad')}: ${err.message}`)
       })
       .finally(() => {
         if (!abortController.signal.aborted) setSectionsLoading(false)
@@ -198,7 +198,7 @@ export default function StorePage() {
       })
       .catch((err) => {
         if (abortController.signal.aborted) return
-        showToast('error', `${t('store.failedLoadBrowse')}: ${err.message}`)
+        showToast('error', `${t('store.failedLoad')}: ${err.message}`)
       })
       .finally(() => {
         if (!abortController.signal.aborted) setBrowseLoading(false)
@@ -306,12 +306,11 @@ export default function StorePage() {
     try {
       const closeResult = await window.steamtools.closeSteam()
       if (closeResult && !closeResult.success) {
-        showToast('error', closeResult.error || t('store.failedCloseSteamManual'))
+        showToast('error', closeResult.error || t('store.failedCloseSteam'))
         return
       }
 
       if (GOLDSRC_MOD_APP_IDS.has(game.app_id)) {
-        showToast('info', t('store.installingHalfLifeBase'))
         const baseResp = await installGame('70')
         if (baseResp.status === 'ready' && baseResp.game) {
           const result = await window.steamtools.storeInstallGame({
@@ -322,19 +321,15 @@ export default function StorePage() {
             depot_keys: baseResp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
           })
           if (!result.success) {
-            showToast('error', result.errors?.[0] || result.error || t('store.failedHalfLifeBase'))
+            showToast('error', result.errors?.[0] || result.error || t('store.failedInstallBase'))
             return
           }
           try { await reportDownloaded('70') } catch {}
         } else if (baseResp.status === 'queued') {
-          showToast('info', t('store.halfLifeBaseImporting'))
           await pollJob(baseResp.job_id!, '70')
-        } else {
-          showToast('warning', t('store.halfLifeBaseNotAvailable'))
         }
       }
 
-      showToast('info', t('store.installingNamed').replace('{{name}}', game.name))
       const resp = await installGame(game.app_id)
 
       if (resp.status === 'ready' && resp.game) {
@@ -350,7 +345,7 @@ export default function StorePage() {
         if (result.actions) for (const a of result.actions) actions.push({ type: 'info', message: a })
         if (result.errors) for (const e of result.errors) actions.push({ type: 'error', message: e })
         if (result.success) {
-          actions.push({ type: 'success', message: t('store.installSuccess').replace('{{name}}', game.name) })
+          actions.push({ type: 'success', message: `${game.name} installed` })
           try { await reportDownloaded(game.app_id) } catch {}
           consumeGame(game.app_id)
         }
@@ -361,7 +356,6 @@ export default function StorePage() {
           }).catch(() => {})
         }
         if (result.success) {
-          showToast('success', t('store.installSuccess').replace('{{name}}', game.name))
           try { await window.steamtools.restartSteam() } catch {}
         } else {
           showToast('error', result.errors?.[0] || result.error || t('store.installFailed'))
@@ -382,7 +376,6 @@ export default function StorePage() {
 
   const pollJob = async (jobId: string, appId: string, gameName?: string) => {
     setImportProgress({ appId, status: 'queued' })
-    showToast('info', t('store.importing').replace('{{name}}', gameName || `App ${appId}`))
 
     let attempts = 0
     const maxAttempts = 200
@@ -410,10 +403,9 @@ export default function StorePage() {
         if (result.success) {
           try { await reportDownloaded(appId) } catch {}
           consumeGame(appId)
-          showToast('success', t('store.installSuccess').replace('{{name}}', job.result.name))
           try { await window.steamtools.restartSteam() } catch {}
         } else {
-          showToast('error', result.errors?.[0] || result.error || t('store.installFailedAfterImport'))
+          showToast('error', result.errors?.[0] || result.error || `${t('store.installFailed')} after import`)
         }
         return
       }
@@ -428,7 +420,7 @@ export default function StorePage() {
     }
 
     setImportProgress(null)
-    showToast('error', t('store.importTimedOut'))
+    showToast('error', t('store.importTimeout'))
   }
 
   const cardProps = { onInstall: handleInstall, installing, onSelect: setSelectedGame }
@@ -501,7 +493,7 @@ export default function StorePage() {
         <div className="flex items-center gap-3 p-3 rounded-xl border border-accent/20 bg-accent/5 backdrop-blur-sm">
           <Loader2 className="w-4 h-4 text-accent animate-spin" />
           <span className="text-sm text-text-dim">
-            {t('store.importProgress').replace('{{appId}}', importProgress.appId).replace('{{status}}', importProgress.status)}
+            {t('store.importingApp')} {importProgress.appId}... {t('store.status')}: {importProgress.status}
           </span>
         </div>
       )}

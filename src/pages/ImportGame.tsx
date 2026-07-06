@@ -32,7 +32,7 @@ export default function ImportGame() {
     const folderPath = filePath.substring(0, filePath.lastIndexOf('\\'))
 
     if (!folderPath) {
-      setResults([{ type: 'error', message: 'Could not determine folder path' }])
+      setResults([{ type: 'error', message: t('importgame.couldNotDeterminePath') }])
       return
     }
 
@@ -60,7 +60,7 @@ export default function ImportGame() {
       const result = await window.steamtools.importGameFolder({ folderPath })
 
       if (!result.success) {
-        setResults([{ type: 'error', message: result.error || 'Import failed' }])
+        setResults([{ type: 'error', message: result.error || t('importgame.importFailed') }])
         return
       }
 
@@ -78,7 +78,7 @@ export default function ImportGame() {
         }
       }
 
-      actions.push({ type: 'success', message: t('importgame.importSummary').replace('{{luaCount}}', String(result.luaCount)).replace('{{manifestCount}}', String(result.manifestCount)) })
+      actions.push({ type: 'success', message: `Imported ${result.luaCount} Lua file(s) and ${result.manifestCount} manifest file(s)` })
 
       setResults(actions)
       setImportedGames(result.importedGames || [])
@@ -91,14 +91,14 @@ export default function ImportGame() {
   }
 
   const handleRestartSteam = async () => {
-    showToast('info', t('importgame.restartingSteam'))
+    showToast('info', t('importgame.restarting'))
     const result = await restartSteam()
     if (result.success) {
       setResults(prev => [...prev, { type: 'success', message: t('importgame.steamRestarted') }])
       showToast('success', t('library.steamRestarted'))
     } else {
-      setResults(prev => [...prev, { type: 'error', message: result.error || t('importgame.failedRestartSteam') }])
-      showToast('error', result.error || t('importgame.failedRestartSteam'))
+      setResults(prev => [...prev, { type: 'error', message: result.error || t('importgame.failedRestart') }])
+      showToast('error', result.error || t('importgame.failedRestart'))
     }
   }
 
@@ -148,18 +148,18 @@ export default function ImportGame() {
       <div className="grid grid-cols-3 gap-3">
         <Card variant="base">
           <FileCode className="w-5 h-5 text-accent mb-2" />
-          <p className="text-text-bright text-sm font-medium">Lua → stplug-in</p>
-          <p className="text-text-dim text-xs mt-1">Depot keys & manifest IDs</p>
+          <p className="text-text-bright text-sm font-medium">{t('importgame.luaToStplug')}</p>
+          <p className="text-text-dim text-xs mt-1">{t('importgame.depotKeysManifests')}</p>
         </Card>
         <Card variant="base">
           <Package className="w-5 h-5 text-accent mb-2" />
-          <p className="text-text-bright text-sm font-medium">Manifests → depotcache</p>
-          <p className="text-text-dim text-xs mt-1">Game file manifests</p>
+          <p className="text-text-bright text-sm font-medium">{t('importgame.manifestsToDepot')}</p>
+          <p className="text-text-dim text-xs mt-1">{t('importgame.gameFileManifests')}</p>
         </Card>
         <Card variant="base">
           <Zap className="w-5 h-5 text-accent mb-2" />
-          <p className="text-text-bright text-sm font-medium">Hook DLL installed</p>
-          <p className="text-text-dim text-xs mt-1">Ownership injection</p>
+          <p className="text-text-bright text-sm font-medium">{t('importgame.hookDll')}</p>
+          <p className="text-text-dim text-xs mt-1">{t('importgame.ownershipInjection')}</p>
         </Card>
       </div>
 

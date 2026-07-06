@@ -1,107 +1,77 @@
 # Y-core
 
-Cliente de escritorio para gestionar juegos de Steam con soporte para instalación mediante manifests, depot keys, Lua scripts y Online Fix.
+Y-core is a desktop application built with Electron + React that enhances your Steam gaming experience with a modern UI, game library management, store integration, and extensive customization options.
 
-## Estado: Pre-alpha
+## What's in this repo?
 
-## Arquitectura
+This repository contains the **client-side source code** of Y-core — the Electron + React application that users install on their machines. The code is published here for **transparency** so users can verify the client is clean and contains no malware.
 
-```
-┌─────────────────────────────────────────────────┐
-│                  Electron App                    │
-│  ┌───────────┐  ┌───────────┐  ┌─────────────┐ │
-│  │  React UI  │  │  Main.ts  │  │  Native DLLs│ │
-│  │  (Vite)    │←→│  (IPC)    │←→│  (YCoreTool) │ │
-│  └───────────┘  └─────┬─────┘  └─────────────┘ │
-│                       │                         │
-│              ┌────────┴────────┐               │
-│              │  Y-core API      │               │
-│              │  (Fastify)       │               │
-│              └────────┬────────┘               │
-│                       │                         │
-│              ┌────────┴────────┐               │
-│              │  Supabase (PG)   │              │
-│              └─────────────────┘               │
-└─────────────────────────────────────────────────┘
-```
+### Included
+- `src/` — Full React UI (pages, components, stores, i18n, utilities)
+- `electron/` — Electron main process structure (window management, auth, config, logs)
+- `packages/shared/` — Shared TypeScript types
+- `public/` — App icons and assets
+- Configuration files (`vite.config.ts`, `tsconfig.json`, `tailwind.config.js`, etc.)
 
-## Estructura del Proyecto
+### Not included (private)
+The following components are **proprietary** and not part of this public repository:
+- **API backend** — Server-side code handling game data, auth, depot keys
+- **Native DLLs** — Compiled native modules for Steam integration
+- **Steam injection logic** — DLL injection, depot key injection, manifest sync
+- **Database schema** — Supabase migrations and schema
 
-| Directorio | Descripción |
-|---|---|
-| `electron/` | App de escritorio Electron (proceso main + preload) |
-| `src/` | Frontend React (Vite + Tailwind + Zustand) |
-| `apps/api/` | API backend Fastify (auth, games, manifests, imports DepotBox) |
-| `packages/shared/` | Tipos compartidos entre apps y frontend |
-| `native/` | DLLs nativas C++ para hook de Steam |
-| `tools/` | Herramientas externas (steamless) |
-| `tests/` | Tests automatizados (Vitest + smoke tests) |
-| `scripts/` | Scripts de desarrollo |
-| `docs/` | Documentación del proyecto |
-| `supabase/` | Migraciones de base de datos |
+These private components are necessary for the full functionality of Y-core but are kept closed-source to protect the project's integrity.
 
-## Requisitos
+## Tech Stack
 
-- Node.js 20+
-- pnpm 11+
-- Visual Studio 2022 (para compilar DLLs nativas)
-- CMake 3.20+ (para build nativo)
+- **Electron** — Desktop application framework
+- **React + TypeScript** — UI framework
+- **Vite** — Build tool and dev server
+- **TailwindCSS** — Styling
+- **Zustand** — State management
+- **React Router** — Navigation
+- **i18n** — Multi-language support (7 languages: ES, EN, FR, PT, DE, ZH, HI)
 
-## Instalación
+## Features
 
+- **Game Library** — Browse and manage your Steam games
+- **Store** — Discover and install games
+- **Online Fix** — Multiplayer compatibility checking
+- **Customization Panel** — Personalize your experience:
+  - Custom background image with blur, opacity, overlay controls
+  - Custom accent color picker
+  - Sidebar and titlebar opacity sliders
+  - Drag-and-drop navigation item reordering
+- **Settings** — Account management, content filters, log configuration
+- **Auto-updater** — Automatic updates on app launch
+
+## Development
+
+### Prerequisites
+- Node.js 18+
+- pnpm
+
+### Setup
 ```bash
 pnpm install
-```
-
-## Desarrollo
-
-```bash
-# Frontend + Electron
-pnpm dev
-
-# API
-pnpm --filter @y-core/api dev
-
-# Electron + API + Vite
 pnpm electron:dev
 ```
 
-## Build
-
+### Build
 ```bash
-# Compilar todo
-pnpm build
-
-# Compilar DLLs nativas
-cd native/opensteamtool-src && build_y_core.bat
+pnpm vite build
 ```
 
-## Tests
-
-```bash
-# Tests unitarios (122 tests)
-pnpm test
-
-# Smoke test de DLLs (11 checks)
-pnpm test:dll
-
-# Checklist E2E manual
-# Ver tests/MANUAL_TEST_CHECKLIST.md
+### Environment Variables
+Copy `.env.example` to `.env` and configure:
+```
+VITE_YCORE_API_URL=http://localhost:3000
 ```
 
-## Variables de Entorno
+## License
 
-Copiar `.env.example` a `.env` y configurar:
+This client code is provided for transparency purposes. All rights reserved.
 
-| Variable | Descripción |
-|---|---|
-| `VITE_SUPABASE_URL` | URL de Supabase |
-| `VITE_SUPABASE_ANON_KEY` | Clave anónima de Supabase (pública) |
-| `VITE_DEPOTBOX_API_KEY` | API key de DepotBox |
-| `VITE_STEAMGRIDDB_API_KEY` | API key de SteamGridDB (opcional) |
+## Community
 
-Para la API (`apps/api/.env`), ver `apps/api/.env.example`.
-
-## Licencia
-
-MIT
+Join our [Discord](https://discord.gg/Z2CzV884zE) for support and updates.
