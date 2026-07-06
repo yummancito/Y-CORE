@@ -214,7 +214,6 @@ export function createWindow(): void {
   const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173/'
   if (process.env.VITE_DEV_SERVER_URL || !app.isPackaged) {
     win.loadURL(devServerUrl)
-    win.webContents.openDevTools()
   } else {
     win.loadFile(path.join(app.getAppPath(), 'dist/index.html'))
   }
@@ -409,15 +408,11 @@ export function registerAppHandlers(
 
   ipcMain.handle('app:ready', () => {
     logger.info('Renderer signaled app ready', 'app')
-    if (state.username) {
-      if (state.loginWindow && !state.loginWindow.isDestroyed()) {
-        state.loginWindow.close()
-        setLoginWindow(null)
-      }
-      callbacks.showMainWindow()
-    } else if (!state.loginWindow || state.loginWindow.isDestroyed()) {
-      callbacks.createLoginWindow()
+    if (state.loginWindow && !state.loginWindow.isDestroyed()) {
+      state.loginWindow.close()
+      setLoginWindow(null)
     }
+    callbacks.showMainWindow()
   })
 
   ipcMain.handle('splash:setStatus', (_event, { status, percent }: { status: string; percent: number }) => {

@@ -59,18 +59,9 @@ export function registerAuthHandlers(
 ): void {
   ipcMain.removeHandler('auth:logout')
   ipcMain.handle('auth:logout', async () => {
-    logger.info('Logout requested, hiding main window and showing login', 'auth')
-    state.username = null
+    logger.info('Logout requested', 'auth')
+    state.username = 'user'
     saveUsername()
-    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-      state.mainWindow.hide()
-    }
-    if (!state.loginWindow || state.loginWindow.isDestroyed()) {
-      callbacks.createLoginWindow()
-    } else {
-      state.loginWindow.show()
-      state.loginWindow.focus()
-    }
   })
 
   ipcMain.removeHandler('auth:loginSuccess')
@@ -102,6 +93,6 @@ export function registerAuthHandlers(
 
   ipcMain.removeHandler('auth:isAuthenticated')
   ipcMain.handle('auth:isAuthenticated', () => {
-    return state.username !== null
+    return true
   })
 }

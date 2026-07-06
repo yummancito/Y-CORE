@@ -8,7 +8,6 @@ import { SignaturePendingModal } from './components/ui/SignaturePendingModal'
 import { CommandPalette } from './components/CommandPalette'
 import { useCommandPaletteStore } from './stores/useCommandPaletteStore'
 import { useSignaturePendingStore } from './stores/useSignaturePendingStore'
-import LoginPage from './pages/LoginPage'
 
 const LibraryPage = lazy(() => import('./pages/LibraryPage'))
 const AddGame = lazy(() => import('./pages/AddGame'))
@@ -73,7 +72,6 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
         <Route path="/*" element={
           <ProtectedRoute>
             <AppRoutes />

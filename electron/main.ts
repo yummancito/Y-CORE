@@ -90,7 +90,7 @@ app.whenReady().then(async () => {
   registerOnlineFixHandlers(() => { invalidateGamesCache() })
   registerStoreImageHandlers()
   registerAuthHandlers({ showMainWindow, createLoginWindow })
-  registerAppHandlers({ showMainWindow, createLoginWindow })
+  registerAppHandlers({ showMainWindow, createLoginWindow: () => {} })
   registerSteamHandlers()
   registerStoreHandlers(invalidateGamesCache)
 
@@ -98,7 +98,13 @@ app.whenReady().then(async () => {
   createWindow()
   createTray()
   logger.info('Splash, window and tray created', 'app')
-  createLoginWindow()
+
+  // Auto-set default username if none saved
+  if (!state.username) {
+    state.username = 'user'
+    saveUsername()
+  }
+  // Main window is shown when renderer signals app:ready (via showMainWindow)
 
   // Keep ACFs for Y-core Tool games in update-required state so downloads don't stall
   startAcfWatcher()

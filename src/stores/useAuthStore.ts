@@ -21,13 +21,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   init: () => {
     if (get().initialized) return
 
-    window.steamtools.isAuthenticated().then(async (authenticated) => {
-      if (authenticated) {
-        const username = await window.steamtools.getUsername()
-        set({ username, initialized: true })
-      } else {
-        set({ username: null, initialized: true })
-      }
+    window.steamtools.isAuthenticated().then(async () => {
+      const username = await window.steamtools.getUsername()
+      set({ username: username || 'user', initialized: true })
+    }).catch(() => {
+      set({ username: 'user', initialized: true })
     })
   },
 

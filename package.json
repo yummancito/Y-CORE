@@ -80,8 +80,8 @@
     "afterPack": "scripts/fix-exe.js",
     "publish": {
       "provider": "github",
-      "owner": "y-core",
-      "repo": "y-core"
+      "owner": "yummancito",
+      "repo": "Y-CORE"
     }
   }
 }

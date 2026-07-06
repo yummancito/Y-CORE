@@ -19,61 +19,59 @@
       overflow: hidden;
       user-select: none;
       -webkit-app-region: drag;
+      gap: 14px;
     }
 
-    .brand {
+    .logo-wrap {
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 26px;
+      filter: drop-shadow(0 0 16px rgba(255,255,255,0.18));
     }
-    .brand svg {
-      width: 56px;
-      height: 56px;
-      transform: translateX(-1px);
-      filter: drop-shadow(0 0 12px rgba(255,255,255,0.15));
+    .logo-wrap svg {
+      width: 64px;
+      height: 64px;
     }
 
-    .loader {
-      position: relative;
-      width: 52px;
-      height: 52px;
+    .diamond {
+      opacity: 0;
+      animation: buildIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     }
-    .loader-ring {
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      border: 2.5px solid transparent;
-      border-top-color: #3b82f6;
-      animation: spin 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-    }
-    .loader-ring:nth-child(2) {
-      inset: 7px;
-      border-top-color: #60a5fa;
-      border-right-color: rgba(96, 165, 250, 0.2);
-      animation-duration: 1.8s;
-      animation-direction: reverse;
-    }
-    .loader-glow {
-      position: absolute;
-      inset: -4px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(59, 130, 246, 0.22) 0%, transparent 70%);
-      animation: pulseGlow 2.2s ease-in-out infinite;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    @keyframes pulseGlow {
-      0%, 100% { opacity: 0.35; transform: scale(1); }
-      50% { opacity: 0.75; transform: scale(1.08); }
+    .diamond:nth-child(1) { animation-delay: 0s; }
+    .diamond:nth-child(2) { animation-delay: 0.12s; }
+    .diamond:nth-child(3) { animation-delay: 0.24s; }
+    .diamond:nth-child(4) { animation-delay: 0.36s; }
+
+    @keyframes buildIn {
+      0% { opacity: 0; }
+      40% { opacity: 0.4; }
+      100% { opacity: 1; }
     }
 
-    .loading {
-      color: #9ca3af;
-      font-size: 11px;
-      margin-top: 22px;
-      letter-spacing: 0.02em;
+    .title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      color: #ffffff;
+      opacity: 0;
+      animation: fadeUp 0.6s ease-out 0.6s forwards;
+    }
+
+    .loading-text {
+      font-size: 10px;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 0.05em;
+      opacity: 0;
+      animation: fadeUp 0.5s ease-out 0.8s forwards, pulse 1.8s ease-in-out 1.3s infinite;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.6; }
     }
 
     body.fade-out {
@@ -83,22 +81,23 @@
   </style>
 </head>
 <body>
-  <div class="loader" id="spinner">
-    <div class="loader-glow"></div>
-    <div class="loader-ring"></div>
-    <div class="loader-ring"></div>
+  <div class="logo-wrap">
+    <svg width="64" height="64" viewBox="12.5 14.5 96 68" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect class="diamond" x="50" y="10" width="28" height="28" rx="2" transform="rotate(45 50 24)" fill="white"/>
+      <rect class="diamond" x="22" y="38" width="28" height="28" rx="2" transform="rotate(45 22 52)" fill="white"/>
+      <rect class="diamond" x="78" y="38" width="28" height="28" rx="2" transform="rotate(45 78 52)" fill="white"/>
+      <rect class="diamond" x="50" y="38" width="28" height="28" rx="2" transform="rotate(45 50 52)" fill="white"/>
+    </svg>
   </div>
 
-  <div class="loading" id="loadingText">Cargando...</div>
+  <div class="title">Y-CORE</div>
+  <div class="loading-text" id="loadingText">Loading...</div>
 
   <script>
     const loadingText = document.getElementById('loadingText')
-    const spinner = document.getElementById('spinner')
 
     window.splash.onReady(() => {
-      spinner.style.opacity = '0'
-      spinner.style.transition = 'opacity 0.3s ease'
-      loadingText.textContent = 'Listo'
+      loadingText.textContent = 'Ready'
       loadingText.style.color = '#22c55e'
       document.body.classList.add('fade-out')
       setTimeout(() => window.close(), 400)

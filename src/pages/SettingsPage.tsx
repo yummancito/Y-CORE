@@ -5,7 +5,6 @@ import {
   Shield,
   ScrollText,
   Palette,
-  LogOut,
   ChevronRight,
   Eye,
   EyeOff,
@@ -104,7 +103,7 @@ function SettingRow({
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const { username, logout } = useAuthStore()
+  const { username } = useAuthStore()
   const { showToast } = useToastStore()
   const { showAdult, showTools, showAddGame, logsVisible, colorTheme, language, setShowAdult, setShowTools, setShowAddGame, setLogsVisible, setColorTheme, setLanguage, loadFromConfig } = useSettingsStore()
   const [activeTab, setActiveTab] = useState<SettingsTab>('account')
@@ -220,12 +219,6 @@ export default function SettingsPage() {
     reader.readAsDataURL(file)
   }
 
-  const handleLogout = async () => {
-    await logout()
-    showToast('info', t('settings.logout'))
-    navigate('/login')
-  }
-
   return (
     <div className="max-w-5xl mx-auto p-8 space-y-8">
       {/* Tab selector */}
@@ -291,16 +284,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-
-              {/* Logout */}
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="w-full flex items-center justify-center gap-3 p-4 rounded-xl bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/15 transition-colors text-base font-medium"
-              >
-                <LogOut className="w-5 h-5" />
-                {t('settings.logout')}
-              </button>
 
             </div>
           </Card>

@@ -1,9 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { useAuthStore } from '../stores/useAuthStore'
 
+const MIN_SPLASH_MS = 2000
+
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { username, initialized, init } = useAuthStore()
+  const { initialized, init } = useAuthStore()
   const appReadySent = useRef(false)
+  const startTime = useRef(Date.now()).current
 
   useEffect(() => {
     if (!initialized) init()
@@ -12,27 +15,19 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (initialized && !appReadySent.current) {
       appReadySent.current = true
-      window.steamtools?.addLog?.({ level: 'INFO', message: '[App] Signaling ready to main process' })?.catch?.(() => {})
-      // Small delay to let the first page render its loading state before showing the window
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, MIN_SPLASH_MS - elapsed)
+
       setTimeout(() => {
+        window.steamtools?.addLog?.({ level: 'INFO', message: '[App] Signaling ready to main process' })?.catch?.(() => {})
         window.steamtools?.appReady?.().catch?.(() => {})
-      }, 100)
+      }, remaining)
     }
   }, [initialized])
 
   if (!initialized) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#1b1b1b]">
-        <div className="text-white/50">Loading...</div>
-      </div>
-    )
-  }
-
-  if (!username) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-black">
-        <div className="text-zinc-500">Waiting for login...</div>
-      </div>
+      <div className="flex min-h-screen items-center justify-center bg-[#1b1b1b]" />
     )
   }
 
