@@ -131,6 +131,11 @@ contextBridge.exposeInMainWorld('steamtools', {
     ipcRenderer.on('update-available', handler)
     return () => ipcRenderer.removeListener('update-available', handler)
   },
+  onUpdateProgress: (callback: (info: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => void) => {
+    const handler = (_event: any, info: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => callback(info)
+    ipcRenderer.on('update-progress', handler)
+    return () => ipcRenderer.removeListener('update-progress', handler)
+  },
   onUpdateDownloaded: (callback: (info: { version?: string }) => void) => {
     const handler = (_event: any, info: { version?: string }) => callback(info)
     ipcRenderer.on('update-downloaded', handler)

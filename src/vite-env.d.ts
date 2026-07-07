@@ -183,6 +183,7 @@ interface Window {
     windowClose: () => Promise<void>
     installUpdate: () => Promise<void>
     onUpdateAvailable: (callback: (info: { version?: string }) => void) => () => void
+    onUpdateProgress: (callback: (info: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => void) => () => void
     onUpdateDownloaded: (callback: (info: { version?: string }) => void) => () => void
     onSignaturePending: (callback: (info: { component: string; sha256: string }) => void) => () => void
   }

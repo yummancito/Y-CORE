@@ -137,12 +137,24 @@ app.whenReady().then(async () => {
   // Auto-updater — check for updates silently on startup (production only)
   if (app.isPackaged) {
     autoUpdater.autoDownload = true
-    autoUpdater.autoInstallOnAppQuit = false
+    autoUpdater.autoInstallOnAppQuit = true
+    autoUpdater.allowDowngrade = true
 
     autoUpdater.on('update-available', (info: { version?: string }) => {
       logger.info(`Update available: ${info.version ?? 'unknown'}`, 'updater')
       for (const win of BrowserWindow.getAllWindows()) {
         try { win.webContents.send('update-available', info) } catch {}
+      }
+    })
+
+    autoUpdater.on('download-progress', (progress: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        try { win.webContents.send('update-progress', {
+          percent: progress.percent,
+          transferred: progress.transferred,
+          total: progress.total,
+          bytesPerSecond: progress.bytesPerSecond,
+        }) } catch {}
       }
     })
 
