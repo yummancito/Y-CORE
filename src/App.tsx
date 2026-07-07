@@ -5,9 +5,11 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { ToastContainer } from './components/ui/Toast'
 import { UpdateNotification } from './components/ui/UpdateNotification'
 import { SignaturePendingModal } from './components/ui/SignaturePendingModal'
+import { SteamErrorModal } from './components/ui/SteamErrorModal'
 import { CommandPalette } from './components/CommandPalette'
 import { useCommandPaletteStore } from './stores/useCommandPaletteStore'
 import { useSignaturePendingStore } from './stores/useSignaturePendingStore'
+import { useSteamErrorStore } from './stores/useSteamErrorStore'
 
 const LibraryPage = lazy(() => import('./pages/LibraryPage'))
 const AddGame = lazy(() => import('./pages/AddGame'))
@@ -16,6 +18,7 @@ const LogsPage = lazy(() => import('./pages/LogsPage'))
 const StorePage = lazy(() => import('./pages/StorePage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const OnlineFixPage = lazy(() => import('./pages/OnlineFixPage'))
+const DrmRemoverPage = lazy(() => import('./pages/DrmRemoverPage'))
 
 function PageLoader() {
   return (
@@ -36,6 +39,7 @@ function AppRoutes() {
           <Route path="/import-game" element={<ImportGame />} />
           <Route path="/logs" element={<LogsPage />} />
           <Route path="/online-fix" element={<OnlineFixPage />} />
+          <Route path="/drm-remover" element={<DrmRemoverPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Suspense>
@@ -46,6 +50,7 @@ function AppRoutes() {
 export default function App() {
   const { toggle: toggleCommandPalette } = useCommandPaletteStore()
   const { open: openSignaturePending } = useSignaturePendingStore()
+  const { open: openSteamError } = useSteamErrorStore()
 
   // Listen for signature pending events from Electron main process
   useEffect(() => {
@@ -56,6 +61,16 @@ export default function App() {
       if (typeof unsub === 'function') unsub()
     }
   }, [openSignaturePending])
+
+  // Listen for Steam errors from log watcher
+  useEffect(() => {
+    const unsub = window.steamtools?.onSteamError?.((error) => {
+      openSteamError(error)
+    })
+    return () => {
+      if (typeof unsub === 'function') unsub()
+    }
+  }, [openSteamError])
 
   // Ctrl+K / Cmd+K to toggle command palette
   useEffect(() => {
@@ -81,6 +96,7 @@ export default function App() {
       <ToastContainer />
       <UpdateNotification />
       <SignaturePendingModal />
+      <SteamErrorModal />
       <CommandPalette />
     </>
   )

@@ -9,6 +9,7 @@ const NAV_ITEM_LABELS: Record<string, string> = {
   library: 'library.title',
   store: 'store.title',
   onlinefix: 'nav.onlinefix',
+  drmremover: 'nav.drmRemover',
   addgame: 'nav.addGame',
   logs: 'nav.logs',
   settings: 'nav.settings',

@@ -23,6 +23,8 @@ import { registerLogHandlers } from './modules/logs'
 import { registerConfigHandlers } from './modules/config'
 import { registerStoreImageHandlers } from './modules/store-images'
 import { registerOnlineFixHandlers } from './modules/onlinefix'
+import { registerDrmHandlers } from './modules/drm-remover'
+import { registerSteamLogWatcherHandlers, startSteamLogWatcher, stopSteamLogWatcher } from './modules/steam-log-watcher'
 import { startAcfWatcher } from './modules/manifest-sync'
 
 // ============================================
@@ -59,6 +61,9 @@ app.on('child-process-gone', (_event, details: { reason: string; type: string })
 })
 
 app.setName('Y-core')
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.ycore.app')
+}
 
 // Use a stable, non-synced directory for user data to avoid Chromium cache permission errors.
 const userDataPath = path.join(process.env.LOCALAPPDATA || os.homedir(), 'Y-core')
@@ -88,6 +93,8 @@ app.whenReady().then(async () => {
   registerLogHandlers(() => state.mainWindow)
   registerConfigHandlers()
   registerOnlineFixHandlers(() => { invalidateGamesCache() })
+  registerDrmHandlers()
+  registerSteamLogWatcherHandlers()
   registerStoreImageHandlers()
   registerAuthHandlers({ showMainWindow, createLoginWindow })
   registerAppHandlers({ showMainWindow, createLoginWindow: () => {} })
@@ -108,6 +115,9 @@ app.whenReady().then(async () => {
 
   // Keep ACFs for Y-core Tool games in update-required state so downloads don't stall
   startAcfWatcher()
+
+  // Start Steam log watcher (monitors console_log.txt for critical errors)
+  startSteamLogWatcher()
 
   // Focus existing window when second instance is attempted
   app.on('second-instance', () => {
@@ -182,6 +192,7 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   setIsQuitting(true)
   saveUsername()
+  stopSteamLogWatcher()
 })
 
 app.on('window-all-closed', () => {

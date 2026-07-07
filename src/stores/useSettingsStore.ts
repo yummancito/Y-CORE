@@ -7,6 +7,17 @@ export interface NavItemConfig {
   order: number
 }
 
+function mergeNavItems(defaults: NavItemConfig[], saved: NavItemConfig[]): NavItemConfig[] {
+  const savedIds = new Set(saved.map((s) => s.id))
+  const merged = [...saved]
+  for (const d of defaults) {
+    if (!savedIds.has(d.id)) {
+      merged.push(d)
+    }
+  }
+  return merged.sort((a, b) => a.order - b.order)
+}
+
 export interface BackgroundImageConfig {
   enabled: boolean
   path: string | null
@@ -58,9 +69,10 @@ export const DEFAULT_CUSTOMIZATION: Customization = {
     { id: 'library', visible: true, order: 0 },
     { id: 'store', visible: true, order: 1 },
     { id: 'onlinefix', visible: true, order: 2 },
-    { id: 'addgame', visible: true, order: 3 },
-    { id: 'logs', visible: true, order: 4 },
-    { id: 'settings', visible: true, order: 5 },
+    { id: 'drmremover', visible: true, order: 3 },
+    { id: 'addgame', visible: true, order: 4 },
+    { id: 'logs', visible: true, order: 5 },
+    { id: 'settings', visible: true, order: 6 },
   ],
 }
 
@@ -138,7 +150,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
                 backgroundImage: { ...DEFAULT_CUSTOMIZATION.backgroundImage, ...(cu.backgroundImage || {}) },
                 accentColor: { ...DEFAULT_CUSTOMIZATION.accentColor, ...(cu.accentColor || {}) },
                 navbar: { ...DEFAULT_CUSTOMIZATION.navbar, ...(cu.navbar || {}) },
-                navItems: cu.navItems || DEFAULT_CUSTOMIZATION.navItems,
+                navItems: mergeNavItems(DEFAULT_CUSTOMIZATION.navItems, cu.navItems || []),
               },
             })
           }

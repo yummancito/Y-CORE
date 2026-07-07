@@ -262,20 +262,12 @@ export default function LibraryPage() {
                   onContextMenu={(e) => handleContextMenu(e, game)}
                 >
                   <div className="relative aspect-[2/3] overflow-hidden rounded-xl transition-all duration-300 shadow-card hover:shadow-card-hover">
-                    {coverErrors.has(game.appId) || !game.appId ? (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-surface-2">
-                        <Gamepad2 className="w-14 h-14 text-text-muted" />
-                        <p className="text-xs text-text-muted text-center px-4">{game.name}</p>
-                      </div>
-                    ) : (
-                      <CoverImage
-                        src={getCoverUrl(game.appId)}
-                        fallbackSrc={`https://depotbox.org/api/images/steam-header/${game.appId}`}
-                        alt={game.name}
-                        className="absolute inset-0 w-full h-full object-cover"
-                        onError={() => onCoverError(game.appId)}
-                      />
-                    )}
+                    <CoverImage
+                      src={getCoverUrl(game.appId)}
+                      fallbackSrc={`https://depotbox.org/api/images/steam-header/${game.appId}`}
+                      alt={game.name}
+                      className="w-full h-full object-cover"
+                    />
 
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
 

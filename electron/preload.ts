@@ -106,6 +106,19 @@ contextBridge.exposeInMainWorld('steamtools', {
   disableOnlineFix: (appId: string) => ipcRenderer.invoke('onlinefix:disable', { appId }),
   checkOnlineFixStatus: (appId: string) => ipcRenderer.invoke('onlinefix:status', { appId }),
 
+  // DRM Remover
+  removeDrm: (appId: string) => ipcRenderer.invoke('drm:remove', appId),
+  checkDrmStatus: (appId: string) => ipcRenderer.invoke('drm:status', appId),
+
+  // Steam Log Monitor
+  onSteamError: (callback: (error: { type: string; message: string; solution: string; rawLine: string }) => void) => {
+    const handler = (_event: any, error: any) => callback(error)
+    ipcRenderer.on('steam:error', handler)
+    return () => ipcRenderer.removeListener('steam:error', handler)
+  },
+  startSteamLogMonitor: () => ipcRenderer.invoke('steam-log-watcher:start'),
+  stopSteamLogMonitor: () => ipcRenderer.invoke('steam-log-watcher:stop'),
+
   // Window controls
   windowMinimize: () => ipcRenderer.invoke('window-minimize'),
   windowMaximize: () => ipcRenderer.invoke('window-maximize'),

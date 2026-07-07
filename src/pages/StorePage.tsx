@@ -14,13 +14,12 @@ import {
 import { CATEGORIES, type CategoryId, getPrimaryCategoryFromName } from '../lib/categories'
 import { useRecommendationStore } from '../stores/useRecommendationStore'
 import { useSettingsStore } from '../stores/useSettingsStore'
-import { GameCard, GameCardSkeleton, SectionRowSkeleton, getDefaultGameImageUrl, type MergedGame } from '../components/store/GameCard'
-import { SectionRow } from '../components/store/SectionRow'
+import { GameCard, GameCardSkeleton, getDefaultGameImageUrl, type MergedGame } from '../components/store/GameCard'
 import { GameDetailModal } from '../components/store/GameDetailModal'
 
 interface InstallResult { type: 'success' | 'error' | 'info'; message: string }
 
-type Tab = 'discover' | 'browse'
+type Tab = 'browse'
 
 // Module-level cache that persists across component unmount/remount (navigation)
 let _gamesCache: { games: MergedGame[]; timestamp: number; showAdult: boolean } | null = null
@@ -29,6 +28,30 @@ const GAMES_CACHE_TTL = 5 * 60 * 1000
 function getPrimaryCategoryForGame(game: MergedGame): CategoryId | null {
   if (game.category) return game.category
   return getPrimaryCategoryFromName(game.name)
+}
+
+function sortSearchResults(games: MergedGame[], query: string): MergedGame[] {
+  const q = query.toLowerCase().trim()
+  return [...games].sort((a, b) => {
+    const aName = (a.name || '').toLowerCase().trim()
+    const bName = (b.name || '').toLowerCase().trim()
+    // Exact match scores highest
+    if (aName === q && bName !== q) return -1
+    if (bName === q && aName !== q) return 1
+    // Starts with query
+    const aStarts = aName.startsWith(q)
+    const bStarts = bName.startsWith(q)
+    if (aStarts && !bStarts) return -1
+    if (bStarts && !aStarts) return 1
+    // Word boundary match (e.g. "ark" in "Batman Arkham")
+    const aWord = new RegExp(`\\b${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(aName)
+    const bWord = new RegExp(`\\b${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(bName)
+    if (aWord && !bWord) return -1
+    if (bWord && !aWord) return 1
+    // Shorter name = more relevant
+    if (aName.length !== bName.length) return aName.length - bName.length
+    return aName.localeCompare(bName)
+  })
 }
 
 function gameSummaryToMerged(g: GameSummary): MergedGame {
@@ -48,7 +71,7 @@ function filterByCategory(games: MergedGame[], categoryId: CategoryId): MergedGa
 
 // ---- Main Store Page ----
 export default function StorePage() {
-  const [tab, setTab] = useState<Tab>('discover')
+  const [tab, setTab] = useState<Tab>('browse')
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState<MergedGame[] | null>(null)
   const [searching, setSearching] = useState(false)
@@ -57,6 +80,7 @@ export default function StorePage() {
   const [sectionsLoading, setSectionsLoading] = useState(true)
   const [browseFilter, setBrowseFilter] = useState<CategoryId>('all')
   const [browseLoading, setBrowseLoading] = useState(false)
+  const [browseVisibleCount, setBrowseVisibleCount] = useState(60)
   const [installing, setInstalling] = useState<string | null>(null)
   const [selectedGame, setSelectedGame] = useState<MergedGame | null>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
@@ -67,9 +91,6 @@ export default function StorePage() {
   useEffect(() => {
     loadSettings()
   }, [loadSettings])
-
-  const discoverAbortRef = useRef<AbortController | null>(null)
-  const browseAbortRef = useRef<AbortController | null>(null)
 
   const { showToast } = useToastStore()
   const { games: installedGames } = useLibraryStore()
@@ -107,23 +128,6 @@ export default function StorePage() {
     return out
   }, [])
 
-  const buildCategorySections = useCallback((games: MergedGame[]) => {
-    const byCategory = new Map<CategoryId, MergedGame[]>()
-    for (const g of games) {
-      const cat = getPrimaryCategoryForGame(g)
-      if (!cat) continue
-      if (cat === 'nsfw' && !showAdult) continue
-      const list = byCategory.get(cat)
-      if (list) list.push(g)
-      else byCategory.set(cat, [g])
-    }
-    return CATEGORIES.filter((c) => c.id !== 'nsfw' || showAdult).map((category) => ({
-      title: category.label,
-      icon: category.icon,
-      games: (byCategory.get(category.id) || []).slice(0, 30),
-    })).filter((section) => section.games.length > 0)
-  }, [showAdult])
-
   const setSplash = useCallback((status: string, percent: number) => {
     window.steamtools?.setSplashStatus?.(status, percent).catch?.(() => {})
   }, [])
@@ -139,7 +143,7 @@ export default function StorePage() {
     }
 
     const BATCH_SIZE = 200
-    const MAX_GAMES = 1000
+    const MAX_GAMES = 600
     let allGames: MergedGame[] = []
     let offset = 0
     while (offset < MAX_GAMES) {
@@ -163,53 +167,42 @@ export default function StorePage() {
     return games
   }, [installedAppIds, dedupeByAppId, setSplash, showAdult])
 
-  useEffect(() => {
-    if (tab !== 'discover') return
-    discoverAbortRef.current?.abort()
-    const abortController = new AbortController()
-    discoverAbortRef.current = abortController
-    setSectionsLoading(true)
-    loadAllGames()
-      .then((games) => {
-        if (abortController.signal.aborted) return
-        setAllGames(games)
-        setCategorySections(buildCategorySections(games))
-      })
-      .catch((err) => {
-        if (abortController.signal.aborted) return
-        showToast('error', `${t('store.failedLoad')}: ${err.message}`)
-      })
-      .finally(() => {
-        if (!abortController.signal.aborted) setSectionsLoading(false)
-      })
-    return () => { discoverAbortRef.current?.abort() }
-  }, [tab, showToast, loadAllGames, buildCategorySections])
+  const loadAllGamesRef = useRef(loadAllGames)
+  loadAllGamesRef.current = loadAllGames
 
   useEffect(() => {
-    if (tab !== 'browse') return
-    browseAbortRef.current?.abort()
-    const abortController = new AbortController()
-    browseAbortRef.current = abortController
+    let cancelled = false
     setBrowseLoading(true)
-    loadAllGames()
+
+    loadAllGamesRef.current()
       .then((games) => {
-        if (abortController.signal.aborted) return
+        if (cancelled) return
         setAllGames(games)
       })
       .catch((err) => {
-        if (abortController.signal.aborted) return
+        if (cancelled) return
         showToast('error', `${t('store.failedLoad')}: ${err.message}`)
       })
       .finally(() => {
-        if (!abortController.signal.aborted) setBrowseLoading(false)
+        if (cancelled) return
+        setBrowseLoading(false)
       })
-    return () => { browseAbortRef.current?.abort() }
-  }, [tab, showToast, loadAllGames])
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const browseFilteredGames = useMemo(() => {
     const filtered = showAdult ? allGames : allGames.filter(g => getPrimaryCategoryForGame(g) !== 'nsfw')
     return filterByCategory(filtered, browseFilter)
   }, [allGames, browseFilter, showAdult])
+
+  const browseVisibleGames = useMemo(() => {
+    return browseFilteredGames.slice(0, browseVisibleCount)
+  }, [browseFilteredGames, browseVisibleCount])
+
+  useEffect(() => {
+    setBrowseVisibleCount(60)
+  }, [browseFilter])
 
   const searchAbortRef = useRef<AbortController | null>(null)
   const doSearch = useCallback(async (q: string) => {
@@ -251,7 +244,7 @@ export default function StorePage() {
       // If showTools is true AND showAdult is true, skip type checking entirely
       if (showTools && showAdult) {
         const filteredDepotbox = depotboxGames.filter(g => !installedAppIds.has(g.app_id))
-        const allResults = [...filteredCatalog, ...filteredDepotbox]
+        const allResults = sortSearchResults([...filteredCatalog, ...filteredDepotbox], q.trim())
         setSearchResults(allResults)
         return
       }
@@ -281,8 +274,8 @@ export default function StorePage() {
         })
         .filter(g => !installedAppIds.has(g.app_id))
 
-      // Merge catalog + filtered depotbox
-      const allResults = [...filteredCatalog, ...filteredDepotbox]
+      // Merge catalog + filtered depotbox, then sort by relevance
+      const allResults = sortSearchResults([...filteredCatalog, ...filteredDepotbox], q.trim())
       setSearchResults(allResults)
     } catch (err: any) {
       if (abortController.signal.aborted) return
@@ -302,6 +295,7 @@ export default function StorePage() {
   ])
 
   const handleInstall = async (game: MergedGame) => {
+    if (installing) return
     setInstalling(game.app_id)
     try {
       const closeResult = await window.steamtools.closeSteam()
@@ -338,7 +332,7 @@ export default function StorePage() {
           name: resp.game.name,
           lua_content: resp.game.lua_content,
           manifest_files: resp.game.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
-          depot_keys: [],
+          depot_keys: resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
         })
 
         const actions: InstallResult[] = []
@@ -398,7 +392,7 @@ export default function StorePage() {
           name: job.result.name,
           lua_content: job.result.lua_content,
           manifest_files: job.result.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
-          depot_keys: [],
+          depot_keys: job.result.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
         })
         if (result.success) {
           try { await reportDownloaded(appId) } catch {}
@@ -427,50 +421,17 @@ export default function StorePage() {
   const showSearch = query.trim().length >= 2 && searchResults !== null
 
   usePageHeader(
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-6">
-        <div>
-          <h1 className="text-lg font-bold text-text-bright">{t('store.title')}</h1>
-          <p className="text-[11px] text-text-dim">{t('store.subtitle')}</p>
+    <div className="flex items-center gap-2 w-full">
+      <h1 className="text-lg font-bold text-text-bright flex-shrink-0 whitespace-nowrap">{t('store.title')}</h1>
+      <div className="relative flex-1 w-full">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-text-muted pointer-events-none">
+          <Search className="w-5 h-5" />
         </div>
-        {!showSearch && (
-          <div className="flex items-center gap-1">
-            {[
-              { key: 'discover', label: t('store.discover'), title: t('store.discover') },
-              { key: 'browse', label: t('store.browseAll'), title: t('store.browseAll') },
-            ].map((opt) => {
-              const active = tab === opt.key
-              return (
-                <button
-                  key={opt.key}
-                  title={opt.title}
-                  onClick={() => setTab(opt.key as Tab)}
-                  className={`flex items-center gap-2 h-11 px-3.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    active
-                      ? 'bg-white/[0.08] text-text-bright shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
-                      : 'text-text-secondary hover:text-text-bright hover:bg-white/[0.04]'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </div>,
-    [tab, showSearch]
-  )
-
-  return (
-    <div data-section="Store" className="w-full px-4 py-4 space-y-4 animate-fade-in">
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
         <input
           type="text" value={query} onChange={e => setQuery(e.target.value)}
           placeholder={t('store.searchPlaceholder')}
-          className="w-full pl-12 pr-10 py-3 rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-colors bg-white/[0.04] border border-white/[0.08] focus:border-accent/50 backdrop-blur-sm"
+          className="w-full pr-10 py-2.5 rounded-xl text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-colors bg-white/[0.04] border border-white/[0.08] focus:border-accent/50"
+          style={{ paddingLeft: '52px' }}
         />
         {query && (
           <button
@@ -487,7 +448,12 @@ export default function StorePage() {
         )}
         {searching && <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-accent animate-spin" />}
       </div>
+    </div>,
+    [query, searching]
+  )
 
+  return (
+    <div data-section="Store" className="w-full px-4 py-4 space-y-4 animate-fade-in">
       {/* Import progress banner */}
       {importProgress && (
         <div className="flex items-center gap-3 p-3 rounded-xl border border-accent/20 bg-accent/5 backdrop-blur-sm">
@@ -500,52 +466,29 @@ export default function StorePage() {
 
       {/* Search results */}
       {showSearch && (
-        <div className="space-y-2">
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-text-bright">{t('store.searchResults')}: "{query}" — {searchResults!.length} {t('store.results')}</p>
           {searching ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
               {Array.from({ length: 20 }).map((_, i) => (
                 <GameCardSkeleton key={i} />
               ))}
             </div>
-          ) : (
-            <>
-              <p className="text-sm text-text-dim">{searchResults!.length} {t('store.resultsFor')} "{query}"</p>
-              {searchResults!.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-                  {searchResults!.map(g => <GameCard key={g.app_id} game={g} src={getDefaultGameImageUrl(g)} {...cardProps} />)}
-                </div>
-              ) : (
-                <div className="text-center py-16">
-                  <Package className="w-12 h-12 text-text-dim mx-auto mb-3" />
-                  <p className="text-text-dim">{t('store.noGames')}</p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Discover */}
-      {tab === 'discover' && (
-        <div className="space-y-6">
-          {sectionsLoading ? (
-            <div className="space-y-6">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <SectionRowSkeleton key={i} />
-              ))}
+          ) : searchResults!.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+              {searchResults!.map(g => <GameCard key={g.app_id} game={g} src={getDefaultGameImageUrl(g)} {...cardProps} />)}
             </div>
           ) : (
-            <>
-              {categorySections.map((cat) => (
-                <SectionRow key={cat.title} title={cat.title} icon={cat.icon} games={cat.games} {...cardProps} />
-              ))}
-            </>
+            <div className="text-center py-16">
+              <Package className="w-12 h-12 text-text-dim mx-auto mb-3" />
+              <p className="text-text-dim">{t('store.noGames')}</p>
+            </div>
           )}
         </div>
       )}
 
-      {/* Browse */}
-      {tab === 'browse' && (
+      {/* Browse — hidden while searching */}
+      {tab === 'browse' && !showSearch && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 flex-wrap w-fit p-1.5 rounded-2xl bg-white/[0.04] border border-white/[0.08]">
             {[{ id: 'all', label: t('store.category.all'), icon: LayoutGrid }, ...CATEGORIES.filter(c => c.id !== 'nsfw' || showAdult)].map((cat) => {
@@ -568,10 +511,22 @@ export default function StorePage() {
             })}
           </div>
 
-          {browseFilteredGames.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-              {browseFilteredGames.map(g => <GameCard key={g.app_id} game={g} src={getDefaultGameImageUrl(g)} {...cardProps} />)}
-            </div>
+          {browseVisibleGames.length > 0 && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+                {browseVisibleGames.map(g => <GameCard key={g.app_id} game={g} src={getDefaultGameImageUrl(g)} {...cardProps} />)}
+              </div>
+              {browseVisibleCount < browseFilteredGames.length && (
+                <div className="flex justify-center pt-4">
+                  <button
+                    onClick={() => setBrowseVisibleCount(c => c + 60)}
+                    className="px-6 py-3 rounded-xl bg-white/[0.05] border border-white/[0.08] text-sm font-medium text-text-secondary hover:text-text-bright hover:bg-white/[0.08] transition-colors"
+                  >
+                    {t('store.loadMore')} ({browseFilteredGames.length - browseVisibleCount})
+                  </button>
+                </div>
+              )}
+            </>
           )}
 
           {browseLoading && browseFilteredGames.length === 0 && (

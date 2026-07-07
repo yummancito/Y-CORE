@@ -124,6 +124,7 @@ export async function searchGamesCombined(query: string, limit = 50, filterNsfw?
 export async function installGame(appId: string): Promise<InstallResponse> {
   return apiFetch<InstallResponse>(`/api/games/${appId}/install`, {
     method: 'POST',
+    body: JSON.stringify({}),
   })
 }
 

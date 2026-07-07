@@ -173,6 +173,11 @@ interface Window {
     enableOnlineFix: (appId: string) => Promise<{ success: boolean; error?: string; launchOptions?: string; message?: string }>
     disableOnlineFix: (appId: string) => Promise<{ success: boolean; error?: string; launchOptions?: string; message?: string }>
     checkOnlineFixStatus: (appId: string) => Promise<{ enabled: boolean; launchOptions: string }>
+    removeDrm: (appId: string) => Promise<{ success: boolean; message: string; hadDrm: boolean; backupPath?: string; exePath?: string }>
+    checkDrmStatus: (appId: string) => Promise<{ status: 'no-drm' | 'drm-removed' | 'drm-present' | 'not-found'; exePath?: string; backupPath?: string; message: string }>
+    onSteamError: (callback: (error: { type: string; message: string; solution: string; rawLine: string }) => void) => () => void
+    startSteamLogMonitor: () => Promise<{ success: boolean }>
+    stopSteamLogMonitor: () => Promise<{ success: boolean }>
     windowMinimize: () => Promise<void>
     windowMaximize: () => Promise<void>
     windowClose: () => Promise<void>

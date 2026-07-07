@@ -21,7 +21,7 @@ interface LibraryStore {
   setSelectedGame: (g: InstalledGame | null) => void
 }
 
-export const useLibraryStore = create<LibraryStore>((set) => ({
+export const useLibraryStore = create<LibraryStore>((set, get) => ({
   games: [],
   loading: false,
   error: null,
@@ -30,6 +30,7 @@ export const useLibraryStore = create<LibraryStore>((set) => ({
   selectedGame: null,
 
   loadGames: async () => {
+    if (get().loading) return
     set({ loading: true, error: null })
     try {
       const result = await window.steamtools.listInstalledGames()

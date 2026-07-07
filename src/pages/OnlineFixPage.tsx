@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Search, Wifi, X, AlertTriangle, CheckCircle2, XCircle, Loader2, Filter } from 'lucide-react'
+import { Search, Wifi, X, AlertTriangle, CheckCircle2, XCircle, Loader2, Filter, Gamepad2 } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { useLibraryStore } from '../stores/useLibraryStore'
 import { useToastStore } from '../stores/useToastStore'
@@ -21,6 +21,7 @@ export default function OnlineFixPage() {
   const [compatMap, setCompatMap] = useState<Record<string, { status: CompatibilityStatus; reason?: string }>>({})
   const [compatLoading, setCompatLoading] = useState(false)
   const [hideWarning, setHideWarning] = useState(false)
+  const [coverErrors, setCoverErrors] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadGames()
@@ -152,35 +153,19 @@ export default function OnlineFixPage() {
 
   return (
     <div className="px-6 py-5 w-full">
-      {/* Warning banner */}
-      {!hideWarning && (
-        <div className="mb-6 flex flex-col sm:flex-row items-start gap-3 p-4 rounded-xl bg-yellow-500/[0.08] border border-yellow-500/20">
-          <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-          <div className="flex-1 text-sm text-text-secondary min-w-0">
-            <p className="text-yellow-400 font-medium mb-1">{t('onlinefix.warning')}</p>
-            <p>{t('onlinefix.warningDescription')}</p>
-          </div>
-          <button
-            onClick={dismissWarning}
-            className="flex items-center gap-2 text-sm font-semibold text-text-bright hover:text-white transition-colors px-4 py-2 rounded-xl bg-white/[0.08] border border-white/[0.12] hover:bg-white/[0.16] hover:border-white/[0.20] shadow-sm flex-shrink-0"
-            title={t('onlinefix.dontShowAgain')}
-          >
-            <X className="w-5 h-5" />
-            <span className="whitespace-nowrap">{t('onlinefix.dontShowAgain')}</span>
-          </button>
-        </div>
-      )}
-
       {/* Search + filters */}
       <div className="mb-5 flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-muted" />
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-text-muted pointer-events-none">
+            <Search className="w-5 h-5" />
+          </div>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('onlinefix.searchPlaceholder')}
-            className="w-full min-h-[52px] pl-12 pr-12 py-3 rounded-xl bg-white/[0.06] text-base text-text-bright placeholder:text-text-muted border border-white/[0.12] focus:border-accent/50 focus:outline-none transition-colors"
+            className="w-full min-h-[52px] pr-12 py-3 rounded-xl bg-white/[0.06] text-base text-text-bright placeholder:text-text-muted border border-white/[0.12] focus:border-accent/50 focus:outline-none transition-colors"
+            style={{ paddingLeft: '48px' }}
           />
           {searchQuery && (
             <button
@@ -239,6 +224,7 @@ export default function OnlineFixPage() {
                 <div className="relative aspect-[2/3] overflow-hidden">
                   <CoverImage
                     src={getCoverUrl(game.appId)}
+                    fallbackSrc={`https://depotbox.org/api/images/steam-header/${game.appId}`}
                     alt={game.name}
                     className="w-full h-full object-cover transition-all duration-500 group-hover/card:scale-105"
                   />

@@ -22,6 +22,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   'lastWindowBounds',
   'apiUrl',
   'customization',
+  'steamLogMonitor',
 ])
 
 const MAX_CONFIG_DEPTH = 3

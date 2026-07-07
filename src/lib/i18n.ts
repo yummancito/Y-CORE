@@ -53,6 +53,7 @@ const es: Dict = {
   'nav.tools': 'Herramientas',
   'nav.logs': 'Logs',
   'nav.onlinefix': 'Online Fix',
+  'nav.drmRemover': 'DRM Remover',
   'nav.quickLaunch': 'Inicio rápido',
   'nav.recommended': 'Recomendado',
 
@@ -469,6 +470,8 @@ const es: Dict = {
   'store.scrollForMore': 'Desplázate para cargar más',
   'store.scrollToTop': 'Volver arriba',
   'store.resultsFor': 'resultados para',
+  'store.searchResults': 'Resultados de búsqueda',
+  'store.results': 'resultados',
   'store.recommended': 'Recomendado para ti',
 
   // Settings extra
@@ -614,6 +617,33 @@ const es: Dict = {
   // Login extras
   'login.invalidResetToken': 'Token de reseteo inválido',
   'login.resetFailed': 'Error al restablecer la contraseña',
+
+  // DRM Remover
+  'drm.title': 'DRM Remover',
+  'drm.description': 'Elimina el DRM de Steam (SteamStub) de tus juegos instalados para evitar errores de verificación de licencia.',
+  'drm.descriptionSub': 'Se hará una copia de seguridad del ejecutable original. Solo funciona con DRM SteamStub.',
+  'drm.removeButton': 'Eliminar DRM',
+  'drm.removing': 'Eliminando...',
+  'drm.success': 'DRM eliminado correctamente',
+  'drm.noDrm': 'No se encontró DRM',
+  'drm.alreadyRemoved': 'DRM ya eliminado',
+  'drm.error': 'Error al eliminar DRM',
+  'drm.confirmTitle': '¿Eliminar DRM?',
+  'drm.confirmMessage': 'Se hará una copia de seguridad del ejecutable original. El juego se cerrará si está abierto.',
+  'drm.noGames': 'No se encontraron juegos instalados',
+
+  // Steam Error Monitor
+  'steamError.title': 'Error de Steam detectado',
+  'steamError.no_connection': 'Sin conexión a Steam',
+  'steamError.dll_missing': 'DLL faltante',
+  'steamError.crash': 'Steam se cerró inesperadamente',
+  'steamError.disk_write': 'Error de escritura en disco',
+  'steamError.fatal': 'Error fatal de Steam',
+  'steamError.restartSteam': 'Reiniciar Steam',
+  'steamError.later': 'Más tarde',
+  'steamError.solution': 'Solución sugerida',
+  'settings.steamLogMonitor': 'Monitorizar logs de Steam',
+  'settings.steamLogMonitorDesc': 'Detecta errores de Steam en tiempo real',
 }
 
 const en: Dict = {
@@ -991,6 +1021,34 @@ const en: Dict = {
   'logs.description': 'Review system events and messages in real time',
   'nav.logs': 'Logs',
   'nav.onlinefix': 'Online Fix',
+  'nav.drmRemover': 'DRM Remover',
+
+  // DRM Remover
+  'drm.title': 'DRM Remover',
+  'drm.description': 'Remove Steam DRM (SteamStub) from your installed games to prevent license verification errors.',
+  'drm.descriptionSub': 'A backup of the original executable will be made. Only works with SteamStub DRM.',
+  'drm.removeButton': 'Remove DRM',
+  'drm.removing': 'Removing...',
+  'drm.success': 'DRM removed successfully',
+  'drm.noDrm': 'No DRM found',
+  'drm.alreadyRemoved': 'DRM already removed',
+  'drm.error': 'Failed to remove DRM',
+  'drm.confirmTitle': 'Remove DRM?',
+  'drm.confirmMessage': 'A backup of the original executable will be made. The game will be closed if open.',
+  'drm.noGames': 'No installed games found',
+
+  // Steam Error Monitor
+  'steamError.title': 'Steam error detected',
+  'steamError.no_connection': 'No Steam connection',
+  'steamError.dll_missing': 'Missing DLL',
+  'steamError.crash': 'Steam crashed',
+  'steamError.disk_write': 'Disk write error',
+  'steamError.fatal': 'Steam fatal error',
+  'steamError.restartSteam': 'Restart Steam',
+  'steamError.later': 'Later',
+  'steamError.solution': 'Suggested solution',
+  'settings.steamLogMonitor': 'Monitor Steam logs',
+  'settings.steamLogMonitorDesc': 'Detects Steam errors in real time',
 
   // Online Fix
   'onlinefix.title': 'Online Fix',
@@ -1079,6 +1137,8 @@ const en: Dict = {
   'store.scrollForMore': 'Scroll to load more',
   'store.scrollToTop': 'Back to top',
   'store.resultsFor': 'results for',
+  'store.searchResults': 'Search results',
+  'store.results': 'results',
   'store.recommended': 'Recommended for you',
 
   // Settings extra
@@ -1584,6 +1644,33 @@ const fr: Dict = {
   // Login extras
   'login.invalidResetToken': 'Jeton de réinitialisation invalide',
   'login.resetFailed': 'Échec de la réinitialisation du mot de passe',
+
+  // DRM Remover
+  'drm.title': 'DRM Remover',
+  'drm.description': 'Supprime le DRM Steam (SteamStub) de vos jeux installés pour éviter les erreurs de vérification de licence.',
+  'drm.descriptionSub': 'Une sauvegarde de l\'exécutable original sera créée. Fonctionne uniquement avec le DRM SteamStub.',
+  'drm.removeButton': 'Supprimer le DRM',
+  'drm.removing': 'Suppression...',
+  'drm.success': 'DRM supprimé avec succès',
+  'drm.noDrm': 'Aucun DRM trouvé',
+  'drm.alreadyRemoved': 'DRM déjà supprimé',
+  'drm.error': 'Échec de la suppression du DRM',
+  'drm.confirmTitle': 'Supprimer le DRM ?',
+  'drm.confirmMessage': 'Une sauvegarde de l\'exécutable original sera créée. Le jeu sera fermé s\'il est ouvert.',
+  'drm.noGames': 'Aucun jeu installé trouvé',
+
+  // Steam Error Monitor
+  'steamError.title': 'Erreur Steam détectée',
+  'steamError.no_connection': 'Pas de connexion Steam',
+  'steamError.dll_missing': 'DLL manquante',
+  'steamError.crash': 'Steam a planté',
+  'steamError.disk_write': 'Erreur d\'écriture disque',
+  'steamError.fatal': 'Erreur fatale Steam',
+  'steamError.restartSteam': 'Redémarrer Steam',
+  'steamError.later': 'Plus tard',
+  'steamError.solution': 'Solution suggérée',
+  'settings.steamLogMonitor': 'Surveiller les logs Steam',
+  'settings.steamLogMonitorDesc': 'Détecte les erreurs Steam en temps réel',
 }
 
 const pt: Dict = {
@@ -1944,6 +2031,33 @@ const pt: Dict = {
   // Login extras
   'login.invalidResetToken': 'Token de redefinição inválido',
   'login.resetFailed': 'Falha ao redefinir a senha',
+
+  // DRM Remover
+  'drm.title': 'Removedor de DRM',
+  'drm.description': 'Remove o DRM do Steam (SteamStub) dos seus jogos instalados para evitar erros de verificação de licença.',
+  'drm.descriptionSub': 'Um backup do executável original será criado. Funciona apenas com DRM SteamStub.',
+  'drm.removeButton': 'Remover DRM',
+  'drm.removing': 'Removendo...',
+  'drm.success': 'DRM removido com sucesso',
+  'drm.noDrm': 'Nenhum DRM encontrado',
+  'drm.alreadyRemoved': 'DRM já removido',
+  'drm.error': 'Falha ao remover DRM',
+  'drm.confirmTitle': 'Remover DRM?',
+  'drm.confirmMessage': 'Um backup do executável original será criado. O jogo será fechado se estiver aberto.',
+  'drm.noGames': 'Nenhum jogo instalado encontrado',
+
+  // Steam Error Monitor
+  'steamError.title': 'Erro do Steam detectado',
+  'steamError.no_connection': 'Sem conexão com o Steam',
+  'steamError.dll_missing': 'DLL faltando',
+  'steamError.crash': 'Steam fechou inesperadamente',
+  'steamError.disk_write': 'Erro de escrita no disco',
+  'steamError.fatal': 'Erro fatal do Steam',
+  'steamError.restartSteam': 'Reiniciar Steam',
+  'steamError.later': 'Mais tarde',
+  'steamError.solution': 'Solução sugerida',
+  'settings.steamLogMonitor': 'Monitorar logs do Steam',
+  'settings.steamLogMonitorDesc': 'Detecta erros do Steam em tempo real',
 }
 
 const de: Dict = {
@@ -2304,6 +2418,33 @@ const de: Dict = {
   // Login extras
   'login.invalidResetToken': 'Ungültiges Reset-Token',
   'login.resetFailed': 'Passwort-Zurücksetzung fehlgeschlagen',
+
+  // DRM Remover
+  'drm.title': 'DRM Entferner',
+  'drm.description': 'Entfernt Steam DRM (SteamStub) von Ihren installierten Spielen, um Lizenzprüfungsfehler zu vermeiden.',
+  'drm.descriptionSub': 'Ein Backup der ursprünglichen ausführbaren Datei wird erstellt. Funktioniert nur mit SteamStub DRM.',
+  'drm.removeButton': 'DRM entfernen',
+  'drm.removing': 'Wird entfernt...',
+  'drm.success': 'DRM erfolgreich entfernt',
+  'drm.noDrm': 'Kein DRM gefunden',
+  'drm.alreadyRemoved': 'DRM bereits entfernt',
+  'drm.error': 'DRM konnte nicht entfernt werden',
+  'drm.confirmTitle': 'DRM entfernen?',
+  'drm.confirmMessage': 'Ein Backup der ursprünglichen ausführbaren Datei wird erstellt. Das Spiel wird geschlossen, falls es offen ist.',
+  'drm.noGames': 'Keine installierten Spiele gefunden',
+
+  // Steam Error Monitor
+  'steamError.title': 'Steam-Fehler erkannt',
+  'steamError.no_connection': 'Keine Steam-Verbindung',
+  'steamError.dll_missing': 'DLL fehlt',
+  'steamError.crash': 'Steam abgestürzt',
+  'steamError.disk_write': 'Fehler beim Schreiben auf Festplatte',
+  'steamError.fatal': 'Fataler Steam-Fehler',
+  'steamError.restartSteam': 'Steam neu starten',
+  'steamError.later': 'Später',
+  'steamError.solution': 'Vorgeschlagene Lösung',
+  'settings.steamLogMonitor': 'Steam-Logs überwachen',
+  'settings.steamLogMonitorDesc': 'Erkennt Steam-Fehler in Echtzeit',
 }
 
 const zh: Dict = {
@@ -2664,6 +2805,33 @@ const zh: Dict = {
   // Login extras
   'login.invalidResetToken': '无效的重置令牌',
   'login.resetFailed': '重置密码失败',
+
+  // DRM Remover
+  'drm.title': 'DRM 移除器',
+  'drm.description': '从已安装的游戏中移除 Steam DRM (SteamStub)，以防止许可证验证错误。',
+  'drm.descriptionSub': '将创建原始可执行文件的备份。仅适用于 SteamStub DRM。',
+  'drm.removeButton': '移除 DRM',
+  'drm.removing': '正在移除...',
+  'drm.success': 'DRM 移除成功',
+  'drm.noDrm': '未找到 DRM',
+  'drm.alreadyRemoved': 'DRM 已移除',
+  'drm.error': '移除 DRM 失败',
+  'drm.confirmTitle': '移除 DRM？',
+  'drm.confirmMessage': '将创建原始可执行文件的备份。如果游戏已打开，将被关闭。',
+  'drm.noGames': '未找到已安装的游戏',
+
+  // Steam Error Monitor
+  'steamError.title': '检测到 Steam 错误',
+  'steamError.no_connection': '无 Steam 连接',
+  'steamError.dll_missing': '缺少 DLL',
+  'steamError.crash': 'Steam 崩溃',
+  'steamError.disk_write': '磁盘写入错误',
+  'steamError.fatal': 'Steam 严重错误',
+  'steamError.restartSteam': '重启 Steam',
+  'steamError.later': '稍后',
+  'steamError.solution': '建议的解决方案',
+  'settings.steamLogMonitor': '监控 Steam 日志',
+  'settings.steamLogMonitorDesc': '实时检测 Steam 错误',
 }
 
 const hi: Dict = {
@@ -3024,6 +3192,33 @@ const hi: Dict = {
   // Login extras
   'login.invalidResetToken': 'अमान्य रीसेट टोकन',
   'login.resetFailed': 'पासवर्ड रीसेट विफल',
+
+  // DRM Remover
+  'drm.title': 'DRM हटाने वाला',
+  'drm.description': 'अपने इंस्टॉल किए गए गेम से Steam DRM (SteamStub) हटाएं ताकि लाइसेंस सत्यापन त्रुटियों को रोका जा सके।',
+  'drm.descriptionSub': 'मूल निष्पादन योग्य फ़ाइल का बैकअप बनाया जाएगा। केवल SteamStub DRM के साथ काम करता है।',
+  'drm.removeButton': 'DRM हटाएं',
+  'drm.removing': 'हटा रहा है...',
+  'drm.success': 'DRM सफलतापूर्वक हटाया गया',
+  'drm.noDrm': 'कोई DRM नहीं मिला',
+  'drm.alreadyRemoved': 'DRM पहले ही हटाया गया',
+  'drm.error': 'DRM हटाने में विफल',
+  'drm.confirmTitle': 'DRM हटाएं?',
+  'drm.confirmMessage': 'मूल निष्पादन योग्य फ़ाइल का बैकअप बनाया जाएगा। गेम खुला होने पर बंद हो जाएगा।',
+  'drm.noGames': 'कोई इंस्टॉल किए गए गेम नहीं मिले',
+
+  // Steam Error Monitor
+  'steamError.title': 'Steam त्रुटि का पता चला',
+  'steamError.no_connection': 'Steam कनेक्शन नहीं',
+  'steamError.dll_missing': 'DLL गायब',
+  'steamError.crash': 'Steam क्रैश हो गया',
+  'steamError.disk_write': 'डिस्क लेखन त्रुटि',
+  'steamError.fatal': 'Steam घातक त्रुटि',
+  'steamError.restartSteam': 'Steam पुनर्प्रारंभ करें',
+  'steamError.later': 'बाद में',
+  'steamError.solution': 'सुझाई गई समाधान',
+  'settings.steamLogMonitor': 'Steam लॉग मॉनिटर करें',
+  'settings.steamLogMonitorDesc': 'वास्तविक समय में Steam त्रुटियों का पता लगाता है',
 }
 
 const dicts: Record<Language, Dict> = { es, en, fr, pt, de, zh, hi }

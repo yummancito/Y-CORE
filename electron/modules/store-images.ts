@@ -3,8 +3,40 @@ import https from 'https'
 import { isValidAppId } from './steam-helpers'
 import { logger } from '../logger'
 
-const storeImageCache = new Map<string, { success: boolean; imageUrl?: string; error?: string }>()
-const storeBrowseImageCache = new Map<string, { success: boolean; imageUrl?: string; error?: string }>()
+class LRUCache<K, V> {
+  private map = new Map<K, V>()
+  private readonly max: number
+
+  constructor(max: number) {
+    this.max = max
+  }
+
+  get(key: K): V | undefined {
+    const val = this.map.get(key)
+    if (val !== undefined) {
+      this.map.delete(key)
+      this.map.set(key, val)
+    }
+    return val
+  }
+
+  set(key: K, val: V): void {
+    if (this.map.has(key)) this.map.delete(key)
+    else if (this.map.size >= this.max) {
+      const firstKey = this.map.keys().next().value
+      if (firstKey !== undefined) this.map.delete(firstKey)
+    }
+    this.map.set(key, val)
+  }
+
+  has(key: K): boolean {
+    return this.map.has(key)
+  }
+}
+
+const MAX_IMAGE_CACHE = 500
+const storeImageCache = new LRUCache<string, { success: boolean; imageUrl?: string; error?: string }>(MAX_IMAGE_CACHE)
+const storeBrowseImageCache = new LRUCache<string, { success: boolean; imageUrl?: string; error?: string }>(MAX_IMAGE_CACHE)
 
 async function getSteamStoreImageFromHtml(appId: string): Promise<string | null> {
   try {

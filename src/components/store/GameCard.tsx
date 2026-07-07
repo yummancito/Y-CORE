@@ -62,6 +62,7 @@ export const GameCard = memo(function GameCard({
               className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
               onLoad={() => setImgLoaded(true)}
               onError={() => setFailed(true)}
+              showSkeleton={false}
             />
             {!imgLoaded && !failed && (
               <div className="absolute inset-0 flex items-center justify-center bg-surface-2">

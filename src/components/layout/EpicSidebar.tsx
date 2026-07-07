@@ -9,6 +9,7 @@ import {
   Settings20Regular,
   DocumentText20Regular,
   Wifi120Regular,
+  ShieldDismiss20Regular,
 } from '@fluentui/react-icons'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSteamStore } from '../../stores/useSteamStore'
@@ -105,6 +106,7 @@ export function EpicSidebar() {
     library: { to: '/', icon: Library20Regular, label: t('library.title') },
     store: { to: '/store', icon: BuildingShop20Regular, label: t('store.title') },
     onlinefix: { to: '/online-fix', icon: Wifi120Regular, label: t('nav.onlinefix') },
+    drmremover: { to: '/drm-remover', icon: ShieldDismiss20Regular, label: t('nav.drmRemover') },
     addgame: { to: '/add-game', icon: AddCircle20Regular, label: t('nav.addGame'), conditional: showAddGame },
     logs: { to: '/logs', icon: DocumentText20Regular, label: t('nav.logs'), conditional: logsVisible },
     settings: { to: '/settings', icon: Settings20Regular, label: t('nav.settings') },
@@ -167,6 +169,7 @@ export function EpicSidebar() {
                           alt={game.name}
                           className="w-full h-full object-cover"
                           onError={() => setCoverErrors((prev) => new Set(prev).add(game.appId))}
+                          showSkeleton={false}
                         />
                       )}
                     </div>
@@ -208,7 +211,8 @@ export function EpicSidebar() {
                         alt={game.name}
                         className="w-full h-full object-cover"
                         onError={() => setCoverErrors((prev) => new Set(prev).add(game.app_id))}
-                        />
+                        showSkeleton={false}
+                      />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">

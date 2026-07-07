@@ -12,6 +12,7 @@ import {
   Camera,
   Globe,
   PlusCircle,
+  Activity,
 } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { useAuthStore } from '../stores/useAuthStore'
@@ -107,6 +108,7 @@ export default function SettingsPage() {
   const { showToast } = useToastStore()
   const { showAdult, showTools, showAddGame, logsVisible, colorTheme, language, setShowAdult, setShowTools, setShowAddGame, setLogsVisible, setColorTheme, setLanguage, loadFromConfig } = useSettingsStore()
   const [activeTab, setActiveTab] = useState<SettingsTab>('account')
+  const [steamLogMonitor, setSteamLogMonitor] = useState(true)
 
   // Logs settings
   const [logConfig, setLogConfig] = useState<LogConfig | null>(null)
@@ -132,6 +134,7 @@ export default function SettingsPage() {
     }).catch(() => {})
     window.steamtools?.readConfig?.().then((cfg: any) => {
       if (cfg?.profileImage) setProfileImage(cfg.profileImage)
+      if (cfg?.steamLogMonitor !== undefined) setSteamLogMonitor(cfg.steamLogMonitor !== false)
     }).catch(() => {})
     window.steamtools?.getVersion?.().then((v) => setAppVersion(v)).catch(() => {})
   }, [loadFromConfig])
@@ -200,6 +203,16 @@ export default function SettingsPage() {
   const handleLogsVisible = async (v: boolean) => {
     setLogsVisible(v)
     await saveConfig({ logsVisible: v })
+  }
+
+  const handleSteamLogMonitor = async (v: boolean) => {
+    setSteamLogMonitor(v)
+    await saveConfig({ steamLogMonitor: v })
+    if (v) {
+      window.steamtools?.startSteamLogMonitor?.()
+    } else {
+      window.steamtools?.stopSteamLogMonitor?.()
+    }
   }
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -355,6 +368,14 @@ export default function SettingsPage() {
                 description={t('settings.logsVisibleDesc')}
               >
                 <Toggle checked={logsVisible} onChange={handleLogsVisible} />
+              </SettingRow>
+
+              <SettingRow
+                icon={Activity}
+                title={t('settings.steamLogMonitor')}
+                description={t('settings.steamLogMonitorDesc')}
+              >
+                <Toggle checked={steamLogMonitor} onChange={handleSteamLogMonitor} />
               </SettingRow>
 
               <SettingRow icon={ScrollText} title={t('settings.logLevel')}>
