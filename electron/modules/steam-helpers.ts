@@ -52,6 +52,21 @@ export function getSteamAppsPath(): string | null {
   return null
 }
 
+export function getSteamGamesIconPath(): string | null {
+  const steamPath = getSteamPath()
+  if (!steamPath) return null
+
+  const gamesPath = path.join(steamPath, 'steam', 'games')
+  if (!fs.existsSync(gamesPath)) {
+    try {
+      fs.mkdirSync(gamesPath, { recursive: true })
+    } catch {
+      return null
+    }
+  }
+  return gamesPath
+}
+
 export function getSteamUserId(): string | null {
   const steamPath = getSteamPath()
   if (!steamPath) return null

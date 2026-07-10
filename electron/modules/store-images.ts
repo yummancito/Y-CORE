@@ -94,6 +94,8 @@ async function getStoreBrowseImageUrl(appId: string): Promise<string | null> {
           success?: number
           assets?: {
             asset_url_format?: string
+            icon_url?: string
+            icon_url_format?: string
             library_capsule_2x?: string
             library_capsule?: string
             header_2x?: string
@@ -108,6 +110,45 @@ async function getStoreBrowseImageUrl(appId: string): Promise<string | null> {
     if (!assetName) return null
     const relativeUrl = item.assets.asset_url_format.replace('${FILENAME}', assetName)
     return `https://shared.steamstatic.com/store_item_assets/${relativeUrl}`
+  } catch {
+    return null
+  }
+}
+
+export async function getStoreIconUrl(appId: string): Promise<string | null> {
+  try {
+    const inputJson = JSON.stringify({
+      ids: [{ appid: Number(appId) }],
+      context: { country_code: 'US' },
+      data_request: { include_assets: true },
+    })
+    const url = `https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=${encodeURIComponent(inputJson)}`
+    const res = await fetch(url, { headers: { 'User-Agent': 'Y-core/1.0' } })
+    if (!res.ok) return null
+    const json = await res.json() as {
+      response?: {
+        store_items?: Array<{
+          appid?: number
+          success?: number
+          assets?: {
+            asset_url_format?: string
+            icon_url?: string
+            icon_url_format?: string
+          }
+        }>
+      }
+    }
+    const item = json.response?.store_items?.find((i) => String(i.appid) === appId)
+    if (!item?.assets) return null
+
+    // Prefer the explicit icon_url/icon_url_format; fall back to asset_url_format + icon_url
+    const format = item.assets.icon_url_format || item.assets.asset_url_format
+    const iconFile = item.assets.icon_url
+    if (format && iconFile) {
+      const relativeUrl = format.replace('${FILENAME}', iconFile)
+      return `https://shared.steamstatic.com/store_item_assets/${relativeUrl}`
+    }
+    return null
   } catch {
     return null
   }
