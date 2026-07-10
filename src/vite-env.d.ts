@@ -173,6 +173,9 @@ interface Window {
     enableOnlineFix: (appId: string) => Promise<{ success: boolean; error?: string; launchOptions?: string; message?: string }>
     disableOnlineFix: (appId: string) => Promise<{ success: boolean; error?: string; launchOptions?: string; message?: string }>
     checkOnlineFixStatus: (appId: string) => Promise<{ enabled: boolean; launchOptions: string }>
+    generateOnlineFix: (appId: string) => Promise<{ success: boolean; error?: string; gameDir?: string; results?: string[]; has64?: boolean; has32?: boolean }>
+    removeOnlineFix: (appId: string) => Promise<{ success: boolean; error?: string; results?: string[] }>
+    detectOnlineFix: (appId: string) => Promise<{ hasSteamApi: boolean; is64Bit: boolean; hasFix: boolean; hasConfig: boolean; gameDir?: string }>
     removeDrm: (appId: string) => Promise<{ success: boolean; message: string; hadDrm: boolean; backupPath?: string; exePath?: string }>
     checkDrmStatus: (appId: string) => Promise<{ status: 'no-drm' | 'drm-removed' | 'drm-present' | 'not-found'; exePath?: string; backupPath?: string; message: string }>
     onSteamError: (callback: (error: { type: string; message: string; solution: string; rawLine: string }) => void) => () => void
@@ -182,9 +185,12 @@ interface Window {
     windowMaximize: () => Promise<void>
     windowClose: () => Promise<void>
     installUpdate: () => Promise<void>
+    manualDownloadUpdate: (url: string) => Promise<{ path: string }>
+    runManualInstaller: (installerPath: string) => Promise<void>
     onUpdateAvailable: (callback: (info: { version?: string }) => void) => () => void
     onUpdateProgress: (callback: (info: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => void) => () => void
     onUpdateDownloaded: (callback: (info: { version?: string }) => void) => () => void
+    onUpdateError: (callback: (info: { message: string }) => void) => () => void
     onSignaturePending: (callback: (info: { component: string; sha256: string }) => void) => () => void
   }
 }

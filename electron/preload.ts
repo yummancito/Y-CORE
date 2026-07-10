@@ -105,6 +105,9 @@ contextBridge.exposeInMainWorld('steamtools', {
   enableOnlineFix: (appId: string) => ipcRenderer.invoke('onlinefix:enable', { appId }),
   disableOnlineFix: (appId: string) => ipcRenderer.invoke('onlinefix:disable', { appId }),
   checkOnlineFixStatus: (appId: string) => ipcRenderer.invoke('onlinefix:status', { appId }),
+  generateOnlineFix: (appId: string) => ipcRenderer.invoke('onlinefix:generate', { appId }),
+  removeOnlineFix: (appId: string) => ipcRenderer.invoke('onlinefix:remove', { appId }),
+  detectOnlineFix: (appId: string) => ipcRenderer.invoke('onlinefix:detect', { appId }),
 
   // DRM Remover
   removeDrm: (appId: string) => ipcRenderer.invoke('drm:remove', appId),
@@ -126,6 +129,8 @@ contextBridge.exposeInMainWorld('steamtools', {
 
   // Auto-updater
   installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+  manualDownloadUpdate: (url: string) => ipcRenderer.invoke('app:manualDownloadUpdate', url),
+  runManualInstaller: (installerPath: string) => ipcRenderer.invoke('app:runManualInstaller', installerPath),
   onUpdateAvailable: (callback: (info: { version?: string }) => void) => {
     const handler = (_event: any, info: { version?: string }) => callback(info)
     ipcRenderer.on('update-available', handler)
@@ -140,6 +145,11 @@ contextBridge.exposeInMainWorld('steamtools', {
     const handler = (_event: any, info: { version?: string }) => callback(info)
     ipcRenderer.on('update-downloaded', handler)
     return () => ipcRenderer.removeListener('update-downloaded', handler)
+  },
+  onUpdateError: (callback: (info: { message: string }) => void) => {
+    const handler = (_event: any, info: { message: string }) => callback(info)
+    ipcRenderer.on('update-error', handler)
+    return () => ipcRenderer.removeListener('update-error', handler)
   },
 
   // Signature validation

@@ -1,0 +1,13 @@
+{
+  "name": "bot-tickets",
+  "version": "1.0.0",
+  "description": "Bot de tickets para Discord - facil de configurar",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3"
+  }
+}

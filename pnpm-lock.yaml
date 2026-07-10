@@ -11,6 +11,9 @@ importers:
       '@fluentui/react-icons':
         specifier: ^2.0.331
         version: 2.0.331(react@18.3.1)
+      builder-util-runtime:
+        specifier: 9.7.0
+        version: 9.7.0
       dotenv:
         specifier: ^16.4.7
         version: 16.6.1
@@ -42,6 +45,9 @@ importers:
         specifier: ^5.0.14
         version: 5.0.14(@types/react@18.3.31)(react@18.3.1)
     devDependencies:
+      7zip-min:
+        specifier: ^3.0.1
+        version: 3.0.1
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.31
@@ -148,8 +154,14 @@ importers:
 
 packages:
 
+  7zip-bin@5.1.1:
+    resolution: {integrity: sha512-sAP4LldeWNz0lNzmTird3uWfFDWWTeg6V/MsmyyLR9X1idwKBWIgt/ZvinqQldJm3LecKEs1emkbquO6PCiLVQ==}
+
   7zip-bin@5.2.0:
     resolution: {integrity: sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A==}
+
+  7zip-min@3.0.1:
+    resolution: {integrity: sha512-WB4VCA/KSKzxhj+BAp8fI3ZYMMAftclkXlUTckuiDacsqyubQxxG3lGcpBcgzWWuJqnfQncEq1xrJpPLSxqsxw==}
 
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
@@ -3042,7 +3054,13 @@ packages:
 
 snapshots:
 
+  7zip-bin@5.1.1: {}
+
   7zip-bin@5.2.0: {}
+
+  7zip-min@3.0.1:
+    dependencies:
+      7zip-bin: 5.1.1
 
   '@alloc/quick-lru@5.2.0': {}
 

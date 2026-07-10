@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Search, Wifi, X, AlertTriangle, CheckCircle2, XCircle, Loader2, Filter, Gamepad2 } from 'lucide-react'
+import { Search, Wifi, X, AlertTriangle, CheckCircle2, XCircle, Loader2, Filter, Gamepad2, Zap, Trash2 } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { useLibraryStore } from '../stores/useLibraryStore'
 import { useToastStore } from '../stores/useToastStore'
@@ -10,18 +10,25 @@ import { Card3D } from '../components/ui/Card3D'
 import { getCompatibility, getCompatibilityReason, type CompatibilityStatus } from '../lib/onlinefix-compatibility'
 import { getOnlineFixCompatibilityBatch } from '../lib/y-core-api'
 
+interface FixStatus {
+  hasSteamApi: boolean
+  is64Bit: boolean
+  hasFix: boolean
+  hasConfig: boolean
+  gameDir?: string
+}
+
 export default function OnlineFixPage() {
-  usePageHeader(<div><h1>{t('onlinefix.title')}</h1><p className="text-sm text-text-muted">{t('onlinefix.description')}</p></div>, [])
+  usePageHeader(<div><h1>{t('onlinefix.ycoreOnline')}</h1><p className="text-sm text-text-muted">{t('onlinefix.description')}</p></div>, [])
   const { games, loadGames, loading } = useLibraryStore()
   const { showToast } = useToastStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState<CompatibilityStatus | 'all'>('all')
-  const [statusMap, setStatusMap] = useState<Record<string, boolean>>({})
+  const [fixStatusMap, setFixStatusMap] = useState<Record<string, FixStatus>>({})
   const [loadingMap, setLoadingMap] = useState<Set<string>>(new Set())
   const [compatMap, setCompatMap] = useState<Record<string, { status: CompatibilityStatus; reason?: string }>>({})
   const [compatLoading, setCompatLoading] = useState(false)
   const [hideWarning, setHideWarning] = useState(false)
-  const [coverErrors, setCoverErrors] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadGames()
@@ -40,9 +47,11 @@ export default function OnlineFixPage() {
 
   useEffect(() => {
     if (games.length === 0) return
+
+    // Detect fix status for each game
     games.forEach((game) => {
-      window.steamtools.checkOnlineFixStatus(game.appId).then((result) => {
-        setStatusMap((prev) => ({ ...prev, [game.appId]: result.enabled }))
+      window.steamtools.detectOnlineFix(game.appId).then((result: FixStatus) => {
+        setFixStatusMap((prev) => ({ ...prev, [game.appId]: result }))
       })
     })
 
@@ -80,29 +89,41 @@ export default function OnlineFixPage() {
     })
   }, [games, searchQuery, filter, compatMap])
 
-  const handleToggle = async (appId: string, gameName: string) => {
-    const currentlyEnabled = statusMap[appId]
+  const handleGenerate = async (appId: string, gameName: string) => {
     setLoadingMap((prev) => new Set(prev).add(appId))
     try {
-      if (currentlyEnabled) {
-        const result = await window.steamtools.disableOnlineFix(appId)
-        if (result.success) {
-          setStatusMap((prev) => ({ ...prev, [appId]: false }))
-          showToast('success', `${t('onlinefix.disabledSuccess')} ${gameName}`)
-        } else {
-          showToast('error', result.error || t('onlinefix.disableFailed'))
-        }
+      const result = await window.steamtools.generateOnlineFix(appId)
+      if (result.success) {
+        const detect = await window.steamtools.detectOnlineFix(appId)
+        setFixStatusMap((prev) => ({ ...prev, [appId]: detect }))
+        showToast('success', `${t('onlinefix.generateSuccess')} ${gameName}`)
       } else {
-        const result = await window.steamtools.enableOnlineFix(appId)
-        if (result.success) {
-          setStatusMap((prev) => ({ ...prev, [appId]: true }))
-          showToast('success', `${t('onlinefix.enabledSuccess')} ${gameName}`)
-        } else {
-          showToast('error', result.error || t('onlinefix.enableFailed'))
-        }
+        showToast('error', result.error || t('onlinefix.generateFailed'))
       }
     } catch (err: any) {
-      showToast('error', err.message)
+      showToast('error', err.message || t('onlinefix.generateFailed'))
+    } finally {
+      setLoadingMap((prev) => {
+        const next = new Set(prev)
+        next.delete(appId)
+        return next
+      })
+    }
+  }
+
+  const handleRemove = async (appId: string, gameName: string) => {
+    setLoadingMap((prev) => new Set(prev).add(appId))
+    try {
+      const result = await window.steamtools.removeOnlineFix(appId)
+      if (result.success) {
+        const detect = await window.steamtools.detectOnlineFix(appId)
+        setFixStatusMap((prev) => ({ ...prev, [appId]: detect }))
+        showToast('success', `${t('onlinefix.removeSuccess')} ${gameName}`)
+      } else {
+        showToast('error', result.error || t('onlinefix.removeFailed'))
+      }
+    } catch (err: any) {
+      showToast('error', err.message || t('onlinefix.removeFailed'))
     } finally {
       setLoadingMap((prev) => {
         const next = new Set(prev)
@@ -210,38 +231,47 @@ export default function OnlineFixPage() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
           {filteredGames.map((game) => {
             const compat = resolveCompat(game.appId)
-            const isEnabled = statusMap[game.appId] ?? false
+            const fixStatus = fixStatusMap[game.appId]
+            const hasFix = fixStatus?.hasFix ?? false
+            const hasSteamApi = fixStatus?.hasSteamApi ?? true
             const isLoading = loadingMap.has(game.appId)
-            const isDisabled = compat.status === 'incompatible'
+            const isDisabled = compat.status === 'incompatible' || !hasSteamApi
 
             return (
               <Card3D
                 key={game.appId}
-                className={`group/card relative rounded-xl overflow-hidden cursor-pointer bg-surface-2 border border-white/[0.06] shadow-card transition-all duration-300 hover:shadow-card-hover will-change-transform ${
+                className={`group/card cursor-pointer ${
                   isDisabled ? 'opacity-60' : ''
-                } ${isEnabled ? 'ring-1 ring-accent/30' : ''}`}
+                } ${hasFix ? 'ring-1 ring-accent/30' : ''}`}
               >
-                <div className="relative aspect-[2/3] overflow-hidden">
+                <div className={`relative aspect-[2/3] overflow-hidden rounded-xl transition-all duration-300 shadow-card hover:shadow-card-hover ${
+                  hasFix ? 'ring-1 ring-accent/30' : ''
+                }`}>
                   <CoverImage
                     src={getCoverUrl(game.appId)}
                     fallbackSrc={`https://depotbox.org/api/images/steam-header/${game.appId}`}
                     alt={game.name}
-                    className="w-full h-full object-cover transition-all duration-500 group-hover/card:scale-105"
+                    className="w-full h-full object-cover"
                   />
 
-                  <div className="absolute top-2.5 left-2.5 right-2.5 flex flex-wrap gap-1 pointer-events-none">
+                  <div className="absolute top-2.5 left-2.5 right-2.5 flex flex-wrap gap-1 pointer-events-none z-10">
                     {statusBadge(compat.status, compat.reason)}
-                    {isEnabled && (
+                    {hasFix && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent/20 text-accent border border-accent/30">
-                        {t('onlinefix.enabled')}
+                        {t('onlinefix.installed')}
+                      </span>
+                    )}
+                    {!hasSteamApi && fixStatus && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
+                        {t('onlinefix.noSteamApi')}
                       </span>
                     )}
                   </div>
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
 
-                  <div className="absolute bottom-0 left-0 right-0 p-2.5 pt-6 z-10">
-                    <p className="text-xs font-bold text-white leading-tight line-clamp-2 drop-shadow-md">
+                  <div className="absolute bottom-0 left-0 right-0 p-3 pt-8 z-10">
+                    <p className="text-sm font-bold text-white leading-tight line-clamp-2 drop-shadow-md">
                       {game.name}
                     </p>
                     <p className="text-[10px] text-text-dim font-mono mt-0.5">AppID {game.appId}</p>
@@ -259,26 +289,26 @@ export default function OnlineFixPage() {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
-                      onClick={(e) => { e.stopPropagation(); handleToggle(game.appId, game.name) }}
+                      onClick={(e) => { e.stopPropagation(); hasFix ? handleRemove(game.appId, game.name) : handleGenerate(game.appId, game.name) }}
                       disabled={isLoading || isDisabled}
-                      className={`pointer-events-auto mx-2.5 mb-2.5 px-4 py-2 rounded-lg text-xs font-bold text-white transition-all shadow-lg ${
-                        isEnabled
-                          ? 'bg-white/[0.15] hover:bg-white/[0.25] border border-white/20'
-                          : 'bg-gradient-to-r from-accent to-accent-dark shadow-accent/25 hover:brightness-110'
+                      className={`pointer-events-auto flex items-center justify-center gap-2 mx-3 mb-3 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg ${
+                        hasFix
+                          ? 'text-white bg-white/[0.15] hover:bg-white/[0.25] border border-white/20'
+                          : 'text-black bg-accent hover:bg-accent-hover shadow-accent/25'
                       } ${isLoading ? 'opacity-70 cursor-wait' : ''}`}
                     >
                       {isLoading ? (
                         <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-                      ) : isEnabled ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <X className="w-5 h-5" />
-                          {t('onlinefix.disable')}
-                        </span>
+                      ) : hasFix ? (
+                        <>
+                          <Trash2 className="w-5 h-5" />
+                          {t('onlinefix.remove')}
+                        </>
                       ) : (
-                        <span className="flex items-center justify-center gap-2">
-                          <Wifi className="w-5 h-5" />
-                          {t('onlinefix.enable')}
-                        </span>
+                        <>
+                          <Zap className="w-5 h-5" />
+                          {t('onlinefix.generate')}
+                        </>
                       )}
                     </button>
                   </div>

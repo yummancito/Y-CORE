@@ -10,9 +10,6 @@ export interface CompatibilityEntry {
 const INCOMPATIBLE_GAMES: CompatibilityEntry[] = [
   { appId: '1336200', name: 'Sons of the Forest', status: 'incompatible', reason: 'dedicated_servers' },
   { appId: '1366540', name: 'Warhammer: Darktide', status: 'incompatible', reason: 'dedicated_servers' },
-  { appId: '739630', name: 'Phasmophobia', status: 'incompatible', reason: 'photon' },
-  { appId: '3435960', name: 'PEAK', status: 'incompatible', reason: 'photon' },
-  { appId: '2186680', name: 'Warhammer 40,000: Rogue Trader', status: 'incompatible', reason: 'photon' },
   { appId: '1646240', name: 'For the King 2', status: 'incompatible', reason: 'authentication' },
   { appId: '2378290', name: 'FBC: Firebreak', status: 'incompatible', reason: 'authentication' },
   { appId: '962130', name: 'Grounded', status: 'incompatible', reason: 'microsoft_auth' },
@@ -25,7 +22,6 @@ const INCOMPATIBLE_GAMES: CompatibilityEntry[] = [
   { appId: '602280', name: 'Barotrauma', status: 'incompatible', reason: 'dedicated_servers' },
   { appId: '548430', name: 'Deep Rock Galactic', status: 'incompatible', reason: 'dedicated_servers' },
   { appId: '774171', name: 'Risk of Rain 2', status: 'incompatible', reason: 'dedicated_servers' },
-  { appId: '1687950', name: 'Content Warning', status: 'incompatible', reason: 'photon' },
   { appId: '289070', name: 'Sid Meier\'s Civilization VI', status: 'incompatible', reason: 'dedicated_servers' },
 ]
 
@@ -63,6 +59,10 @@ const COMPATIBLE_GAMES: CompatibilityEntry[] = [
   { appId: '311690', name: 'Enter the Gungeon', status: 'compatible' },
   { appId: '268910', name: 'Cuphead', status: 'compatible' },
   { appId: '4000', name: 'Garry\'s Mod', status: 'compatible' },
+  { appId: '3435960', name: 'PEAK', status: 'compatible' },
+  { appId: '1687950', name: 'Content Warning', status: 'compatible' },
+  { appId: '739630', name: 'Phasmophobia', status: 'compatible' },
+  { appId: '2186680', name: 'Warhammer 40,000: Rogue Trader', status: 'compatible' },
 ]
 
 const incompatibleMap = new Map<string, CompatibilityEntry>(

@@ -22,14 +22,13 @@ export function addCoverCacheBuster(url: string): string {
   return `${url}?v=${COVER_CACHE_VERSION}`
 }
 
-export function getCoverUrls(appId: string): string[] {
+export function getCoverFallbackUrls(appId: string): string[] {
   if (!appId || !/^\d+$/.test(appId)) return []
   return [
-    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`,
-    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`,
     `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`,
     `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_231x87.jpg`,
-  ].map(addCoverCacheBuster)
+  ]
 }
 
 export function isGameFullyDownloaded(game: InstalledGame): boolean {

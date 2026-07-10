@@ -1,0 +1,15 @@
+{
+  "name": "bot-seguridad-y-core",
+  "version": "1.0.0",
+  "description": "Bot standalone de seguridad anti-nuke, anti-raid y moderacion automatica.",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "node --watch bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5"
+  }
+}

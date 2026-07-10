@@ -175,6 +175,9 @@ app.whenReady().then(async () => {
 
     autoUpdater.on('error', (err: Error) => {
       logger.error(`Auto-updater error: ${err.message}`, 'updater')
+      for (const win of BrowserWindow.getAllWindows()) {
+        try { win.webContents.send('update-error', { message: err.message }) } catch {}
+      }
     })
 
     const checkForUpdates = () => {
@@ -192,6 +195,78 @@ app.whenReady().then(async () => {
       logger.info('User requested update install — quitting and installing', 'updater')
       setIsQuitting(true)
       autoUpdater.quitAndInstall()
+    })
+
+    // Manual download fallback — bypasses electron-updater's broken retry() function
+    // Downloads the installer directly and runs it
+    ipcMain.handle('app:manualDownloadUpdate', async (_event, url: string) => {
+      const https = require('https')
+      const tmpDir = app.getPath('temp')
+      const installerPath = path.join(tmpDir, 'y-core-update.exe')
+
+      return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(installerPath)
+        const request = (reqUrl: string) => {
+          https.get(reqUrl, (response: any) => {
+            if (response.statusCode === 302 || response.statusCode === 301) {
+              response.destroy()
+              const newUrl = response.headers.location
+              if (newUrl) { request(newUrl); return }
+            }
+            if (response.statusCode !== 200) {
+              file.close()
+              fs.unlinkSync(installerPath)
+              reject(new Error(`HTTP ${response.statusCode}`))
+              return
+            }
+
+            const totalSize = parseInt(response.headers['content-length'] || '0', 10)
+            let downloaded = 0
+
+            response.on('data', (chunk: Buffer) => {
+              downloaded += chunk.length
+              if (totalSize > 0) {
+                const percent = (downloaded / totalSize) * 100
+                for (const win of BrowserWindow.getAllWindows()) {
+                  try { win.webContents.send('update-progress', {
+                    percent,
+                    transferred: downloaded,
+                    total: totalSize,
+                    bytesPerSecond: 0,
+                  }) } catch {}
+                }
+              }
+            })
+
+            response.pipe(file)
+            file.on('finish', () => {
+              file.close()
+              logger.info(`Update downloaded to ${installerPath}`, 'updater')
+              for (const win of BrowserWindow.getAllWindows()) {
+                try { win.webContents.send('update-downloaded', { version: 'manual' }) } catch {}
+              }
+              resolve({ path: installerPath })
+            })
+          }).on('error', (err: Error) => {
+            file.close()
+            if (fs.existsSync(installerPath)) fs.unlinkSync(installerPath)
+            reject(err)
+          })
+        }
+        request(url)
+      })
+    })
+
+    // Run the downloaded installer manually
+    ipcMain.handle('app:runManualInstaller', async (_event, installerPath: string) => {
+      const { exec } = require('child_process')
+      logger.info(`Running manual installer: ${installerPath}`, 'updater')
+      setIsQuitting(true)
+      // Run installer with /S for silent install, then quit
+      exec(`"${installerPath}" /S`, (err: Error | null) => {
+        if (err) logger.error(`Installer error: ${err.message}`, 'updater')
+      })
+      setTimeout(() => app.quit(), 1000)
     })
   } else {
     ipcMain.handle('app:installUpdate', () => {

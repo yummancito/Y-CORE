@@ -30,10 +30,14 @@ export function UpdateNotification() {
   const [updateDownloaded, setUpdateDownloaded] = useState<UpdateInfo | null>(null)
   const [progress, setProgress] = useState<ProgressInfo | null>(null)
   const [dismissed, setDismissed] = useState(false)
+  const [manualInstallerPath, setManualInstallerPath] = useState<string | null>(null)
+  const [updateError, setUpdateError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   useEffect(() => {
     const offAvailable = window.steamtools?.onUpdateAvailable?.((info: UpdateInfo) => {
       setUpdateAvailable(info)
+      setUpdateError(null)
     })
     const offProgress = window.steamtools?.onUpdateProgress?.((info: ProgressInfo) => {
       setProgress(info)
@@ -43,12 +47,34 @@ export function UpdateNotification() {
       setUpdateAvailable(null)
       setProgress(null)
     })
+    const offError = window.steamtools?.onUpdateError?.((info: { message: string }) => {
+      console.error('Update error:', info.message)
+      setUpdateError(info.message)
+    })
     return () => {
       offAvailable?.()
       offProgress?.()
       offDownloaded?.()
+      offError?.()
     }
   }, [])
+
+  // Auto-fallback: when electron-updater fails with retry error, download manually
+  useEffect(() => {
+    if (!updateError || !updateAvailable || retryCount > 0) return
+    if (!updateError.includes('retry')) return
+
+    setRetryCount(1)
+    const downloadUrl = `https://github.com/yummancito/Y-CORE/releases/download/v${updateAvailable.version}/Y-core-Setup-${updateAvailable.version}.exe`
+    console.log('Falling back to manual download:', downloadUrl)
+    setUpdateError(null)
+    window.steamtools?.manualDownloadUpdate?.(downloadUrl).then((result) => {
+      setManualInstallerPath(result.path)
+    }).catch((err: any) => {
+      console.error('Manual download failed:', err)
+      setUpdateError(err.message)
+    })
+  }, [updateError, updateAvailable, retryCount])
 
   if (dismissed) return null
 
@@ -81,7 +107,13 @@ export function UpdateNotification() {
               </div>
             </div>
             <button
-              onClick={() => window.steamtools?.installUpdate?.()}
+              onClick={() => {
+                if (manualInstallerPath) {
+                  window.steamtools?.runManualInstaller?.(manualInstallerPath)
+                } else {
+                  window.steamtools?.installUpdate?.()
+                }
+              }}
               className="w-full py-3 rounded-xl bg-green-600 text-white text-sm font-semibold transition-colors hover:bg-green-500"
             >
               Instalar y reiniciar

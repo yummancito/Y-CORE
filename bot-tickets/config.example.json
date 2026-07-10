@@ -1,0 +1,17 @@
+{
+  "color": "#4b0082",
+  "footer": "P4S Support System",
+  "advertencia": "If you create a joke ticket, you will be sanctioned with a mute or warning.",
+  "tituloPanel": "SUPPORT TICKETS",
+  "descripcionPanel": "Select one of the buttons below to open a ticket and receive support.",
+  "imagenPanel": "",
+  "categoriaTickets": "",
+  "canalLog": "",
+  "rolStaff": "",
+  "mensajeBienvenida": "Welcome {user}! Please describe your inquiry and wait for a staff member to assist you.",
+  "tipos": [
+    { "id": "buyvip", "label": "BUY VIP", "emoji": "💎", "color": "Primary", "descripcion": "Create a ticket if you want to buy the premium bot." },
+    { "id": "report", "label": "REPORT ISSUE", "emoji": "⚙️", "color": "Secondary", "descripcion": "Create a ticket if you want to report a bot issue." },
+    { "id": "questions", "label": "QUESTIONS", "emoji": "🔗", "color": "Success", "descripcion": "Create a ticket if you have any questions about the bot." }
+  ]
+}
