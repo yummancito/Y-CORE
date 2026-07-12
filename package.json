@@ -80,6 +80,7 @@
       "native/**/*",
       "resources/native/**/*",
       "tools/**/*",
+      "build/**/*",
       "public/logo.ico",
       "public/logo.svg"
     ],
@@ -92,7 +93,8 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "differentialPackage": false,
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "include": "build/installer.nsh"
     },
     "afterPack": "scripts/fix-exe.js",
     "publish": {
