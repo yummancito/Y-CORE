@@ -694,7 +694,7 @@ export default function SettingsPage() {
               {/* Documentation */}
               <button
                 onClick={() => {
-                  const url = 'https://github.com/yummancito/Y-CORE/wiki'
+                  const url = 'https://github.com/yummancito/Y-CORE/tree/main/docs'
                   if (window.steamtools?.openExternal) {
                     window.steamtools.openExternal(url)
                   } else {

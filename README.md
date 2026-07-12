@@ -57,7 +57,7 @@ These private components are necessary for the full functionality of Y-core but 
 - **Install & build** → [docs/INSTALL.md](./docs/INSTALL.md)
 - **Troubleshooting** (Steam not detected, IPC message, etc.) → [docs/TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)
 - **Contributing** → [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md)
-- **Guides & Wiki** → [github.com/yummancito/Y-CORE/wiki](https://github.com/yummancito/Y-CORE/wiki)
+- **Guides** → [docs/](./docs)
 - **Download** the latest version → [Releases](https://github.com/yummancito/Y-CORE/releases)
 
 ## Development
