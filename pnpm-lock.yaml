@@ -63,6 +63,9 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.2
         version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/node':
+        specifier: ^20.19.43
+        version: 20.19.43
       '@types/react':
         specifier: ^18.3.3
         version: 18.3.31
@@ -92,7 +95,7 @@ importers:
         version: 8.5.16
       sharp:
         specifier: ^0.35.3
-        version: 0.35.3(@types/node@22.20.0)
+        version: 0.35.3(@types/node@20.19.43)
       tailwindcss:
         specifier: ^3.4.4
         version: 3.4.19(tsx@4.22.4)
@@ -110,7 +113,7 @@ importers:
         version: 0.14.7
       vitest:
         specifier: ^2.1.9
-        version: 2.1.9(@types/node@22.20.0)(jsdom@25.0.1)
+        version: 2.1.9(@types/node@20.19.43)(jsdom@25.0.1)
       wait-on:
         specifier: ^7.2.0
         version: 7.2.0
@@ -5639,7 +5642,7 @@ snapshots:
 
   set-cookie-parser@2.7.2: {}
 
-  sharp@0.35.3(@types/node@22.20.0):
+  sharp@0.35.3(@types/node@20.19.43):
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
@@ -5670,7 +5673,7 @@ snapshots:
       '@img/sharp-win32-arm64': 0.35.3
       '@img/sharp-win32-ia32': 0.35.3
       '@img/sharp-win32-x64': 0.35.3
-      '@types/node': 22.20.0
+      '@types/node': 20.19.43
 
   shebang-command@2.0.0:
     dependencies:
@@ -5961,24 +5964,6 @@ snapshots:
       - supports-color
       - terser
 
-  vite-node@2.1.9(@types/node@22.20.0):
-    dependencies:
-      cac: 6.7.14
-      debug: 4.4.3
-      es-module-lexer: 1.7.0
-      pathe: 1.1.2
-      vite: 5.4.21(@types/node@22.20.0)
-    transitivePeerDependencies:
-      - '@types/node'
-      - less
-      - lightningcss
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-
   vite-plugin-electron-renderer@0.14.7: {}
 
   vite-plugin-electron@0.28.8(vite-plugin-electron-renderer@0.14.7):
@@ -5992,15 +5977,6 @@ snapshots:
       rollup: 4.62.2
     optionalDependencies:
       '@types/node': 20.19.43
-      fsevents: 2.3.3
-
-  vite@5.4.21(@types/node@22.20.0):
-    dependencies:
-      esbuild: 0.21.5
-      postcss: 8.5.16
-      rollup: 4.62.2
-    optionalDependencies:
-      '@types/node': 22.20.0
       fsevents: 2.3.3
 
   vitest@2.1.9(@types/node@20.19.43)(jsdom@25.0.1):
@@ -6027,42 +6003,6 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 20.19.43
-      jsdom: 25.0.1
-    transitivePeerDependencies:
-      - less
-      - lightningcss
-      - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-
-  vitest@2.1.9(@types/node@22.20.0)(jsdom@25.0.1):
-    dependencies:
-      '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(vite@5.4.21(@types/node@20.19.43))
-      '@vitest/pretty-format': 2.1.9
-      '@vitest/runner': 2.1.9
-      '@vitest/snapshot': 2.1.9
-      '@vitest/spy': 2.1.9
-      '@vitest/utils': 2.1.9
-      chai: 5.3.3
-      debug: 4.4.3
-      expect-type: 1.4.0
-      magic-string: 0.30.21
-      pathe: 1.1.2
-      std-env: 3.10.0
-      tinybench: 2.9.0
-      tinyexec: 0.3.2
-      tinypool: 1.1.1
-      tinyrainbow: 1.2.0
-      vite: 5.4.21(@types/node@22.20.0)
-      vite-node: 2.1.9(@types/node@22.20.0)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 22.20.0
       jsdom: 25.0.1
     transitivePeerDependencies:
       - less
