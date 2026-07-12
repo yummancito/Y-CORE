@@ -82,7 +82,20 @@ export function registerConfigHandlers() {
         filtered[key] = value
       }
 
-      const serialized = JSON.stringify(filtered, null, 2)
+      // Merge with existing config so partial updates (e.g. { tourDone: true })
+      // don't wipe unrelated keys like `customization`.
+      let existing: Record<string, unknown> = {}
+      try {
+        if (fs.existsSync(CONFIG_PATH)) {
+          const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
+          const parsed = JSON.parse(raw, (k, v) =>
+            k === '__proto__' || k === 'constructor' || k === 'prototype' ? undefined : v
+          )
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) existing = parsed
+        }
+      } catch {}
+      const merged = { ...existing, ...filtered }
+      const serialized = JSON.stringify(merged, null, 2)
       const MAX_CONFIG_SIZE = 256 * 1024
       if (serialized.length > MAX_CONFIG_SIZE) {
         return { success: false, error: 'Config exceeds maximum size of 256KB' }

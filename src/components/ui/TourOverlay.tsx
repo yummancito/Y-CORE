@@ -188,11 +188,15 @@ function TourOverlayInner() {
           }
           log('Starting tour (first run)')
           start(TOUR_STEPS)
+          // Mark as seen immediately so closing the window (X / Alt+F4) still
+          // counts as "done" and the tour never re-appears on next launch.
+          window.steamtools?.writeConfig?.({ tourDone: true }).catch?.(() => {})
         })
         .catch(() => {
           if (cancelled) return
           log('Starting tour (config read failed, defaulting to start)')
           start(TOUR_STEPS)
+          window.steamtools?.writeConfig?.({ tourDone: true }).catch?.(() => {})
         })
     }, 2000)
     return () => {

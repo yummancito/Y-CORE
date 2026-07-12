@@ -1,6 +1,6 @@
 {
   "name": "y-core",
-  "version": "2.5.3",
+  "version": "2.5.4",
   "description": "Y-core - Steam game management tool",
   "main": "dist-electron/main.js",
   "author": "Y-core",
