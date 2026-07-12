@@ -174,8 +174,9 @@ function TourOverlayInner() {
   }, [currentStep, isOpen, steps, log])
 
   useEffect(() => {
+    if (localStorage.getItem('y-core-tour-done') === 'true') return
     const timer = setTimeout(() => {
-      log('Starting tour (dev mode)')
+      log('Starting tour (first run)')
       start(TOUR_STEPS)
     }, 2000)
     return () => clearTimeout(timer)
