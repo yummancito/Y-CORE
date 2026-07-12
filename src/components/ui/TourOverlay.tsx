@@ -139,6 +139,7 @@ function TourOverlayInner() {
     }
     if (cs === st.length - 1) {
       localStorage.setItem('y-core-tour-done', 'true')
+      window.steamtools?.writeConfig?.({ tourDone: true }).catch?.(() => {})
       playCompleteSound()
       log('Tour completed')
     } else {
@@ -163,6 +164,7 @@ function TourOverlayInner() {
 
   const handleClose = useCallback(() => {
     localStorage.setItem('y-core-tour-done', 'true')
+    window.steamtools?.writeConfig?.({ tourDone: true }).catch?.(() => {})
     playCompleteSound()
     log('Tour skipped')
     close()
@@ -174,12 +176,29 @@ function TourOverlayInner() {
   }, [currentStep, isOpen, steps, log])
 
   useEffect(() => {
-    if (localStorage.getItem('y-core-tour-done') === 'true') return
+    let cancelled = false
     const timer = setTimeout(() => {
-      log('Starting tour (first run)')
-      start(TOUR_STEPS)
+      const cfg = window.steamtools?.readConfig?.()
+      Promise.resolve(cfg)
+        .then((c: any) => {
+          if (cancelled) return
+          if (c && c.tourDone === true) {
+            log('Tour already completed, skipping auto-start')
+            return
+          }
+          log('Starting tour (first run)')
+          start(TOUR_STEPS)
+        })
+        .catch(() => {
+          if (cancelled) return
+          log('Starting tour (config read failed, defaulting to start)')
+          start(TOUR_STEPS)
+        })
     }, 2000)
-    return () => clearTimeout(timer)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [start, log])
 
   const step = steps[currentStep]

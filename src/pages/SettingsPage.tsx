@@ -578,6 +578,7 @@ export default function SettingsPage() {
                   <span className="text-sm text-text-dim">{t('settings.restartTour')}</span>
                   <button
                     onClick={() => {
+                      window.steamtools?.writeConfig?.({ tourDone: false }).catch?.(() => {})
                       localStorage.removeItem('y-core-tour-done')
                       window.location.reload()
                     }}

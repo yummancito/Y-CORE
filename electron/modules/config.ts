@@ -24,6 +24,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   'customization',
   'steamLogMonitor',
   'steamPath',
+  'tourDone',
 ])
 
 const MAX_CONFIG_DEPTH = 3
