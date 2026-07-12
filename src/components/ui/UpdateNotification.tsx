@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Download, RefreshCw, X } from 'lucide-react'
+import { Download, RefreshCw, X, FileText } from 'lucide-react'
 
 interface UpdateInfo {
   version?: string
@@ -33,6 +33,8 @@ export function UpdateNotification() {
   const [manualInstallerPath, setManualInstallerPath] = useState<string | null>(null)
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [showChangelog, setShowChangelog] = useState(false)
+  const [changelog, setChangelog] = useState<string | null>(null)
 
   useEffect(() => {
     const offAvailable = window.steamtools?.onUpdateAvailable?.((info: UpdateInfo) => {
@@ -59,7 +61,6 @@ export function UpdateNotification() {
     }
   }, [])
 
-  // Auto-fallback: when electron-updater fails with retry error, download manually
   useEffect(() => {
     if (!updateError || !updateAvailable || retryCount > 0) return
     if (!updateError.includes('retry')) return
@@ -75,6 +76,25 @@ export function UpdateNotification() {
       setUpdateError(err.message)
     })
   }, [updateError, updateAvailable, retryCount])
+
+  const fetchChangelog = async () => {
+    const version = updateAvailable?.version || updateDownloaded?.version || 'latest'
+    try {
+      setChangelog('Cargando...')
+      const url = `https://api.github.com/repos/yummancito/Y-CORE/releases/tags/v${version}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('Not found')
+      const data = await res.json()
+      setChangelog(data.body || '*Sin notas de versión*')
+    } catch {
+      setChangelog('*No se pudieron cargar las notas de versión*')
+    }
+  }
+
+  const handleOpenChangelog = () => {
+    setShowChangelog(!showChangelog)
+    if (!changelog) fetchChangelog()
+  }
 
   if (dismissed) return null
 
@@ -101,11 +121,27 @@ export function UpdateNotification() {
               </div>
               <div>
                 <p className="text-sm font-bold text-text-bright">
-                  Actualizacion lista — v{updateDownloaded.version ?? 'nueva'}
+                  Actualización lista — v{updateDownloaded.version ?? 'nueva'}
                 </p>
-                <p className="text-xs text-text-dim">Reinicia para instalar la nueva version.</p>
+                <p className="text-xs text-text-dim">Reinicia para instalar la nueva versión.</p>
               </div>
             </div>
+
+            {/* Changelog */}
+            <button
+              onClick={handleOpenChangelog}
+              className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-bright transition-colors mb-3"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Ver qué hay de nuevo
+            </button>
+
+            {showChangelog && (
+              <div className="mb-4 max-h-40 overflow-y-auto rounded-xl bg-black/30 p-3 text-xs text-text-secondary whitespace-pre-wrap">
+                {changelog || 'Cargando...'}
+              </div>
+            )}
+
             <button
               onClick={() => {
                 if (manualInstallerPath) {
@@ -127,7 +163,7 @@ export function UpdateNotification() {
               </div>
               <div>
                 <p className="text-sm font-bold text-text-bright">
-                  Descargando actualizacion — v{updateAvailable?.version ?? 'nueva'}
+                  Descargando actualización — v{updateAvailable?.version ?? 'nueva'}
                 </p>
                 <p className="text-xs text-text-dim">
                   {progress

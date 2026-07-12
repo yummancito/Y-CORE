@@ -57,17 +57,18 @@ export default function DrmRemoverPage() {
         if (result?.status === 'drm-removed') {
           setDrmStates((prev) => ({ ...prev, [game.appId]: { status: 'already-removed', message: result.message } }))
         }
-      }).catch(() => {})
+      }).catch((e) => console.warn(`[DRM] checkDrmStatus for ${game.appId} failed:`, e))
     })
   }, [games])
 
   const filtered = games.filter((g) =>
-    g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (g.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
     g.appId.includes(searchQuery)
   )
 
   const handleRemoveDrm = async (appId: string, name: string) => {
-    const confirmed = window.confirm(`${t('drm.confirmTitle')}\n\n${t('drm.confirmMessage')}\n\n${name} (${appId})`)
+    const displayName = name || `App ${appId}`
+    const confirmed = window.confirm(`${t('drm.confirmTitle')}\n\n${t('drm.confirmMessage')}\n\n${displayName} (${appId})`)
     if (!confirmed) return
 
     setDrmStates((prev) => ({ ...prev, [appId]: { status: 'processing' } }))
@@ -77,10 +78,10 @@ export default function DrmRemoverPage() {
       if (result.success) {
         if (result.hadDrm) {
           setDrmStates((prev) => ({ ...prev, [appId]: { status: 'success', message: result.message } }))
-          showToast('success', `${t('drm.success')} — ${name}`)
+          showToast('success', `${t('drm.success')} — ${displayName}`)
         } else {
           setDrmStates((prev) => ({ ...prev, [appId]: { status: 'no-drm', message: result.message } }))
-          showToast('info', `${t('drm.noDrm')} — ${name}`)
+          showToast('info', `${t('drm.noDrm')} — ${displayName}`)
         }
       } else {
         setDrmStates((prev) => ({ ...prev, [appId]: { status: 'error', message: result.message } }))

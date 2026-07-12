@@ -1,7 +1,31 @@
 import path from 'path'
 import fs from 'fs'
+import { app } from 'electron'
 import { getSteamAppsPath, getSteamUserId } from './steam-helpers'
 import { GOLDSRC_BASE_DEPOT_IDS, GOLDSRC_MOD_APP_IDS } from './goldsrc'
+
+const APP_LANG_TO_STEAM: Record<string, string> = {
+  es: 'spanish',
+  en: 'english',
+  fr: 'french',
+  pt: 'portuguese',
+  de: 'german',
+  zh: 'schinese',
+  hi: 'hindi',
+}
+
+function getLanguageFromConfig(): string {
+  try {
+    const configPath = path.join(app.getPath('userData'), 'ycore-config.json')
+    if (!fs.existsSync(configPath)) return 'english'
+    const raw = fs.readFileSync(configPath, 'utf-8')
+    const config = JSON.parse(raw)
+    const lang = config.language || 'en'
+    return APP_LANG_TO_STEAM[lang] || 'english'
+  } catch {
+    return 'english'
+  }
+}
 
 export interface AddGameOptions {
   appId: string
@@ -11,7 +35,7 @@ export interface AddGameOptions {
   stateFlags?: string
 }
 
-export function generateAcfContent(options: AddGameOptions): string {
+export function generateAcfContent(options: AddGameOptions, language?: string): string {
   const {
     appId,
     name = '',
@@ -21,6 +45,7 @@ export function generateAcfContent(options: AddGameOptions): string {
   } = options
 
   const now = Math.floor(Date.now() / 1000)
+  const lang = language || getLanguageFromConfig()
 
   return `"AppState"
 {
@@ -41,7 +66,7 @@ export function generateAcfContent(options: AddGameOptions): string {
 \t"ScheduledAutoUpdate"\t\t"0"
 \t"UserConfig"
 \t{
-\t\t"Language"\t\t"english"
+\t\t"Language"\t\t"${lang}"
 \t}
 \t"MountedDepots"
 \t{
@@ -122,10 +147,12 @@ export function buildAppManifestAcf(
   installDir: string,
   depotEntries: { depotId: string; manifestId: string; size?: string }[],
   sharedDepots: Record<string, string> = {},
-  depotIdsWithKeys?: Set<string>
+  depotIdsWithKeys?: Set<string>,
+  language?: string
 ): string {
   const lastOwner = getSteamUserId() || '0'
   const nowEpoch = Math.floor(Date.now() / 1000)
+  const lang = language || getLanguageFromConfig()
 
   let totalSize = 0
   for (const entry of depotEntries) {
@@ -169,11 +196,11 @@ ${sharedDepotsBlock}
 \t}
 \t"UserConfig"
 \t{
-\t\t"language"\t\t"english"
+\t\t"language"\t\t"${lang}"
 \t}
 \t"MountedConfig"
 \t{
-\t\t"language"\t\t"english"
+\t\t"language"\t\t"${lang}"
 \t}
 }
 `
@@ -183,7 +210,8 @@ export function createAppManifestFromLua(
   appId: string,
   luaContent: string,
   gameName?: string,
-  depotIdsWithKeys?: Set<string>
+  depotIdsWithKeys?: Set<string>,
+  language?: string
 ): { success: boolean; path?: string; error?: string; sharedDepots?: Record<string, string> } {
   const steamAppsPath = getSteamAppsPath()
   if (!steamAppsPath) return { success: false, error: 'Steam apps directory not found' }
@@ -220,7 +248,7 @@ export function createAppManifestFromLua(
     }
   }
 
-  const acfContent = buildAppManifestAcf(appId, name, installDir, modDepots, sharedDepots, depotIdsWithKeys)
+  const acfContent = buildAppManifestAcf(appId, name, installDir, modDepots, sharedDepots, depotIdsWithKeys, language)
 
   try {
     fs.writeFileSync(acfPath, acfContent, 'utf-8')
@@ -232,7 +260,8 @@ export function createAppManifestFromLua(
 
 export function createGoldSrcBaseAppManifest(
   luaContent: string,
-  depotIdsWithKeys?: Set<string>
+  depotIdsWithKeys?: Set<string>,
+  language?: string
 ): { success: boolean; path?: string; error?: string } {
   const steamAppsPath = getSteamAppsPath()
   if (!steamAppsPath) return { success: false, error: 'Steam apps directory not found' }

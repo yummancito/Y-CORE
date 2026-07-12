@@ -4,11 +4,10 @@ import { AppShell } from './components/layout/AppShell'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { ToastContainer } from './components/ui/Toast'
 import { UpdateNotification } from './components/ui/UpdateNotification'
-import { SignaturePendingModal } from './components/ui/SignaturePendingModal'
 import { SteamErrorModal } from './components/ui/SteamErrorModal'
 import { CommandPalette } from './components/CommandPalette'
+import { TourOverlay } from './components/ui/TourOverlay'
 import { useCommandPaletteStore } from './stores/useCommandPaletteStore'
-import { useSignaturePendingStore } from './stores/useSignaturePendingStore'
 import { useSteamErrorStore } from './stores/useSteamErrorStore'
 
 const LibraryPage = lazy(() => import('./pages/LibraryPage'))
@@ -49,18 +48,7 @@ function AppRoutes() {
 
 export default function App() {
   const { toggle: toggleCommandPalette } = useCommandPaletteStore()
-  const { open: openSignaturePending } = useSignaturePendingStore()
   const { open: openSteamError } = useSteamErrorStore()
-
-  // Listen for signature pending events from Electron main process
-  useEffect(() => {
-    const unsub = window.steamtools?.onSignaturePending?.((info) => {
-      openSignaturePending(info.component, info.sha256)
-    })
-    return () => {
-      if (typeof unsub === 'function') unsub()
-    }
-  }, [openSignaturePending])
 
   // Listen for Steam errors from log watcher
   useEffect(() => {
@@ -95,9 +83,9 @@ export default function App() {
       </Routes>
       <ToastContainer />
       <UpdateNotification />
-      <SignaturePendingModal />
       <SteamErrorModal />
       <CommandPalette />
+      <TourOverlay />
     </>
   )
 }

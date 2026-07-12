@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Gamepad2,
   Play,
@@ -26,7 +26,7 @@ import { CoverImage } from '../components/ui/CoverImage'
 import { Card3D } from '../components/ui/Card3D'
 
 export default function LibraryPage() {
-  const { searchQuery, sortBy, loadGames, setSearchQuery, setSortBy, loading } = useLibraryStore()
+  const { searchQuery, sortBy, loadGames, setSearchQuery, setSortBy, loading, error } = useLibraryStore()
   const allFiltered = useFilteredLibraryGames()
   const { showToast } = useToastStore()
   const [coverErrors, setCoverErrors] = useState<Set<string>>(new Set())
@@ -209,14 +209,14 @@ export default function LibraryPage() {
     if (status.enabled) {
       const result = await window.steamtools.disableOnlineFix(game.appId)
       if (result.success) {
-        showToast('success', `${t('onlinefix.disabledSuccess')} ${game.name}`)
+        showToast('success', `${t('onlinefix.disabledSuccess')} ${game.name || t('library.unknown')}`)
       } else {
         showToast('error', result.error || t('onlinefix.disableFailed'))
       }
     } else {
       const result = await window.steamtools.enableOnlineFix(game.appId)
       if (result.success) {
-        showToast('success', `${t('onlinefix.enabledSuccess')} ${game.name}`)
+        showToast('success', `${t('onlinefix.enabledSuccess')} ${game.name || t('library.unknown')}`)
       } else {
         showToast('error', result.error || t('onlinefix.enableFailed'))
       }
@@ -232,30 +232,67 @@ export default function LibraryPage() {
     setCoverErrors((prev) => new Set(prev).add(appId))
   }
 
+  const GAMES_PER_PAGE = 60
+  const [visibleCount, setVisibleCount] = useState(GAMES_PER_PAGE)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  const prevGamesLengthRef = useRef(0)
+
+  const games = allFiltered
+
+  // Reset visible count when filter/sort changes
+  useEffect(() => {
+    if (games.length !== prevGamesLengthRef.current) {
+      prevGamesLengthRef.current = games.length
+      setVisibleCount(GAMES_PER_PAGE)
+    }
+  }, [games.length])
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && visibleCount < games.length) {
+          setVisibleCount((prev) => Math.min(prev + GAMES_PER_PAGE, games.length))
+        }
+      },
+      { rootMargin: '400px' }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [visibleCount, games.length])
+
+  const visibleGames = useMemo(() => games.slice(0, visibleCount), [games, visibleCount])
+
   return (
     <div data-section="Library" className="min-h-full overflow-y-auto animate-fade-in">
       <div className="px-6 py-6">
-        {(() => {
-          if (loading) {
-            return (
-              <div className="flex flex-col items-center justify-center py-20 text-text-dim">
-                <Loader2 className="w-8 h-8 mb-4 animate-spin text-accent" />
-                <p className="text-sm">Cargando...</p>
-              </div>
-            )
-          }
-          const games = allFiltered
-          if (games.length === 0) {
-            return (
-              <div className="flex flex-col items-center justify-center py-20 text-text-dim">
-                <Gamepad2 className="w-16 h-16 mb-4 opacity-20" />
-                <p className="text-sm">{allFiltered.length === 0 ? t('library.noGames') : t('library.noMatch')}</p>
-              </div>
-            )
-          }
-          return (
+        {error ? (
+          <div className="flex flex-col items-center justify-center py-20 text-text-dim">
+            <Package className="w-16 h-16 mb-4 opacity-20 text-red-400" />
+            <p className="text-sm text-red-400 mb-2">{error}</p>
+            <button
+              onClick={loadGames}
+              className="mt-2 text-xs font-semibold px-4 py-2 rounded-xl bg-accent hover:bg-accent/80 text-white transition-all"
+            >
+              {t('errors.retry')}
+            </button>
+          </div>
+        ) : loading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-text-dim">
+            <Loader2 className="w-8 h-8 mb-4 animate-spin text-accent" />
+            <p className="text-sm">{t('library.loading')}</p>
+          </div>
+        ) : games.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-text-dim">
+            <Gamepad2 className="w-16 h-16 mb-4 opacity-20" />
+            <p className="text-sm">{allFiltered.length === 0 ? t('library.noGames') : t('library.noMatch')}</p>
+          </div>
+        ) : (
+          <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
-              {games.map((game) => (
+              {visibleGames.map((game) => (
                 <Card3D
                   key={game.appId}
                   className="group/card cursor-pointer"
@@ -300,8 +337,19 @@ export default function LibraryPage() {
                 </Card3D>
               ))}
             </div>
-          )
-        })()}
+            {visibleCount < games.length && (
+              <div ref={sentinelRef} className="flex items-center justify-center py-8 text-text-dim">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="ml-2 text-sm">{t('library.loadingMore')}</span>
+              </div>
+            )}
+            {visibleCount >= games.length && games.length > GAMES_PER_PAGE && (
+              <p className="text-center text-xs text-text-dim py-4">
+                {games.length} {t('library.games')}
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       <button

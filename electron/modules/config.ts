@@ -23,6 +23,7 @@ const ALLOWED_CONFIG_KEYS = new Set([
   'apiUrl',
   'customization',
   'steamLogMonitor',
+  'steamPath',
 ])
 
 const MAX_CONFIG_DEPTH = 3

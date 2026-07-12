@@ -16,6 +16,7 @@ import { useSteamStore } from '../../stores/useSteamStore'
 import { useToastStore } from '../../stores/useToastStore'
 import { useRecommendationStore } from '../../stores/useRecommendationStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
+import { useDownloadQueueStore } from '../../stores/useDownloadQueueStore'
 import { t } from '../../lib/i18n'
 import { isGameFullyDownloaded, getDownloadProgress, getCoverUrl } from '../../domain/utils'
 import { CoverImage } from '../../components/ui/CoverImage'
@@ -24,13 +25,15 @@ interface NavItemProps {
   to: string
   icon: React.ComponentType<{ className?: string }>
   label: string
+  tourId?: string
 }
 
-function NavItem({ to, icon: Icon, label }: NavItemProps) {
+function NavItem({ to, icon: Icon, label, tourId }: NavItemProps) {
   return (
     <NavLink
       to={to}
       title={label}
+      data-tour={tourId}
       className={({ isActive }) =>
         `flex items-center gap-3 h-11 px-3.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
           isActive
@@ -41,6 +44,34 @@ function NavItem({ to, icon: Icon, label }: NavItemProps) {
     >
       <Icon className="w-6 h-6 flex-shrink-0" />
       <span className="font-medium">{label}</span>
+    </NavLink>
+  )
+}
+
+function StoreNavItem() {
+  const queueLength = useDownloadQueueStore((s) => s.queue.length)
+  const current = useDownloadQueueStore((s) => s.current)
+  const totalPending = queueLength + (current ? 1 : 0)
+  return (
+    <NavLink
+      to="/store"
+      title={t('store.title')}
+      data-tour="store"
+      className={({ isActive }) =>
+        `flex items-center gap-3 h-11 px-3.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+          isActive
+            ? 'bg-white/[0.08] text-text-bright shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+            : 'text-text-secondary hover:text-text-bright hover:bg-white/[0.04]'
+        }`
+      }
+    >
+      <BuildingShop20Regular className="w-6 h-6 flex-shrink-0" />
+      <span className="font-medium flex-1">{t('store.title')}</span>
+      {totalPending > 0 && (
+        <span className="flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-accent/80 text-white">
+          {totalPending}
+        </span>
+      )}
     </NavLink>
   )
 }
@@ -140,7 +171,10 @@ export function EpicSidebar() {
           {visibleNavItems.filter((item) => item.id !== 'settings').map((item) => {
             const config = NAV_ITEM_MAP[item.id]
             if (!config) return null
-            return <NavItem key={item.id} to={config.to} icon={config.icon} label={config.label} />
+            if (item.id === 'store') {
+              return <StoreNavItem key={item.id} />
+            }
+            return <NavItem key={item.id} to={config.to} icon={config.icon} label={config.label} tourId={item.id} />
           })}
         </div>
 
@@ -228,7 +262,7 @@ export function EpicSidebar() {
       {/* Bottom actions */}
       <div className="p-5 border-t border-white/[0.08] space-y-1">
         {visibleNavItems.find((item) => item.id === 'settings') && (
-          <NavItem to="/settings" icon={Settings20Regular} label={t('nav.settings')} />
+          <NavItem to="/settings" icon={Settings20Regular} label={t('nav.settings')} tourId="settings" />
         )}
 
         {/* Discord CTA */}

@@ -6,12 +6,14 @@ import {
 import { t } from '../lib/i18n'
 import { useToastStore } from '../stores/useToastStore'
 import { useLibraryStore } from '../stores/useLibraryStore'
+import { useDownloadQueueStore } from '../stores/useDownloadQueueStore'
 import { usePageHeader } from '../components/layout/AppShell'
 import {
   listGames, installGame, getJobStatus, reportDownloaded, searchGamesCombined,
   type GameSummary,
 } from '../lib/y-core-api'
 import { CATEGORIES, type CategoryId, getPrimaryCategoryFromName } from '../lib/categories'
+import { getLauncherInfo } from '../lib/onlinefix-compatibility'
 import { useRecommendationStore } from '../stores/useRecommendationStore'
 import { useSettingsStore } from '../stores/useSettingsStore'
 import { GameCard, GameCardSkeleton, getDefaultGameImageUrl, type MergedGame } from '../components/store/GameCard'
@@ -84,6 +86,7 @@ export default function StorePage() {
   const [installing, setInstalling] = useState<string | null>(null)
   const [selectedGame, setSelectedGame] = useState<MergedGame | null>(null)
   const [showScrollTop, setShowScrollTop] = useState(false)
+  const [hideInstalled, setHideInstalled] = useState(true)
   const [importProgress, setImportProgress] = useState<{ appId: string; status: string } | null>(null)
   const { showTools, showAdult, loadFromConfig: loadSettings } = useSettingsStore()
 
@@ -197,14 +200,23 @@ export default function StorePage() {
   }, [allGames, browseFilter, showAdult])
 
   const browseVisibleGames = useMemo(() => {
-    return browseFilteredGames.slice(0, browseVisibleCount)
-  }, [browseFilteredGames, browseVisibleCount])
+    let games = browseFilteredGames
+    // Filter out orphaned games (no real name, no image)
+    games = games.filter(g => {
+      const rawName = g.name?.trim()
+      return rawName && rawName !== g.app_id && !/^app\s*\d*$/i.test(rawName) && rawName.toLowerCase() !== 'appid'
+    })
+    if (hideInstalled) games = games.filter(g => !installedAppIds.has(g.app_id))
+    return games.slice(0, browseVisibleCount)
+  }, [browseFilteredGames, browseVisibleCount, hideInstalled, installedAppIds])
 
   useEffect(() => {
     setBrowseVisibleCount(60)
   }, [browseFilter])
 
   const searchAbortRef = useRef<AbortController | null>(null)
+  const pollAbortRef = useRef<AbortController | null>(null)
+  const pollJobRef = useRef<((jobId: string, appId: string, gameName?: string) => Promise<void>) | null>(null)
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setSearchResults(null); return }
     if (q.trim().length < 2) return
@@ -261,10 +273,13 @@ export default function StorePage() {
       const typeResults = await window.steamtools.checkAppTypes(depotboxAppIds)
       if (abortController.signal.aborted) return
 
-      // Filter depotbox games: exclude tools (if showTools=false) and adult content (if showAdult=false)
+      // Filter depotbox games: exclude tools, adult, installed, and orphaned entries
       const filteredDepotbox = depotboxGames
         .filter(g => {
-          // Client-side fallback: check name against NSFW category keywords
+          // Exclude entries without a real name (orphaned app IDs)
+          const rawName = g.name?.trim()
+          const isOrphaned = !rawName || rawName === g.app_id || /^app\s*\d*$/i.test(rawName) || rawName.toLowerCase() === 'appid'
+          if (isOrphaned) return false
           if (!showAdult && getPrimaryCategoryForGame(g) === 'nsfw') return false
           const info = typeResults[g.app_id]
           if (!info) return true
@@ -294,9 +309,28 @@ export default function StorePage() {
     '10', '20', '30', '40', '50', '60', '80', '100', '130',
   ])
 
+  const enqueueGame = useDownloadQueueStore((s) => s.enqueue)
+
   const handleInstall = async (game: MergedGame) => {
-    if (installing) return
-    setInstalling(game.app_id)
+    const launcherInfo = getLauncherInfo(game.app_id)
+    if (launcherInfo) {
+      const message = t('store.incompatibleLauncher').replace('{launcher}', launcherInfo.launcher)
+      if (!window.confirm(`${t('store.incompatibleLauncherTitle')}\n\n${message}\n\n${t('store.installAnyway')}?`)) {
+        return
+      }
+    }
+    enqueueGame({ appId: game.app_id, name: game.name || `App ${game.app_id}` })
+  }
+
+  const processQueue = useCallback(async () => {
+    const { processing, dequeue, setProcessing, setCurrent } = useDownloadQueueStore.getState()
+    if (processing) return
+    const item = dequeue()
+    if (!item) return
+
+    setProcessing(true)
+    setCurrent(item)
+    setInstalling(item.appId)
     try {
       const closeResult = await window.steamtools.closeSteam()
       if (closeResult && !closeResult.success) {
@@ -304,7 +338,7 @@ export default function StorePage() {
         return
       }
 
-      if (GOLDSRC_MOD_APP_IDS.has(game.app_id)) {
+      if (GOLDSRC_MOD_APP_IDS.has(item.appId)) {
         const baseResp = await installGame('70')
         if (baseResp.status === 'ready' && baseResp.game) {
           const result = await window.steamtools.storeInstallGame({
@@ -320,11 +354,11 @@ export default function StorePage() {
           }
           try { await reportDownloaded('70') } catch {}
         } else if (baseResp.status === 'queued') {
-          await pollJob(baseResp.job_id!, '70')
+          await pollJobRef.current!(baseResp.job_id!, '70')
         }
       }
 
-      const resp = await installGame(game.app_id)
+      const resp = await installGame(item.appId)
 
       if (resp.status === 'ready' && resp.game) {
         const result = await window.steamtools.storeInstallGame({
@@ -339,42 +373,66 @@ export default function StorePage() {
         if (result.actions) for (const a of result.actions) actions.push({ type: 'info', message: a })
         if (result.errors) for (const e of result.errors) actions.push({ type: 'error', message: e })
         if (result.success) {
-          actions.push({ type: 'success', message: `${game.name} installed` })
-          try { await reportDownloaded(game.app_id) } catch {}
-          consumeGame(game.app_id)
+          actions.push({ type: 'success', message: `${item.name} installed` })
+          try { await reportDownloaded(item.appId) } catch {}
+          consumeGame(item.appId)
         }
         for (const action of actions) {
           window.steamtools.addLog({
             level: action.type === 'error' ? 'ERROR' : 'INFO',
             message: `[Store] ${action.message}`,
-          }).catch(() => {})
+          }).catch((e) => console.warn('[Store] addLog failed:', e))
         }
-        if (result.success) {
-          try { await window.steamtools.restartSteam() } catch {}
-        } else {
+        if (!result.success) {
           showToast('error', result.errors?.[0] || result.error || t('store.installFailed'))
         }
       } else if (resp.status === 'queued' && resp.job_id) {
-        await pollJob(resp.job_id, game.app_id, game.name)
+        await pollJobRef.current!(resp.job_id, item.appId, item.name)
       } else {
         showToast('error', t('store.unexpectedResponse'))
       }
     } catch (err: any) {
-      window.steamtools.addLog({ level: 'ERROR', message: `[Store] Install failed: ${err.message}` }).catch(() => {})
+      window.steamtools.addLog({ level: 'ERROR', message: `[Store] Install failed: ${err.message}` }).catch((e) => console.warn('[Store] addLog failed:', e))
       showToast('error', err.message)
     } finally {
       setInstalling(null)
       setImportProgress(null)
+      setCurrent(null)
+      setProcessing(false)
+      // If queue is empty, offer restart
+      if (useDownloadQueueStore.getState().queue.length === 0) {
+        const shouldRestart = window.confirm(t('store.restartPrompt'))
+        if (shouldRestart) {
+          const r = await window.steamtools.restartSteam()
+          if (!r?.success) showToast('error', r?.error || t('store.restartFailed'))
+        }
+      }
+      processQueue()
     }
-  }
+  }, [showToast, setInstalling, setImportProgress, consumeGame])
+
+  // Start processing whenever the queue changes
+  const queue = useDownloadQueueStore((s) => s.queue)
+  const processing = useDownloadQueueStore((s) => s.processing)
+  useEffect(() => {
+    if (!processing && queue.length > 0) {
+      processQueue()
+    }
+  }, [queue, processing, processQueue])
 
   const pollJob = async (jobId: string, appId: string, gameName?: string) => {
+    pollAbortRef.current?.abort()
+    const abortController = new AbortController()
+    pollAbortRef.current = abortController
+
     setImportProgress({ appId, status: 'queued' })
 
     let attempts = 0
     const maxAttempts = 200
     while (attempts < maxAttempts) {
+      if (abortController.signal.aborted) return
       await new Promise(resolve => setTimeout(resolve, 3000))
+      if (abortController.signal.aborted) return
       attempts++
 
       let job
@@ -397,7 +455,6 @@ export default function StorePage() {
         if (result.success) {
           try { await reportDownloaded(appId) } catch {}
           consumeGame(appId)
-          try { await window.steamtools.restartSteam() } catch {}
         } else {
           showToast('error', result.errors?.[0] || result.error || `${t('store.installFailed')} after import`)
         }
@@ -413,9 +470,18 @@ export default function StorePage() {
       setImportProgress({ appId, status: job.status })
     }
 
+    if (abortController.signal.aborted) return
     setImportProgress(null)
     showToast('error', t('store.importTimeout'))
   }
+
+  pollJobRef.current = pollJob
+
+  useEffect(() => {
+    return () => {
+      pollAbortRef.current?.abort()
+    }
+  }, [])
 
   const cardProps = { onInstall: handleInstall, installing, onSelect: setSelectedGame }
   const showSearch = query.trim().length >= 2 && searchResults !== null
@@ -423,6 +489,17 @@ export default function StorePage() {
   usePageHeader(
     <div className="flex items-center gap-2 w-full">
       <h1 className="text-lg font-bold text-text-bright flex-shrink-0 whitespace-nowrap">{t('store.title')}</h1>
+      <button
+        onClick={() => setHideInstalled((v) => !v)}
+        className={`flex-shrink-0 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+          hideInstalled
+            ? 'bg-accent/20 text-accent border border-accent/30'
+            : 'bg-white/[0.04] text-text-dim border border-white/[0.08] hover:text-text-bright'
+        }`}
+        title={hideInstalled ? t('store.showInstalled') : t('store.hideInstalled')}
+      >
+        {hideInstalled ? t('store.showInstalled') : t('store.hideInstalled')}
+      </button>
       <div className="relative flex-1 w-full">
         <div className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-text-muted pointer-events-none">
           <Search className="w-5 h-5" />
@@ -465,27 +542,30 @@ export default function StorePage() {
       )}
 
       {/* Search results */}
-      {showSearch && (
-        <div className="space-y-3">
-          <p className="text-sm font-semibold text-text-bright">{t('store.searchResults')}: "{query}" — {searchResults!.length} {t('store.results')}</p>
-          {searching ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-              {Array.from({ length: 20 }).map((_, i) => (
-                <GameCardSkeleton key={i} />
-              ))}
-            </div>
-          ) : searchResults!.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-              {searchResults!.map(g => <GameCard key={g.app_id} game={g} src={getDefaultGameImageUrl(g)} {...cardProps} />)}
-            </div>
-          ) : (
-            <div className="text-center py-16">
-              <Package className="w-12 h-12 text-text-dim mx-auto mb-3" />
-              <p className="text-text-dim">{t('store.noGames')}</p>
-            </div>
-          )}
-        </div>
-      )}
+      {showSearch && (() => {
+        const visibleResults = hideInstalled ? searchResults!.filter(g => !installedAppIds.has(g.app_id)) : searchResults!
+        return (
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-text-bright">{t('store.searchResults')}: "{query}" — {visibleResults.length} {t('store.results')}</p>
+            {searching ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+                {Array.from({ length: 20 }).map((_, i) => (
+                  <GameCardSkeleton key={i} />
+                ))}
+              </div>
+            ) : visibleResults.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+                {visibleResults.map(g => <GameCard key={g.app_id} game={g} src={getDefaultGameImageUrl(g)} isInstalled={installedAppIds.has(g.app_id)} {...cardProps} />)}
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <Package className="w-12 h-12 text-text-dim mx-auto mb-3" />
+                <p className="text-text-dim">{t('store.noGames')}</p>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Browse — hidden while searching */}
       {tab === 'browse' && !showSearch && (
@@ -514,7 +594,7 @@ export default function StorePage() {
           {browseVisibleGames.length > 0 && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-                {browseVisibleGames.map(g => <GameCard key={g.app_id} game={g} src={getDefaultGameImageUrl(g)} {...cardProps} />)}
+                {browseVisibleGames.map(g => <GameCard key={g.app_id} game={g} src={getDefaultGameImageUrl(g)} isInstalled={installedAppIds.has(g.app_id)} {...cardProps} />)}
               </div>
               {browseVisibleCount < browseFilteredGames.length && (
                 <div className="flex justify-center pt-4">

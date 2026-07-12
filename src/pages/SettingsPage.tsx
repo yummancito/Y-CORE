@@ -13,7 +13,16 @@ import {
   Globe,
   PlusCircle,
   Activity,
+  Users,
+  ExternalLink,
+  MessagesSquare,
+  BookOpen,
+  Bug,
+  FolderOpen,
+  Check,
+  RefreshCw,
 } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useToastStore } from '../stores/useToastStore'
@@ -22,8 +31,9 @@ import { usePageHeader } from '../components/layout/AppShell'
 import { Card } from '../components/ui/Card'
 import { CustomizationPanel } from '../components/settings/CustomizationPanel'
 import type { LogConfig } from '../domain/types'
+import { sendDiscordReport } from '../lib/discord-report'
 
-type SettingsTab = 'account' | 'content' | 'logs' | 'personalization'
+type SettingsTab = 'account' | 'content' | 'logs' | 'personalization' | 'community'
 
 interface TabConfig {
   id: SettingsTab
@@ -36,6 +46,7 @@ const TABS: TabConfig[] = [
   { id: 'content', label: 'settings.tabContent', icon: Shield },
   { id: 'logs', label: 'settings.tabLogs', icon: ScrollText },
   { id: 'personalization', label: 'settings.tabPersonalization', icon: Palette },
+  { id: 'community', label: 'settings.tabCommunity', icon: Users },
 ]
 
 const COLOR_THEMES = [
@@ -118,6 +129,11 @@ export default function SettingsPage() {
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const [appVersion, setAppVersion] = useState('')
 
+  // Steam path detection
+  const [steamPath, setSteamPath] = useState<string | null>(null)
+  const [pickingSteamPath, setPickingSteamPath] = useState(false)
+  const pathDetected = steamPath !== null
+
   usePageHeader(
     <div className="flex items-center gap-4 h-11">
       <h1 className="text-xl font-bold text-text-bright leading-none">{t('settings.title')}</h1>
@@ -131,13 +147,39 @@ export default function SettingsPage() {
     loadFromConfig()
     window.steamtools?.getLogConfig?.().then((cfg) => {
       setLogConfig(cfg)
-    }).catch(() => {})
+    }).catch((e) => console.warn('[Settings] getLogConfig failed:', e))
     window.steamtools?.readConfig?.().then((cfg: any) => {
       if (cfg?.profileImage) setProfileImage(cfg.profileImage)
       if (cfg?.steamLogMonitor !== undefined) setSteamLogMonitor(cfg.steamLogMonitor !== false)
-    }).catch(() => {})
-    window.steamtools?.getVersion?.().then((v) => setAppVersion(v)).catch(() => {})
+    }).catch((e) => console.warn('[Settings] readConfig failed:', e))
+    window.steamtools?.getVersion?.().then((v) => setAppVersion(v)).catch((e) => console.warn('[Settings] getVersion failed:', e))
+    // Load current Steam path
+    window.steamtools?.getSteamPath?.().then((r) => setSteamPath(r?.success ? (r.path ?? null) : null)).catch(() => {})
   }, [loadFromConfig])
+
+  const refreshSteamPath = useCallback(async () => {
+    try {
+      const r = await window.steamtools?.getSteamPath?.()
+      setSteamPath(r?.success ? (r.path ?? null) : null)
+    } catch {}
+  }, [])
+
+  const pickSteamFolder = useCallback(async () => {
+    setPickingSteamPath(true)
+    try {
+      const result = await window.steamtools?.openSteamFolderDialog?.()
+      if (result?.success && result.path) {
+        setSteamPath(result.path)
+        showToast('success', t('settings.steamPathSaved'))
+      } else if (result?.error && !result.error.includes('canceled')) {
+        showToast('error', result.error)
+      }
+    } catch (err: any) {
+      showToast('error', err?.message || t('common.failed'))
+    } finally {
+      setPickingSteamPath(false)
+    }
+  }, [showToast])
 
   const saveConfig = useCallback(async (partial: Record<string, unknown>) => {
     try {
@@ -298,6 +340,65 @@ export default function SettingsPage() {
               </div>
 
 
+            </div>
+          </Card>
+
+          {/* Steam installation */}
+          <Card>
+            <div data-tour="steampath" className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/15 flex items-center justify-center">
+                  <FolderOpen className="w-5 h-5 text-accent" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-text-bright">{t('settings.steamPathTitle')}</h3>
+                  <p className="text-xs text-text-dim mt-0.5">{t('settings.steamPathDesc')}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                {pathDetected ? (
+                  <>
+                    <Check className="w-5 h-5 text-green-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-green-400 mb-0.5">{t('settings.steamPathDetected')}</p>
+                      <p className="text-xs text-text-dim font-mono truncate" title={steamPath || ''}>{steamPath}</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-amber-400 mb-0.5">{t('settings.steamPathNotDetected')}</p>
+                      <p className="text-xs text-text-dim">{t('settings.steamPathNotDetectedHelp')}</p>
+                    </div>
+                  </>
+                )}
+                <button
+                  onClick={refreshSteamPath}
+                  className="p-2 rounded-lg text-text-dim hover:text-text-bright hover:bg-white/[0.05] transition-colors shrink-0"
+                  title={t('settings.steamPathRefresh')}
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
+
+              <button
+                onClick={pickSteamFolder}
+                disabled={pickingSteamPath}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white hover:bg-accent/80 disabled:opacity-50 transition-colors text-sm font-medium shadow-lg shadow-accent/20"
+              >
+                <FolderOpen className={`w-4 h-4 ${pickingSteamPath ? 'animate-pulse' : ''}`} />
+                {pickingSteamPath ? t('settings.steamPathPicking') : t('settings.steamPathPick')}
+              </button>
+
+              <div className="text-xs text-text-dim leading-relaxed space-y-1 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <p className="font-semibold text-text-secondary mb-1">{t('settings.steamPathHowToTitle')}</p>
+                <p>{t('settings.steamPathHowTo1')}</p>
+                <p>{t('settings.steamPathHowTo2')}</p>
+                <p>{t('settings.steamPathHowTo3')}</p>
+                <p className="font-mono text-[10px] text-text-muted mt-1">C:\Program Files (x86)\Steam</p>
+              </div>
             </div>
           </Card>
         </div>
@@ -470,11 +571,159 @@ export default function SettingsPage() {
                   <span className="text-sm font-mono text-text-secondary">{appVersion || '—'}</span>
                 </div>
               </div>
+
+              {/* Restart Tour */}
+              <div className="pt-2 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between p-3">
+                  <span className="text-sm text-text-dim">{t('settings.restartTour')}</span>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem('y-core-tour-done')
+                      window.location.reload()
+                    }}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-accent hover:bg-accent/80 text-white transition-all"
+                  >
+                    {t('settings.restartTourBtn')}
+                  </button>
+                </div>
+              </div>
+
+              {/* Reset settings */}
+              <div className="pt-2 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between p-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-400" />
+                    <span className="text-sm text-red-400">{t('settings.reset')}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(t('settings.resetConfirm'))) {
+                        localStorage.clear()
+                        window.location.reload()
+                      }
+                    }}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 transition-all"
+                  >
+                    {t('settings.reset')}
+                  </button>
+                </div>
+              </div>
             </div>
           </Card>
 
           {/* Advanced customization */}
           <CustomizationPanel />
+        </div>
+      )}
+
+      {/* Community tab */}
+      {activeTab === 'community' && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-text-bright">{t('settings.community')}</h2>
+            <p className="text-xs text-text-dim mt-0.5">{t('settings.communityDesc')}</p>
+          </div>
+
+          <Card>
+            <div className="space-y-2">
+              {/* Discord */}
+              <button
+                onClick={() => {
+                  const url = 'https://discord.gg/Z2CzV884zE'
+                  if (window.steamtools?.openExternal) {
+                    window.steamtools.openExternal(url)
+                  } else {
+                    window.open(url, '_blank')
+                  }
+                }}
+                className="flex items-center justify-between w-full p-4 rounded-xl bg-white/[0.03] border border-white/[0.04] hover:bg-white/[0.05] transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-[#3BB2F7]/15 flex items-center justify-center">
+                    <MessagesSquare className="w-5 h-5 text-[#3BB2F7]" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-sm font-medium text-text-bright">Discord</span>
+                    <p className="text-xs text-text-dim mt-0.5">{t('settings.communityDiscordDesc')}</p>
+                  </div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-text-dim group-hover:text-text-bright transition-colors" />
+              </button>
+
+              {/* Report a problem → Discord */}
+              <button
+                onClick={async () => {
+                  const description = window.prompt(t('settings.reportPrompt'))
+                  if (!description || !description.trim()) return
+
+                  const version = await window.steamtools?.getVersion?.().catch?.(() => null) || 'unknown'
+                  const username = await window.steamtools?.getUsername?.().catch?.(() => null) || 'unknown'
+
+                  showToast('info', t('settings.reportSending'))
+
+                  const result = await sendDiscordReport(
+                    'User Report',
+                    description.trim(),
+                    [
+                      { name: 'User', value: String(username), inline: true },
+                      { name: 'Version', value: String(version), inline: true },
+                      { name: 'OS', value: navigator.userAgent.slice(0, 200), inline: false },
+                    ]
+                  )
+
+                  if (result.success) {
+                    showToast('success', t('settings.reportSent'))
+                  } else {
+                    showToast('error', t('settings.reportFailed'))
+                  }
+                }}
+                className="flex items-center justify-between w-full p-4 rounded-xl bg-white/[0.03] border border-white/[0.04] hover:bg-white/[0.05] transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-red-500/15 flex items-center justify-center">
+                    <Bug className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-sm font-medium text-text-bright">{t('settings.communityReport')}</span>
+                    <p className="text-xs text-text-dim mt-0.5">{t('settings.communityReportDesc')}</p>
+                  </div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-text-dim group-hover:text-text-bright transition-colors" />
+              </button>
+
+              {/* Documentation */}
+              <button
+                onClick={() => {
+                  const url = 'https://github.com/yummancito/Y-CORE/wiki'
+                  if (window.steamtools?.openExternal) {
+                    window.steamtools.openExternal(url)
+                  } else {
+                    window.open(url, '_blank')
+                  }
+                }}
+                className="flex items-center justify-between w-full p-4 rounded-xl bg-white/[0.03] border border-white/[0.04] hover:bg-white/[0.05] transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-white/[0.06] flex items-center justify-center">
+                    <BookOpen className="w-5 h-5 text-text-secondary" />
+                  </div>
+                  <div className="text-left">
+                    <span className="text-sm font-medium text-text-bright">{t('settings.communityDocs')}</span>
+                    <p className="text-xs text-text-dim mt-0.5">{t('settings.communityDocsDesc')}</p>
+                  </div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-text-dim group-hover:text-text-bright transition-colors" />
+              </button>
+
+              {/* Version */}
+              <div className="pt-2 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between p-3">
+                  <span className="text-sm text-text-dim">{t('settings.version')}</span>
+                  <span className="text-sm font-mono text-text-secondary">{appVersion || '—'}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
 

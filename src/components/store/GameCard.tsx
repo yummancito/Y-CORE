@@ -15,8 +15,12 @@ export interface MergedGame {
   is_dlc?: boolean
 }
 
-export function getDefaultGameImageUrl(game: MergedGame): string {
+export function getDefaultGameImageUrl(game: MergedGame): string | null {
   if (game.header_image_url) return game.header_image_url
+  // Don't try depotbox for orphaned apps
+  const rawName = game.name?.trim()
+  const isOrphaned = !rawName || rawName === game.app_id || /^app\s*\d*$/i.test(rawName) || rawName.toLowerCase() === 'appid'
+  if (isOrphaned) return null
   if (/^\d+$/.test(game.app_id)) {
     return `https://depotbox.org/api/images/steam-header/${game.app_id}`
   }
@@ -24,7 +28,7 @@ export function getDefaultGameImageUrl(game: MergedGame): string {
 }
 
 export const GameCard = memo(function GameCard({
-  game, onInstall, installing, onSelect, isRecommended, src,
+  game, onInstall, installing, onSelect, isRecommended, src, isInstalled,
 }: {
   game: MergedGame
   onInstall: (g: MergedGame) => void
@@ -32,6 +36,7 @@ export const GameCard = memo(function GameCard({
   onSelect?: (g: MergedGame) => void
   isRecommended?: boolean
   src?: string | null
+  isInstalled?: boolean
 }) {
   const [failed, setFailed] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
@@ -49,7 +54,7 @@ export const GameCard = memo(function GameCard({
     >
       <div className="relative aspect-[460/215] overflow-hidden">
         {failed ? (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-white/[0.08] to-white/[0.02] p-4">
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 bg-gradient-to-br from-white/[0.06] to-white/[0.01] p-4">
             <Package className="w-10 h-10 text-text-dim" />
             <p className="text-[10px] text-text-dim text-center line-clamp-2">{displayName}</p>
           </div>
@@ -81,11 +86,18 @@ export const GameCard = memo(function GameCard({
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
 
         <div className="absolute top-2.5 left-2.5 right-2.5 flex justify-between pointer-events-none">
-          {isRecommended && (
-            <span className="flex items-center gap-0.5 text-[8px] font-semibold px-1.5 py-1 rounded-lg bg-accent/80 backdrop-blur-md border border-white/10 text-white shadow-sm">
-              {t('store.recommended')}
-            </span>
-          )}
+          <div className="flex gap-1">
+            {isInstalled && (
+              <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold px-1.5 py-1 rounded-lg bg-emerald-500/80 backdrop-blur-md border border-white/10 text-white shadow-sm">
+                {t('store.installed')}
+              </span>
+            )}
+            {isRecommended && (
+              <span className="inline-flex items-center gap-0.5 text-[8px] font-semibold px-1.5 py-1 rounded-lg bg-accent/80 backdrop-blur-md border border-white/10 text-white shadow-sm">
+                {t('store.recommended')}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent">

@@ -34,7 +34,7 @@ export default function OnlineFixPage() {
     loadGames()
     window.steamtools?.readConfig?.().then((cfg: any) => {
       if (cfg?.hideOnlineFixWarning) setHideWarning(true)
-    }).catch(() => {})
+    }).catch((e) => console.warn('[OnlineFix] readConfig failed:', e))
   }, [loadGames])
 
   const dismissWarning = async () => {
@@ -81,7 +81,7 @@ export default function OnlineFixPage() {
   const filteredGames = useMemo(() => {
     return games.filter((g) => {
       const matchesSearch =
-        g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (g.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         g.appId.includes(searchQuery)
       const compat = resolveCompat(g.appId)
       const matchesFilter = filter === 'all' || compat.status === filter
@@ -91,12 +91,13 @@ export default function OnlineFixPage() {
 
   const handleGenerate = async (appId: string, gameName: string) => {
     setLoadingMap((prev) => new Set(prev).add(appId))
+    const displayName = gameName || `App ${appId}`
     try {
       const result = await window.steamtools.generateOnlineFix(appId)
       if (result.success) {
         const detect = await window.steamtools.detectOnlineFix(appId)
         setFixStatusMap((prev) => ({ ...prev, [appId]: detect }))
-        showToast('success', `${t('onlinefix.generateSuccess')} ${gameName}`)
+        showToast('success', `${t('onlinefix.generateSuccess')} ${displayName}`)
       } else {
         showToast('error', result.error || t('onlinefix.generateFailed'))
       }
@@ -113,12 +114,13 @@ export default function OnlineFixPage() {
 
   const handleRemove = async (appId: string, gameName: string) => {
     setLoadingMap((prev) => new Set(prev).add(appId))
+    const displayName = gameName || `App ${appId}`
     try {
       const result = await window.steamtools.removeOnlineFix(appId)
       if (result.success) {
         const detect = await window.steamtools.detectOnlineFix(appId)
         setFixStatusMap((prev) => ({ ...prev, [appId]: detect }))
-        showToast('success', `${t('onlinefix.removeSuccess')} ${gameName}`)
+        showToast('success', `${t('onlinefix.removeSuccess')} ${displayName}`)
       } else {
         showToast('error', result.error || t('onlinefix.removeFailed'))
       }
@@ -272,7 +274,7 @@ export default function OnlineFixPage() {
 
                   <div className="absolute bottom-0 left-0 right-0 p-3 pt-8 z-10">
                     <p className="text-sm font-bold text-white leading-tight line-clamp-2 drop-shadow-md">
-                      {game.name}
+                      {game.name || `App ${game.appId}`}
                     </p>
                     <p className="text-[10px] text-text-dim font-mono mt-0.5">AppID {game.appId}</p>
                     {compat.reason && compat.status === 'incompatible' && (
@@ -289,7 +291,7 @@ export default function OnlineFixPage() {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
-                      onClick={(e) => { e.stopPropagation(); hasFix ? handleRemove(game.appId, game.name) : handleGenerate(game.appId, game.name) }}
+                      onClick={(e) => { e.stopPropagation(); hasFix ? handleRemove(game.appId, game.name || '') : handleGenerate(game.appId, game.name || '') }}
                       disabled={isLoading || isDisabled}
                       className={`pointer-events-auto flex items-center justify-center gap-2 mx-3 mb-3 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg ${
                         hasFix

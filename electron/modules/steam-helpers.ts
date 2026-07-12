@@ -7,6 +7,27 @@ import { logger } from '../logger'
 export function getSteamPath(): string | null {
   const platform = process.platform
 
+  // 1. User-configured Steam path (highest priority)
+  try {
+    const configPath = path.join(app.getPath('userData'), 'ycore-config.json')
+    if (fs.existsSync(configPath)) {
+      const raw = fs.readFileSync(configPath, 'utf-8')
+      const config = JSON.parse(raw)
+      const userPath = config.steamPath
+      if (userPath &&
+          typeof userPath === 'string' &&
+          path.isAbsolute(userPath) &&
+          !userPath.includes('..') &&
+          fs.existsSync(userPath) &&
+          fs.existsSync(path.join(userPath, 'steamapps'))) {
+        return userPath
+      }
+    }
+  } catch {
+    // ignore config read errors
+  }
+
+  // 2. Default detection paths
   let steamPaths: string[] = []
 
   if (platform === 'win32') {
@@ -275,4 +296,20 @@ export async function findFilesAsync(dir: string, ext: string): Promise<string[]
     }
   }
   return results
+}
+
+const APP_LANG_TO_STEAM: Record<string, string> = {
+  es: 'spanish', en: 'english', fr: 'french', pt: 'portuguese',
+  de: 'german', zh: 'schinese', hi: 'hindi',
+}
+
+export async function getAppLanguage(): Promise<string> {
+  try {
+    const configPath = path.join(app.getPath('userData'), 'ycore-config.json')
+    const raw = await fs.promises.readFile(configPath, 'utf-8')
+    const config = JSON.parse(raw)
+    return APP_LANG_TO_STEAM[config.language] || 'english'
+  } catch {
+    return 'english'
+  }
 }

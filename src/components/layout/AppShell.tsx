@@ -1,6 +1,7 @@
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { EpicSidebar } from './EpicSidebar'
 import { TitleBar } from './TitleBar'
+import { OfflineBanner } from '../ui/OfflineBanner'
 import { useSteamStore } from '../../stores/useSteamStore'
 import { useToastStore } from '../../stores/useToastStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
@@ -66,11 +67,17 @@ export function AppShell({ children }: AppShellProps) {
   }, [loadFromConfig])
 
   // Fetch background image as data URL via IPC (avoids file:// CORS issues)
+  // Falls back to public asset path when not in Electron
   useEffect(() => {
     if (customization.backgroundImage.enabled && customization.backgroundImage.path) {
-      window.steamtools?.readImageAsDataURL?.(customization.backgroundImage.path)
+      if (window.steamtools?.readImageAsDataURL) {
+        window.steamtools.readImageAsDataURL(customization.backgroundImage.path)
         .then((url) => setBgDataUrl(url))
         .catch(() => setBgDataUrl(null))
+    } else {
+        // Web/dev fallback: use the public path directly
+        setBgDataUrl(customization.backgroundImage.path.replace(/^public\//, '/'))
+    }
     } else {
       setBgDataUrl(null)
     }
@@ -111,7 +118,6 @@ export function AppShell({ children }: AppShellProps) {
     root.style.setProperty('--sidebar-opacity', String(customization.navbar.sidebarOpacity / 100))
     root.style.setProperty('--titlebar-opacity', String(customization.navbar.titlebarOpacity / 100))
   }, [customization])
-
   useEffect(() => {
     initSteam()
     const interval = setInterval(() => {
@@ -185,6 +191,7 @@ export function AppShell({ children }: AppShellProps) {
             {customization.backgroundImage.overlay && <div className="bg-overlay" />}
           </>
         )}
+        <OfflineBanner />
         <div className="flex h-full w-full relative z-[1]">
           <EpicSidebar />
           <div className="flex flex-col flex-1 h-full min-w-0" data-section="Main Content">
@@ -198,3 +205,4 @@ export function AppShell({ children }: AppShellProps) {
     </PageHeaderContext.Provider>
   )
 }
+

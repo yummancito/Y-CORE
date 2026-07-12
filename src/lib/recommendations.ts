@@ -91,7 +91,7 @@ async function filterFreeGames<T extends RecommendableGame>(games: T[]): Promise
       }
     })
   )
-  window.steamtools.addLog({ level: 'INFO', message: `[filterFreeGames] ${statuses.map((s) => `${s.name}=${s.isFree}`).join(', ')}` }).catch(() => {})
+  window.steamtools.addLog({ level: 'INFO', message: `[filterFreeGames] ${statuses.map((s) => `${s.name}=${s.isFree}`).join(', ')}` }).catch((e) => console.warn('[recommendations] addLog failed:', e))
   return games.filter((g) => !statuses.find((s) => s.app_id === g.app_id)?.isFree)
 }
 
@@ -153,6 +153,6 @@ export async function getRecommendations<T extends RecommendableGame>(
 
   const nonFree = await filterFreeGames(candidates)
   const result = nonFree.slice(0, max)
-  window.steamtools.addLog({ level: 'INFO', message: `[getRecommendations] library=${libraryGames.length}, store=${storeGames.length}, result=${result.map((g) => g.name).join(', ')}` }).catch(() => {})
+  window.steamtools.addLog({ level: 'INFO', message: `[getRecommendations] library=${libraryGames.length}, store=${storeGames.length}, result=${result.map((g) => g.name).join(', ')}` }).catch((e) => console.warn('[recommendations] addLog failed:', e))
   return result
 }

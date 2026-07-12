@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   getCompatibility,
   getCompatibilityReason,
+  getLauncherInfo,
   type CompatibilityStatus,
 } from '../src/lib/onlinefix-compatibility'
 
@@ -19,10 +20,9 @@ describe('onlinefix-compatibility', () => {
       expect(result.reason).toBe('dedicated_servers')
     })
 
-    it('returns "incompatible" with photon reason for Phasmophobia', () => {
+    it('returns "compatible" for Phasmophobia', () => {
       const result = getCompatibility('739630')
-      expect(result.status).toBe('incompatible')
-      expect(result.reason).toBe('photon')
+      expect(result.status).toBe('compatible')
     })
 
     it('returns "unknown" for unlisted AppIDs', () => {
@@ -37,16 +37,16 @@ describe('onlinefix-compatibility', () => {
     })
 
     it('handles all incompatible games correctly', () => {
-      const incompatibleAppIds = [
-        '1336200', '1366540', '739630', '3435960', '2186680',
+      const incompatibleAppIds: string[] = [
+        '1336200', '1366540',
         '1646240', '2378290', '962130', '270880', '239140',
         '578080', '444090', '813780', '1089980', '602280',
-        '548430', '774171', '1687950', '289070',
+        '548430', '774171', '289070',
       ]
       for (const appId of incompatibleAppIds) {
         const result = getCompatibility(appId)
-        expect(result.status).toBe('incompatible')
-        expect(result.reason).toBeDefined()
+        expect(result.status, `appId ${appId} expected incompatible`).toBe('incompatible')
+        expect(result.reason, `appId ${appId} should have a reason`).toBeDefined()
       }
     })
 
@@ -104,6 +104,68 @@ describe('onlinefix-compatibility', () => {
 
     it('returns the raw reason string for unknown reasons', () => {
       expect(getCompatibilityReason('custom_reason')).toBe('custom_reason')
+    })
+
+    it('returns human-readable text for rockstar_launcher', () => {
+      expect(getCompatibilityReason('rockstar_launcher')).toBe('Rockstar Games Launcher')
+    })
+
+    it('returns human-readable text for ea_launcher', () => {
+      expect(getCompatibilityReason('ea_launcher')).toBe('EA App')
+    })
+
+    it('returns human-readable text for ubisoft_connect', () => {
+      expect(getCompatibilityReason('ubisoft_connect')).toBe('Ubisoft Connect')
+    })
+
+    it('returns human-readable text for battlenet', () => {
+      expect(getCompatibilityReason('battlenet')).toBe('Activision / Battle.net')
+    })
+
+    it('returns human-readable text for launcher_2k', () => {
+      expect(getCompatibilityReason('launcher_2k')).toBe('2K Launcher')
+    })
+  })
+
+  describe('getLauncherInfo', () => {
+    it('returns launcher info for GTA V Enhanced', () => {
+      const info = getLauncherInfo('3240220')
+      expect(info).toBeDefined()
+      expect(info!.name).toBe('Grand Theft Auto V Enhanced')
+      expect(info!.launcher).toBe('Rockstar Games Launcher')
+    })
+
+    it('returns launcher info for Red Dead Redemption 2', () => {
+      const info = getLauncherInfo('1174180')
+      expect(info).toBeDefined()
+      expect(info!.launcher).toBe('Rockstar Games Launcher')
+    })
+
+    it('returns launcher info for Star Wars Jedi Survivor', () => {
+      const info = getLauncherInfo('1774580')
+      expect(info).toBeDefined()
+      expect(info!.launcher).toBe('EA App')
+    })
+
+    it('returns launcher info for Rainbow Six Siege', () => {
+      const info = getLauncherInfo('359550')
+      expect(info).toBeDefined()
+      expect(info!.launcher).toBe('Ubisoft Connect')
+    })
+
+    it('returns undefined for games without a launcher', () => {
+      const info = getLauncherInfo('892970')
+      expect(info).toBeUndefined()
+    })
+
+    it('returns undefined for unknown AppIDs', () => {
+      const info = getLauncherInfo('999999999')
+      expect(info).toBeUndefined()
+    })
+
+    it('returns undefined for empty string', () => {
+      const info = getLauncherInfo('')
+      expect(info).toBeUndefined()
     })
   })
 })

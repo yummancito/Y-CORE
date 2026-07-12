@@ -23,10 +23,13 @@ contextBridge.exposeInMainWorld('steamtools', {
 
   // Steam directory
   getSteamPath: () => ipcRenderer.invoke('steam:getPath'),
+  openSteamFolderDialog: () => ipcRenderer.invoke('steam:openSteamFolderDialog'),
   getLibraryFolders: () => ipcRenderer.invoke('steam:getLibraryFolders'),
 
   // Game actions
   listInstalledGames: () => ipcRenderer.invoke('steam:listInstalledGames'),
+  resolveOrphanNames: (games: { appId: string; installDir: string }[]) =>
+    ipcRenderer.invoke('steam:resolveOrphanNames', games),
   launchGame: (appId: string) => ipcRenderer.invoke('steam:launchGame', appId),
   uninstallGame: (appId: string) => ipcRenderer.invoke('steam:uninstallGame', appId),
   deleteGame: (appId: string, installDir: string) => ipcRenderer.invoke('steam:deleteGame', appId, installDir),
@@ -153,9 +156,5 @@ contextBridge.exposeInMainWorld('steamtools', {
   },
 
   // Signature validation
-  onSignaturePending: (callback: (info: { component: string; sha256: string }) => void) => {
-    const handler = (_event: any, info: { component: string; sha256: string }) => callback(info)
-    ipcRenderer.on('signature:pending', handler)
-    return () => ipcRenderer.removeListener('signature:pending', handler)
-  },
+  retrySignatureCheck: () => ipcRenderer.invoke('steam:retrySignature'),
 })

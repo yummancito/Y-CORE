@@ -56,7 +56,7 @@ export function CommandPalette() {
     // Add game search results
     if (query.length > 0) {
       const matched = games
-        .filter((g) => g.name.toLowerCase().includes(query.toLowerCase()) || g.appId.includes(query))
+        .filter((g) => (g.name || '').toLowerCase().includes(query.toLowerCase()) || g.appId.includes(query))
         .slice(0, 5)
         .map((g) => ({
           id: `game-${g.appId}`,

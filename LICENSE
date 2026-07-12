@@ -1,0 +1,40 @@
+Y-CORE — SOURCE AVAILABLE LICENSE
+Version 1.0 — July 2026
+
+Copyright (c) 2026 yummancito. All rights reserved.
+
+The source code published in this repository (the "Code") is made available
+SOLELY for the purpose of transparency and security review by the end users
+of Y-core. Publishing the Code does not constitute a surrender of any
+intellectual property rights.
+
+1. GRANT OF VIEWING RIGHTS ONLY
+   You are permitted to view and read the Code for personal review,
+   verification, and educational understanding of how the Y-core client works.
+
+2. RESTRICTIONS
+   Without prior written permission from the copyright owner, you MAY NOT:
+     (a) copy, reproduce, fork, mirror, or redistribute the Code, in whole
+         or in part, in any form or medium;
+     (b) use the Code, or any portion of it, to create, compile, build, or
+         distribute any derivative application, tool, service, or modified
+         version;
+     (c) remove, obscure, or alter this license notice or any copyright,
+         trademark, or attribution contained in the Code;
+     (d) use the Code, or anything derived from it, for any commercial
+         purpose or to compete with Y-core.
+
+3. NO WARRANTY
+   THE CODE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL
+   THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+   LIABILITY ARISING FROM THE USE OR INABILITY TO USE THE CODE.
+
+4. PROPRIETARY COMPONENTS
+   The API backend, native DLLs, Steam injection logic, and database schema
+   are NOT included in this repository and remain fully proprietary and
+   confidential.
+
+For any permission beyond the scope of this license, contact the copyright
+owner via the official Y-core Discord or GitHub.

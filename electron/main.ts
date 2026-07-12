@@ -260,6 +260,14 @@ app.whenReady().then(async () => {
     // Run the downloaded installer manually
     ipcMain.handle('app:runManualInstaller', async (_event, installerPath: string) => {
       const { exec } = require('child_process')
+      const tmpDir = app.getPath('temp')
+      const expectedPath = path.join(tmpDir, 'y-core-update.exe')
+
+      if (path.resolve(installerPath) !== expectedPath) {
+        logger.error(`Rejected installer path: ${installerPath} (expected ${expectedPath})`, 'updater')
+        throw new Error('Invalid installer path')
+      }
+
       logger.info(`Running manual installer: ${installerPath}`, 'updater')
       setIsQuitting(true)
       // Run installer with /S for silent install, then quit

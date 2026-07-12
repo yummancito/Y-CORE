@@ -48,8 +48,8 @@ export interface Customization {
 
 export const DEFAULT_CUSTOMIZATION: Customization = {
   backgroundImage: {
-    enabled: false,
-    path: null,
+    enabled: true,
+    path: 'public/background.jpg',
     size: 'cover',
     position: 'center',
     blur: 0,
@@ -155,7 +155,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
             })
           }
         }
-      }).catch(() => {})
+      }).catch((e) => console.warn('[useSettingsStore] readConfig failed:', e))
     } catch {
       // Non-Electron
     }

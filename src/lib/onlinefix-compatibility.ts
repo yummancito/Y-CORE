@@ -23,6 +23,51 @@ const INCOMPATIBLE_GAMES: CompatibilityEntry[] = [
   { appId: '548430', name: 'Deep Rock Galactic', status: 'incompatible', reason: 'dedicated_servers' },
   { appId: '774171', name: 'Risk of Rain 2', status: 'incompatible', reason: 'dedicated_servers' },
   { appId: '289070', name: 'Sid Meier\'s Civilization VI', status: 'incompatible', reason: 'dedicated_servers' },
+  // Rockstar Games Launcher (RGL)
+  { appId: '3240220', name: 'Grand Theft Auto V Enhanced', status: 'incompatible', reason: 'rockstar_launcher' },
+  { appId: '12210', name: 'Grand Theft Auto IV', status: 'incompatible', reason: 'rockstar_launcher' },
+  { appId: '204100', name: 'Max Payne 3', status: 'incompatible', reason: 'rockstar_launcher' },
+  { appId: '110800', name: 'L.A. Noire', status: 'incompatible', reason: 'rockstar_launcher' },
+  { appId: '1227920', name: 'Max Payne 2', status: 'incompatible', reason: 'rockstar_launcher' },
+  { appId: '12150', name: 'Max Payne', status: 'incompatible', reason: 'rockstar_launcher' },
+  { appId: '2369390', name: 'Red Dead Redemption', status: 'incompatible', reason: 'rockstar_launcher' },
+  { appId: '1174180', name: 'Red Dead Redemption 2', status: 'incompatible', reason: 'rockstar_launcher' },
+  // EA App
+  { appId: '1222680', name: 'Need for Speed Heat', status: 'incompatible', reason: 'ea_launcher' },
+  { appId: '1262560', name: 'Need for Speed Unbound', status: 'incompatible', reason: 'ea_launcher' },
+  { appId: '738060', name: 'Dead Space (Remake)', status: 'incompatible', reason: 'ea_launcher' },
+  { appId: '1172380', name: 'Star Wars Jedi: Fallen Order', status: 'incompatible', reason: 'ea_launcher' },
+  { appId: '1774580', name: 'Star Wars Jedi: Survivor', status: 'incompatible', reason: 'ea_launcher' },
+  { appId: '1238810', name: 'Battlefield V', status: 'incompatible', reason: 'ea_launcher' },
+  { appId: '1238811', name: 'Battlefield 2042', status: 'incompatible', reason: 'ea_launcher' },
+  { appId: '1238860', name: 'Apex Legends', status: 'incompatible', reason: 'ea_launcher' },
+  { appId: '1446780', name: 'MONOPOLY Plus', status: 'incompatible', reason: 'ea_launcher' },
+  // Ubisoft Connect
+  { appId: '359550', name: 'Tom Clancy\'s Rainbow Six Siege', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '417910', name: 'Tom Clancy\'s The Division 2', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '236390', name: 'Tom Clancy\'s The Division', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '582010', name: 'Assassin\'s Creed Origins', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '289930', name: 'Assassin\'s Creed Odyssey', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '883710', name: 'Assassin\'s Creed Valhalla', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '561910', name: 'Far Cry 5', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '2369390', name: 'Far Cry 6', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '2050650', name: 'Avatar: Frontiers of Pandora', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '15370', name: 'Heroes of Might & Magic V', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '281990', name: 'Starlink: Battle for Atlas', status: 'incompatible', reason: 'ubisoft_connect' },
+  { appId: '233450', name: 'Might & Magic: Clash of Heroes', status: 'incompatible', reason: 'ubisoft_connect' },
+  // Activision / Battle.net
+  { appId: '1962663', name: 'Call of Duty: Modern Warfare II', status: 'incompatible', reason: 'battlenet' },
+  { appId: '1938090', name: 'Call of Duty: Modern Warfare III', status: 'incompatible', reason: 'battlenet' },
+  { appId: '1999770', name: 'Call of Duty: Black Ops 6', status: 'incompatible', reason: 'battlenet' },
+  { appId: '1659040', name: 'Call of Duty: Vanguard', status: 'incompatible', reason: 'battlenet' },
+  { appId: '7940', name: 'Call of Duty: Black Ops', status: 'incompatible', reason: 'battlenet' },
+  // Paradox Launcher
+  { appId: '281990', name: 'Stellaris', status: 'incompatible', reason: 'paradox_launcher' },
+  { appId: '394360', name: 'Hearts of Iron IV', status: 'incompatible', reason: 'paradox_launcher' },
+  // 2K Launcher
+  { appId: '1097150', name: 'Borderlands 3', status: 'incompatible', reason: 'launcher_2k' },
+  { appId: '261550', name: 'Mafia II: Definitive Edition', status: 'incompatible', reason: 'launcher_2k' },
+  { appId: '768200', name: 'Mafia III: Definitive Edition', status: 'incompatible', reason: 'launcher_2k' },
 ]
 
 const COMPATIBLE_GAMES: CompatibilityEntry[] = [
@@ -91,6 +136,52 @@ export function getCompatibilityReason(reason: string | undefined): string {
     microsoft_auth: 'Requires Microsoft account',
     eos: 'Uses Epic Online Services',
     compatibility: 'Known compatibility issues',
+    rockstar_launcher: 'Rockstar Games Launcher',
+    ea_launcher: 'EA App',
+    ubisoft_connect: 'Ubisoft Connect',
+    battlenet: 'Activision / Battle.net',
+    paradox_launcher: 'Paradox Launcher',
+    launcher_2k: '2K Launcher',
   }
   return reasons[reason] || reason
+}
+
+export interface LauncherInfo {
+  appId: string
+  name: string
+  launcher: string
+}
+
+const LAUNCHER_GAMES: LauncherInfo[] = [
+  { appId: '3240220', name: 'Grand Theft Auto V Enhanced', launcher: 'Rockstar Games Launcher' },
+  { appId: '12210', name: 'Grand Theft Auto IV', launcher: 'Rockstar Games Launcher' },
+  { appId: '204100', name: 'Max Payne 3', launcher: 'Rockstar Games Launcher' },
+  { appId: '110800', name: 'L.A. Noire', launcher: 'Rockstar Games Launcher' },
+  { appId: '1227920', name: 'Max Payne 2', launcher: 'Rockstar Games Launcher' },
+  { appId: '12150', name: 'Max Payne', launcher: 'Rockstar Games Launcher' },
+  { appId: '2369390', name: 'Red Dead Redemption', launcher: 'Rockstar Games Launcher' },
+  { appId: '1174180', name: 'Red Dead Redemption 2', launcher: 'Rockstar Games Launcher' },
+  { appId: '1222680', name: 'Need for Speed Heat', launcher: 'EA App' },
+  { appId: '1262560', name: 'Need for Speed Unbound', launcher: 'EA App' },
+  { appId: '738060', name: 'Dead Space (Remake)', launcher: 'EA App' },
+  { appId: '1172380', name: 'Star Wars Jedi: Fallen Order', launcher: 'EA App' },
+  { appId: '1774580', name: 'Star Wars Jedi: Survivor', launcher: 'EA App' },
+  { appId: '1238810', name: 'Battlefield V', launcher: 'EA App' },
+  { appId: '1238811', name: 'Battlefield 2042', launcher: 'EA App' },
+  { appId: '359550', name: 'Rainbow Six Siege', launcher: 'Ubisoft Connect' },
+  { appId: '417910', name: 'The Division 2', launcher: 'Ubisoft Connect' },
+  { appId: '582010', name: 'Assassin\'s Creed Origins', launcher: 'Ubisoft Connect' },
+  { appId: '289930', name: 'Assassin\'s Creed Odyssey', launcher: 'Ubisoft Connect' },
+  { appId: '883710', name: 'Assassin\'s Creed Valhalla', launcher: 'Ubisoft Connect' },
+  { appId: '561910', name: 'Far Cry 5', launcher: 'Ubisoft Connect' },
+  { appId: '1938090', name: 'Call of Duty: Modern Warfare III', launcher: 'Activision / Battle.net' },
+  { appId: '1999770', name: 'Call of Duty: Black Ops 6', launcher: 'Activision / Battle.net' },
+]
+
+const launcherMap = new Map<string, LauncherInfo>(
+  LAUNCHER_GAMES.map((g) => [g.appId, g])
+)
+
+export function getLauncherInfo(appId: string): LauncherInfo | undefined {
+  return launcherMap.get(appId)
 }

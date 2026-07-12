@@ -117,8 +117,10 @@ interface Window {
     logout: () => Promise<void>
     getPathForFile: (file: File) => string
     getSteamPath: () => Promise<SteamResult>
+    openSteamFolderDialog: () => Promise<{ success: boolean; path: string | null; error?: string }>
     getLibraryFolders: () => Promise<LibraryFoldersResult>
     listInstalledGames: () => Promise<ListGamesResult>
+    resolveOrphanNames: (games: { appId: string; installDir: string }[]) => Promise<{ success: boolean; resolved: { appId: string; newName: string }[] }>
     launchGame: (appId: string) => Promise<SteamResult>
     uninstallGame: (appId: string) => Promise<SteamResult>
     deleteGame: (appId: string, installDir: string) => Promise<SteamResult & { manifestDeleted?: boolean; folderDeleted?: boolean }>
@@ -191,6 +193,6 @@ interface Window {
     onUpdateProgress: (callback: (info: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => void) => () => void
     onUpdateDownloaded: (callback: (info: { version?: string }) => void) => () => void
     onUpdateError: (callback: (info: { message: string }) => void) => () => void
-    onSignaturePending: (callback: (info: { component: string; sha256: string }) => void) => () => void
+    retrySignatureCheck: () => Promise<{ success: boolean; status?: string; error?: string }>
   }
 }
