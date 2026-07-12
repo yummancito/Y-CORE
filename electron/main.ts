@@ -192,9 +192,26 @@ app.whenReady().then(async () => {
     setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL)
 
     ipcMain.handle('app:installUpdate', () => {
-      logger.info('User requested update install — quitting and installing', 'updater')
+      logger.info('User requested update install — forcing clean exit before installer', 'updater')
       setIsQuitting(true)
-      autoUpdater.quitAndInstall()
+      // Destroy every window (bypassing the minimize-to-tray 'close' guard) and
+      // the tray so the process fully exits and releases the running .exe lock.
+      // Otherwise the NSIS installer hangs waiting for the file handle, and the
+      // relaunched app collides with the previous single-instance lock.
+      try {
+        BrowserWindow.getAllWindows().forEach((w) => {
+          w.removeAllListeners('close')
+          w.destroy()
+        })
+      } catch {}
+      if (state.tray) {
+        try { state.tray.destroy() } catch {}
+      }
+      // Small grace period so the OS releases the executable handle before the
+      // installer tries to replace it.
+      setTimeout(() => {
+        autoUpdater.quitAndInstall(false, true)
+      }, 400)
     })
 
     // Manual download fallback — bypasses electron-updater's broken retry() function
@@ -270,6 +287,16 @@ app.whenReady().then(async () => {
 
       logger.info(`Running manual installer: ${installerPath}`, 'updater')
       setIsQuitting(true)
+      // Force a clean exit (bypass minimize-to-tray) so the installer can replace the exe
+      try {
+        BrowserWindow.getAllWindows().forEach((w) => {
+          w.removeAllListeners('close')
+          w.destroy()
+        })
+      } catch {}
+      if (state.tray) {
+        try { state.tray.destroy() } catch {}
+      }
       // Run installer with /S for silent install, then quit
       exec(`"${installerPath}" /S`, (err: Error | null) => {
         if (err) logger.error(`Installer error: ${err.message}`, 'updater')
