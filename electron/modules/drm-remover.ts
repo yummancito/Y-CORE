@@ -20,7 +20,7 @@ interface DrmStatusResult {
   message: string
 }
 
-function findGameExecutable(installDir: string): string | null {
+export function findGameExecutable(installDir: string): string | null {
   const folders = getSteamLibraryFolders()
   const priorityPatterns = [
     /-Win64-Shipping\.exe$/i,

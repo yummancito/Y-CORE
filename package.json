@@ -1,6 +1,6 @@
 {
   "name": "y-core",
-  "version": "2.5.5",
+  "version": "2.6.0",
   "description": "Y-core - Steam game management tool",
   "main": "dist-electron/main.js",
   "author": "Y-core",
@@ -28,6 +28,7 @@
     "electron-updater": "^6.8.9",
     "framer-motion": "^12.42.2",
     "fuse.js": "^7.4.2",
+    "koffi": "^3.1.1",
     "lodash.escaperegexp": "^4.1.2",
     "lodash.isequal": "^4.5.0",
     "lucide-react": "^0.400.0",

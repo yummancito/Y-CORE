@@ -40,6 +40,11 @@ interface LibraryStore {
   setSelectedGame: (g: InstalledGame | null) => void
 }
 
+// Tracks orphan appIds we've already attempted to resolve, so a partial or
+// no-op resolution can never trigger an endless loadGames() → resolve → reload
+// loop. Only genuinely new orphans ever trigger a reload.
+const _attemptedOrphans = new Set<string>()
+
 export const useLibraryStore = create<LibraryStore>((set, get) => ({
   games: [],
   loading: false,
@@ -58,11 +63,15 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
         const filtered = allGames.filter((g) => !isOrphanGame(g.name, g.appId))
         set({ games: filtered, loading: false })
 
-        // Background: re-resolve orphan games with generic names
+        // Background: re-resolve orphan games with generic names.
+        // Skip any orphan we've already tried — this prevents an infinite
+        // reload loop when resolution keeps reporting "resolved" for names
+        // that still read as orphans on the next listing.
         const orphanGames = allGames
-          .filter((g) => isOrphanGame(g.name, g.appId))
+          .filter((g) => isOrphanGame(g.name, g.appId) && !_attemptedOrphans.has(g.appId))
           .map((g) => ({ appId: g.appId, installDir: g.installDir }))
         if (orphanGames.length > 0) {
+          for (const g of orphanGames) _attemptedOrphans.add(g.appId)
           window.steamtools.resolveOrphanNames(orphanGames).then(({ resolved }: { resolved: { appId: string; newName: string }[] }) => {
             if (resolved.length > 0) {
               // Reload library with resolved names

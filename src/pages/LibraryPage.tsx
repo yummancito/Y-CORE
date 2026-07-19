@@ -253,7 +253,7 @@ export default function LibraryPage() {
     if (!el) return
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && visibleCount < games.length) {
+        if (entries.length > 0 && entries[0].isIntersecting && visibleCount < games.length) {
           setVisibleCount((prev) => Math.min(prev + GAMES_PER_PAGE, games.length))
         }
       },
@@ -364,8 +364,8 @@ export default function LibraryPage() {
         <div
           className="fixed z-[300] w-[220px] rounded-xl bg-surface-1 border border-white/[0.10] shadow-2xl overflow-hidden py-2"
           style={{
-            left: Math.min(contextMenu.x, window.innerWidth - 240),
-            top: Math.min(contextMenu.y, window.innerHeight - 320),
+            left: Math.max(0, Math.min(contextMenu.x, window.innerWidth - 240)),
+            top: Math.max(0, Math.min(contextMenu.y, window.innerHeight - 320)),
           }}
         >
           <div className="px-4 py-2 border-b border-white/[0.08]">

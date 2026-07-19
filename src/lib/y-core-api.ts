@@ -9,7 +9,7 @@ import type {
   InstallGameData,
 } from '@y-core/shared'
 
-const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'https://y-core-render-api.onrender.com'
+const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'https://y-core-render-api-rxwd.onrender.com'
 
 let cachedUsername: string | null = null
 
@@ -49,17 +49,25 @@ async function apiFetch<T>(
     headers['Content-Type'] = 'application/json'
   }
 
-  const resp = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30000)
 
-  if (!resp.ok) {
-    const errorBody = await resp.json().catch(() => ({ error: 'Request failed' }))
-    const err = new Error(errorBody.error || `HTTP ${resp.status}`)
-    ;(err as any).status = resp.status
-    throw err
+  try {
+    const resp = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: controller.signal })
+    clearTimeout(timeout)
+
+    if (!resp.ok) {
+      const errorBody = await resp.json().catch(() => ({ error: 'Request failed' }))
+      const err = new Error(errorBody.error || `HTTP ${resp.status}`)
+      ;(err as any).status = resp.status
+      throw err
+    }
+
+    if (resp.status === 204) return undefined as T
+    return resp.json() as T
+  } finally {
+    clearTimeout(timeout)
   }
-
-  if (resp.status === 204) return undefined as T
-  return resp.json() as T
 }
 
 // ===== Auth =====

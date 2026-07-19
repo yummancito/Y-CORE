@@ -5,7 +5,7 @@ export function TitleBar({ header }: { header?: ReactNode }) {
   return (
     <div
       className="titlebar-drag relative z-50 min-h-16 flex items-center justify-between px-3 py-2.5 flex-shrink-0 backdrop-blur-xl"
-      style={{ ['WebkitAppRegion' as any]: 'drag', backgroundColor: 'rgba(255, 255, 255, var(--titlebar-opacity, 0.06))' }}
+      style={{ ['WebkitAppRegion' as any]: 'drag', backgroundColor: 'rgba(15, 15, 20, var(--titlebar-opacity, 0.85))' }}
     >
       <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
         {header}

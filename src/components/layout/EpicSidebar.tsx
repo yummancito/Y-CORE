@@ -160,8 +160,8 @@ export function EpicSidebar() {
   return (
     <aside
       data-section="Sidebar"
-      className="flex flex-col flex-shrink-0 h-full w-[260px] select-none backdrop-blur-xl"
-      style={{ backgroundColor: `rgba(255, 255, 255, var(--sidebar-opacity, 0.06))` }}
+      className="flex flex-col flex-shrink-0 h-full w-[260px] select-none backdrop-blur-xl border-r border-white/[0.04]"
+      style={{ backgroundColor: `rgba(15, 15, 20, var(--sidebar-opacity, 0.85))` }}
     >
       {/* Main nav */}
       <nav className="flex-1 p-5 space-y-2 overflow-y-auto">
@@ -268,7 +268,7 @@ export function EpicSidebar() {
         {/* Discord CTA */}
         <button
           onClick={() => {
-            const url = 'https://discord.gg/Z2CzV884zE'
+            const url = 'https://discord.gg/87baAzAKme'
             if (window.steamtools?.openExternal) {
               window.steamtools.openExternal(url)
             } else {

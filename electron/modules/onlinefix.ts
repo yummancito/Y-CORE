@@ -5,6 +5,45 @@ import https from 'https'
 import { logger } from '../logger'
 import { isValidAppId, getSteamAppsPath, getSteamLibraryFolders, parseVdf } from './steam-helpers'
 
+// Locate dumpbin.exe across any installed Visual Studio edition/version instead
+// of relying on a single hardcoded path (which broke on machines with a
+// different VS edition or MSVC toolset version). Returns null if none is found.
+let _dumpbinPathCache: string | null | undefined
+function findDumpbin(): string | null {
+  if (_dumpbinPathCache !== undefined) return _dumpbinPathCache
+
+  const roots = [
+    process.env['ProgramFiles'] || 'C:\\Program Files',
+    process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
+  ]
+  const editions = ['BuildTools', 'Community', 'Professional', 'Enterprise']
+  const years = ['2022', '2019']
+
+  for (const root of roots) {
+    for (const year of years) {
+      for (const edition of editions) {
+        const msvcRoot = path.join(root, 'Microsoft Visual Studio', year, edition, 'VC', 'Tools', 'MSVC')
+        let versions: string[] = []
+        try {
+          versions = fs.readdirSync(msvcRoot).sort().reverse() // newest toolset first
+        } catch {
+          continue
+        }
+        for (const ver of versions) {
+          const candidate = path.join(msvcRoot, ver, 'bin', 'Hostx64', 'x64', 'dumpbin.exe')
+          if (fs.existsSync(candidate)) {
+            _dumpbinPathCache = candidate
+            return candidate
+          }
+        }
+      }
+    }
+  }
+
+  _dumpbinPathCache = null
+  return null
+}
+
 function findSteamApiDlls(gameDir: string): { dll64: string | null; dll32: string | null } {
   let dll64: string | null = null
   let dll32: string | null = null
@@ -151,8 +190,11 @@ const BEPINEX_GAMES: Record<string, { mods: { url: string; name: string }[] }> =
 function downloadFile(url: string, destPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destPath)
+    // Idle timeout: if the server sends no data for 60s, abort so the app can't
+    // hang forever on a stalled Thunderstore/CDN connection.
+    const IDLE_TIMEOUT_MS = 60000
     const request = (reqUrl: string) => {
-      https.get(reqUrl, (response) => {
+      const req = https.get(reqUrl, (response) => {
         // Follow redirects
         if (response.statusCode === 302 || response.statusCode === 301) {
           response.destroy()
@@ -173,7 +215,11 @@ function downloadFile(url: string, destPath: string): Promise<void> {
           file.close()
           resolve()
         })
-      }).on('error', (err) => {
+      })
+      req.setTimeout(IDLE_TIMEOUT_MS, () => {
+        req.destroy(new Error(`Download timed out after ${IDLE_TIMEOUT_MS / 1000}s`))
+      })
+      req.on('error', (err) => {
         file.close()
         if (fs.existsSync(destPath)) fs.unlinkSync(destPath)
         reject(err)
@@ -181,6 +227,35 @@ function downloadFile(url: string, destPath: string): Promise<void> {
     }
     request(url)
   })
+}
+
+// Sanity-check a downloaded file before we trust it enough to extract into a
+// game folder. We can't verify a publisher signature (Thunderstore doesn't
+// provide per-file hashes here), but we can reject anything that isn't a real,
+// non-trivial ZIP — e.g. an HTML error page served with a 200, or a truncated
+// download — which is the most likely failure and the most dangerous to extract.
+function validateZipFile(zipPath: string): void {
+  const MIN_ZIP_BYTES = 1024 // 1 KB — a real BepInEx pack is far larger
+  let stat: fs.Stats
+  try {
+    stat = fs.statSync(zipPath)
+  } catch {
+    throw new Error('Downloaded file is missing')
+  }
+  if (stat.size < MIN_ZIP_BYTES) {
+    throw new Error(`Downloaded file is too small (${stat.size} bytes) — likely not a valid archive`)
+  }
+  // ZIP local-file-header magic: 'PK\x03\x04'
+  const fd = fs.openSync(zipPath, 'r')
+  try {
+    const header = Buffer.alloc(4)
+    fs.readSync(fd, header, 0, 4, 0)
+    if (!(header[0] === 0x50 && header[1] === 0x4b && header[2] === 0x03 && header[3] === 0x04)) {
+      throw new Error('Downloaded file is not a valid ZIP archive (bad magic bytes)')
+    }
+  } finally {
+    fs.closeSync(fd)
+  }
 }
 
 async function extractZip(zipPath: string, destDir: string): Promise<void> {
@@ -252,6 +327,7 @@ async function installBepInExMods(gameDir: string, appId: string): Promise<strin
 
     logger.info(`Extracting ${mod.name}...`, 'onlinefix')
     try {
+      validateZipFile(zipPath)
       await extractZip(zipPath, gameDir)
       results.push(`Installed ${mod.name}`)
     } catch (err: any) {
@@ -496,8 +572,8 @@ export function registerOnlineFixHandlers(invalidateGamesCache: () => void) {
     if (fs.existsSync(originalDllPath)) {
       try {
         const { execSync } = require('child_process')
-        const dumpbin = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\dumpbin.exe'
-        if (fs.existsSync(dumpbin)) {
+        const dumpbin = findDumpbin()
+        if (dumpbin) {
           const output = execSync(`"${dumpbin}" /exports "${originalDllPath}"`, { encoding: 'utf-8', timeout: 15000 })
           const interfaces = output.split('\n')
             .map((l: string) => l.trim())

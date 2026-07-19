@@ -58,7 +58,8 @@ export function registerConfigHandlers() {
         if (key === '__proto__' || key === 'constructor' || key === 'prototype') return undefined
         return value
       })
-    } catch {
+    } catch (err: any) {
+      logger.error(`Failed to read config: ${err?.message ?? err}`, 'config')
       return null
     }
   })
@@ -93,7 +94,9 @@ export function registerConfigHandlers() {
           )
           if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) existing = parsed
         }
-      } catch {}
+      } catch (err: any) {
+        logger.warn(`Failed to merge existing config, overwriting: ${err?.message ?? err}`, 'config')
+      }
       const merged = { ...existing, ...filtered }
       const serialized = JSON.stringify(merged, null, 2)
       const MAX_CONFIG_SIZE = 256 * 1024

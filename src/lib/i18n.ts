@@ -344,6 +344,16 @@ const es: Dict = {
   'common.clear': 'Limpiar',
   'common.close': 'Cerrar',
 
+  // Errores (diálogo humano: mensaje corto + reportar/reintentar)
+  'error.title': 'Algo no salió bien',
+  'error.retry': 'Reintentar',
+  'error.report': 'Reportar',
+  'error.reporting': 'Enviando...',
+  'error.reportSent': '¡Gracias! Recibimos tu reporte y lo revisaremos.',
+  'error.reportFailed': 'No pudimos enviar el reporte. Revisa tu conexión.',
+  'error.showDetails': 'Ver detalles técnicos',
+  'error.hideDetails': 'Ocultar detalles técnicos',
+
   // Settings extras
   'settings.background': 'Fondo animado',
   'settings.bgNone': 'Ninguno',
@@ -1070,6 +1080,16 @@ const en: Dict = {
   'common.refresh': 'Refresh',
   'common.clear': 'Clear',
   'common.close': 'Close',
+
+  // Errors (human-friendly dialog: short message + report/retry)
+  'error.title': 'Something went wrong',
+  'error.retry': 'Retry',
+  'error.report': 'Report',
+  'error.reporting': 'Sending...',
+  'error.reportSent': 'Thanks! We got your report and will look into it.',
+  'error.reportFailed': "We couldn't send the report. Check your connection.",
+  'error.showDetails': 'Show technical details',
+  'error.hideDetails': 'Hide technical details',
 
   // Settings extras
   'settings.background': 'Animated Background',

@@ -62,8 +62,8 @@ export const DEFAULT_CUSTOMIZATION: Customization = {
     color: '#3BB2F7',
   },
   navbar: {
-    sidebarOpacity: 6,
-    titlebarOpacity: 6,
+    sidebarOpacity: 85,
+    titlebarOpacity: 85,
   },
   navItems: [
     { id: 'library', visible: true, order: 0 },

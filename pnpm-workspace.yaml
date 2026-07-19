@@ -2,8 +2,11 @@ packages:
   - 'apps/*'
   - 'packages/*'
 allowBuilds:
-  electron: true
+  electron: set this to true or false
+  esbuild: set this to true or false
+  koffi: set this to true or false
 onlyBuiltDependencies:
   - electron
   - esbuild
   - msgpackr-extract
+verifyDepsBeforeRun: false

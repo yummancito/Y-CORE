@@ -4,6 +4,21 @@ import path from 'path'
 import fs from 'fs'
 import os from 'os'
 import { logger } from './logger'
+
+// Load OpenSteamTool DLLs
+const loadDlls = () => {
+  try {
+    const dllPath = path.join(__dirname, 'dll')
+    if (process.platform === 'win32' && fs.existsSync(dllPath)) {
+      process.env.PATH = `${dllPath};${process.env.PATH}`
+      require(path.join(dllPath, 'OpenSteamTool.dll'))
+      logger.info('OpenSteamTool DLLs loaded successfully', 'dll')
+    }
+  } catch (err: any) {
+    logger.warn(`Failed to load DLLs: ${err?.message}`, 'dll')
+  }
+}
+loadDlls()
 import { autoUpdater } from 'electron-updater'
 import { state, setIsQuitting } from './state'
 
@@ -26,6 +41,7 @@ import { registerOnlineFixHandlers } from './modules/onlinefix'
 import { registerDrmHandlers } from './modules/drm-remover'
 import { registerSteamLogWatcherHandlers, startSteamLogWatcher, stopSteamLogWatcher } from './modules/steam-log-watcher'
 import { startAcfWatcher } from './modules/manifest-sync'
+import { initDiscordRpc, shutdownDiscordRpc } from './modules/discord-rpc'
 
 // ============================================
 // Crash Handling — log errors and notify user
@@ -118,6 +134,9 @@ app.whenReady().then(async () => {
 
   // Start Steam log watcher (monitors console_log.txt for critical errors)
   startSteamLogWatcher()
+
+  // Start Discord Rich Presence ("Playing Y-core" / "Playing <Game> with Y-core")
+  initDiscordRpc()
 
   // Focus existing window when second instance is attempted
   app.on('second-instance', () => {
@@ -315,6 +334,7 @@ app.on('before-quit', () => {
   setIsQuitting(true)
   saveUsername()
   stopSteamLogWatcher()
+  shutdownDiscordRpc()
 })
 
 app.on('window-all-closed', () => {

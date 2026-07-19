@@ -630,7 +630,7 @@ export default function SettingsPage() {
               {/* Discord */}
               <button
                 onClick={() => {
-                  const url = 'https://discord.gg/Z2CzV884zE'
+                  const url = 'https://discord.gg/87baAzAKme'
                   if (window.steamtools?.openExternal) {
                     window.steamtools.openExternal(url)
                   } else {

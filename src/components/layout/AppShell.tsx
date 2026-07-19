@@ -2,9 +2,11 @@ import { type ReactNode, createContext, useContext, useEffect, useMemo, useState
 import { EpicSidebar } from './EpicSidebar'
 import { TitleBar } from './TitleBar'
 import { OfflineBanner } from '../ui/OfflineBanner'
+import { ErrorDialog } from '../ui/ErrorDialog'
 import { useSteamStore } from '../../stores/useSteamStore'
 import { useToastStore } from '../../stores/useToastStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
+import { useErrorStore } from '../../stores/useErrorStore'
 
 interface PageHeaderContextValue {
   setHeader: (header: ReactNode) => void
@@ -57,6 +59,7 @@ export function AppShell({ children }: AppShellProps) {
   const { showToast } = useToastStore()
   const { init: initSteam } = useSteamStore()
   const { customization, loadFromConfig } = useSettingsStore()
+  const { error, open, clearError, retry } = useErrorStore()
   const [pickMode, setPickMode] = useState(false)
   const [pageHeader, setPageHeader] = useState<ReactNode>(null)
   const [bgDataUrl, setBgDataUrl] = useState<string | null>(null)
@@ -71,13 +74,14 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     if (customization.backgroundImage.enabled && customization.backgroundImage.path) {
       if (window.steamtools?.readImageAsDataURL) {
-        window.steamtools.readImageAsDataURL(customization.backgroundImage.path)
-        .then((url) => setBgDataUrl(url))
-        .catch(() => setBgDataUrl(null))
-    } else {
+        window.steamtools
+          .readImageAsDataURL(customization.backgroundImage.path)
+          .then((url) => setBgDataUrl(url))
+          .catch(() => setBgDataUrl(null))
+      } else {
         // Web/dev fallback: use the public path directly
         setBgDataUrl(customization.backgroundImage.path.replace(/^public\//, '/'))
-    }
+      }
     } else {
       setBgDataUrl(null)
     }
@@ -124,7 +128,7 @@ export function AppShell({ children }: AppShellProps) {
       useSteamStore.getState().loadSteamRunning()
     }, 5000)
     return () => clearInterval(interval)
-  }, [initSteam])
+  }, [])
 
   // Global Pick mode: only in development builds
   useEffect(() => {
@@ -192,6 +196,12 @@ export function AppShell({ children }: AppShellProps) {
           </>
         )}
         <OfflineBanner />
+        <ErrorDialog
+          error={error}
+          open={open}
+          onClose={clearError}
+          onRetry={retry || undefined}
+        />
         <div className="flex h-full w-full relative z-[1]">
           <EpicSidebar />
           <div className="flex flex-col flex-1 h-full min-w-0" data-section="Main Content">
