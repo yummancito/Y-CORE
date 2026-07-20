@@ -3,10 +3,13 @@ import { EpicSidebar } from './EpicSidebar'
 import { TitleBar } from './TitleBar'
 import { OfflineBanner } from '../ui/OfflineBanner'
 import { ErrorDialog } from '../ui/ErrorDialog'
+import { ConfirmModal } from '../ui/ConfirmModal'
+import { SupportChat } from '../ui/SupportChat'
 import { useSteamStore } from '../../stores/useSteamStore'
 import { useToastStore } from '../../stores/useToastStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useErrorStore } from '../../stores/useErrorStore'
+import { useInstallProcessor, type RestartPrompt } from '../../hooks/useInstallProcessor'
 
 interface PageHeaderContextValue {
   setHeader: (header: ReactNode) => void
@@ -63,6 +66,10 @@ export function AppShell({ children }: AppShellProps) {
   const [pickMode, setPickMode] = useState(false)
   const [pageHeader, setPageHeader] = useState<ReactNode>(null)
   const [bgDataUrl, setBgDataUrl] = useState<string | null>(null)
+  const [restartPrompt, setRestartPrompt] = useState<RestartPrompt | null>(null)
+
+  // Processes the global download/install queue regardless of which page is mounted.
+  useInstallProcessor((prompt) => setRestartPrompt(prompt))
 
   // Load saved config (including customization) on mount
   useEffect(() => {
@@ -202,6 +209,18 @@ export function AppShell({ children }: AppShellProps) {
           onClose={clearError}
           onRetry={retry || undefined}
         />
+        {restartPrompt && (
+          <ConfirmModal
+            open={!!restartPrompt}
+            onClose={() => setRestartPrompt(null)}
+            onConfirm={restartPrompt.onConfirm}
+            title={restartPrompt.title}
+            message={restartPrompt.message}
+            variant="warning"
+            confirmLabel={restartPrompt.confirmLabel}
+          />
+        )}
+        <SupportChat />
         <div className="flex h-full w-full relative z-[1]">
           <EpicSidebar />
           <div className="flex flex-col flex-1 h-full min-w-0" data-section="Main Content">

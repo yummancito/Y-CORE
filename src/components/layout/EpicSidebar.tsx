@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { RefreshCw, ShieldCheck, ShieldAlert, Sparkles } from 'lucide-react'
+import { RefreshCw, ShieldCheck, ShieldAlert, MessageCircle } from 'lucide-react'
 import {
   Library20Regular,
   AddCircle20Regular,
@@ -14,11 +14,12 @@ import {
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSteamStore } from '../../stores/useSteamStore'
 import { useToastStore } from '../../stores/useToastStore'
-import { useRecommendationStore } from '../../stores/useRecommendationStore'
+
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useDownloadQueueStore } from '../../stores/useDownloadQueueStore'
+import { useSupportChatStore } from '../../stores/useSupportChatStore'
 import { t } from '../../lib/i18n'
-import { isGameFullyDownloaded, getDownloadProgress, getCoverUrl } from '../../domain/utils'
+import { isGameFullyDownloaded, getDownloadProgress, getCoverUrl, getCoverFallbackUrls } from '../../domain/utils'
 import { CoverImage } from '../../components/ui/CoverImage'
 
 interface NavItemProps {
@@ -80,8 +81,9 @@ export function EpicSidebar() {
   const { games, loadGames } = useLibraryStore()
   const { restartSteam, verifySteam } = useSteamStore()
   const { showToast } = useToastStore()
-  const { recommendations, selectGame } = useRecommendationStore()
+
   const { logsVisible, showAddGame, customization } = useSettingsStore()
+  const toggleSupportChat = useSupportChatStore((s) => s.toggle)
   const location = useLocation()
   const [coverErrors, setCoverErrors] = useState<Set<string>>(new Set())
   const [verificationStatus, setVerificationStatus] = useState<{ installed: boolean; missing: string[] } | null>(null)
@@ -116,7 +118,7 @@ export function EpicSidebar() {
           return
         }
         const status = await window.steamtools.checkVerification()
-        console.log('[EpicSidebar] checkVerification result:', JSON.stringify(status))
+        // Logger output removed for release
         if (status) setVerificationStatus(status)
       } catch (err) {
         console.error('[EpicSidebar] checkVerification error:', err)
@@ -152,10 +154,6 @@ export function EpicSidebar() {
   })
 
   const isLibrary = location.pathname === '/'
-  const isStore = location.pathname === '/store'
-  useEffect(() => {
-    window.steamtools?.addLog?.({ level: 'INFO', message: `[EpicSidebar] isStore=${isStore}, recommendations=${recommendations.length}, first=${recommendations[0]?.name || 'none'}` })?.catch?.(() => {})
-  }, [isStore, recommendations])
 
   return (
     <aside
@@ -200,6 +198,8 @@ export function EpicSidebar() {
                       ) : (
                         <CoverImage
                           src={getCoverUrl(game.appId)}
+                          fallbackSrc={`https://cdn.cloudflare.steamstatic.com/steam/apps/${game.appId}/header.jpg`}
+                          fallbackSrcs={getCoverFallbackUrls(game.appId)}
                           alt={game.name}
                           className="w-full h-full object-cover"
                           onError={() => setCoverErrors((prev) => new Set(prev).add(game.appId))}
@@ -216,44 +216,6 @@ export function EpicSidebar() {
                   </NavLink>
                 )
               })}
-            </div>
-          </div>
-        )}
-
-        {/* Recommended section */}
-        {isStore && recommendations.length > 0 && (
-          <div className="pt-1">
-            <p className="px-3 text-[10px] font-semibold uppercase tracking-wider mb-2 text-accent">{t('nav.recommended')}</p>
-            <div className="space-y-1">
-              {recommendations.slice(0, 5).map((game) => (
-                <button
-                  key={game.app_id}
-                  onClick={() => selectGame(game)}
-                  className="flex items-center gap-3 h-12 px-3 rounded-[var(--radius-md)] transition-all duration-300 group text-text-secondary hover:text-white hover:bg-white/[0.04] w-full text-left animate-recommendation-enter"
-                >
-                  <div className="w-10 h-10 rounded-[var(--radius-sm)] overflow-hidden flex-shrink-0 bg-surface-2 relative">
-                    <span className="absolute -top-1 -left-1 z-10 text-[7px] font-semibold px-1 py-0.5 rounded-sm bg-accent text-white shadow-sm">
-                      {t('nav.recommended')}
-                    </span>
-                    {coverErrors.has(game.app_id) || !game.app_id ? (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Sparkles className="w-5 h-5 text-accent" />
-                      </div>
-                    ) : (
-                      <CoverImage
-                        src={getCoverUrl(game.app_id)}
-                        alt={game.name}
-                        className="w-full h-full object-cover"
-                        onError={() => setCoverErrors((prev) => new Set(prev).add(game.app_id))}
-                        showSkeleton={false}
-                      />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium truncate">{game.name || `App ${game.app_id}`}</p>
-                  </div>
-                </button>
-              ))}
             </div>
           </div>
         )}
@@ -341,6 +303,15 @@ export function EpicSidebar() {
           <span className="font-medium">
             {verificationStatus?.installed ? t('library.verified') : t('library.verifySteam')}
           </span>
+        </button>
+
+        <button
+          onClick={toggleSupportChat}
+          title={t('support.title')}
+          className="flex items-center gap-3 w-full h-11 px-3.5 rounded-xl text-sm font-medium text-text-secondary hover:text-text-bright hover:bg-white/[0.08] transition-all duration-200"
+        >
+          <MessageCircle className="w-5 h-5 flex-shrink-0" />
+          <span className="font-medium">{t('support.title')}</span>
         </button>
       </div>
     </aside>

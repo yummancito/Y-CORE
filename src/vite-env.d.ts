@@ -26,6 +26,7 @@ interface InstalledGame {
   bytesDownloaded: number
   autoUpdateBehavior: string
   manifestFile: string
+  playtime?: number
 }
 
 interface LibraryFoldersResult {
@@ -170,6 +171,7 @@ interface Window {
     }>
     storeGetLocalAppIds: () => Promise<{ success: boolean; appIds: string[] }>
     checkAppTypes: (appIds: string[]) => Promise<Record<string, { isGame: boolean; isAdult: boolean }>>
+    fetchAppDetails: (appId: string, cc?: string, lang?: string) => Promise<{ success: boolean; data?: any; error?: string }>
     readConfig: () => Promise<object | null>
     writeConfig: (data: object) => Promise<{ success: boolean; error?: string }>
     enableOnlineFix: (appId: string) => Promise<{ success: boolean; error?: string; launchOptions?: string; message?: string }>

@@ -99,7 +99,8 @@ export async function getRecommendations<T extends RecommendableGame>(
   libraryGames: LibraryGame[],
   storeGames: T[],
   max = 5,
-  excludeAppIds?: Set<string>
+  excludeAppIds?: Set<string>,
+  filterFree = true
 ): Promise<T[]> {
   if (libraryGames.length === 0 || storeGames.length === 0) return []
 
@@ -151,8 +152,8 @@ export async function getRecommendations<T extends RecommendableGame>(
     candidates.push(game)
   }
 
-  const nonFree = await filterFreeGames(candidates)
-  const result = nonFree.slice(0, max)
-  window.steamtools.addLog({ level: 'INFO', message: `[getRecommendations] library=${libraryGames.length}, store=${storeGames.length}, result=${result.map((g) => g.name).join(', ')}` }).catch((e) => console.warn('[recommendations] addLog failed:', e))
-  return result
+  const result = filterFree ? await filterFreeGames(candidates) : candidates
+  const final = result.slice(0, max)
+  window.steamtools.addLog({ level: 'INFO', message: `[getRecommendations] library=${libraryGames.length}, store=${storeGames.length}, result=${final.map((g) => g.name).join(', ')}` }).catch((e) => console.warn('[recommendations] addLog failed:', e))
+  return final
 }

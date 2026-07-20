@@ -100,6 +100,10 @@ contextBridge.exposeInMainWorld('steamtools', {
   checkAppTypes: (appIds: string[]) =>
     ipcRenderer.invoke('steam:checkAppTypes', appIds),
 
+  // Steam store API (proxied through main process to avoid CSP/CORS issues)
+  fetchAppDetails: (appId: string, cc?: string, lang?: string) =>
+    ipcRenderer.invoke('steam:fetchAppDetails', appId, cc, lang),
+
   // Config file persistence
   readConfig: () => ipcRenderer.invoke('config:read'),
   writeConfig: (data: object) => ipcRenderer.invoke('config:write', data),

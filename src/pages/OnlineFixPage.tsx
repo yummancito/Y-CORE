@@ -19,7 +19,13 @@ interface FixStatus {
 }
 
 export default function OnlineFixPage() {
-  usePageHeader(<div><h1>{t('onlinefix.ycoreOnline')}</h1><p className="text-sm text-text-muted">{t('onlinefix.description')}</p></div>, [])
+  usePageHeader(
+    <div className="flex items-center justify-between w-full">
+      <div>
+        <h1 className="text-lg font-bold text-text-bright">{t('onlinefix.ycoreOnline')}</h1>
+        <p className="text-sm text-text-dim">{t('onlinefix.description')}</p>
+      </div>
+    </div>, [])
   const { games, loadGames, loading } = useLibraryStore()
   const { showToast } = useToastStore()
   const [searchQuery, setSearchQuery] = useState('')
@@ -29,6 +35,7 @@ export default function OnlineFixPage() {
   const [compatMap, setCompatMap] = useState<Record<string, { status: CompatibilityStatus; reason?: string }>>({})
   const [compatLoading, setCompatLoading] = useState(false)
   const [hideWarning, setHideWarning] = useState(false)
+  const [hoveredCard, setHoveredCard] = useState(-1)
 
   useEffect(() => {
     loadGames()
@@ -138,20 +145,24 @@ export default function OnlineFixPage() {
   const statusBadge = (status: CompatibilityStatus, reason?: string) => {
     if (status === 'compatible') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/15 text-green-400 border border-green-500/20">
-          <CheckCircle2 className="w-3 h-3" />
-          {t('onlinefix.compatible')}
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide"
+          style={{ background: 'rgba(34,197,94,0.18)', backdropFilter: 'blur(8px)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' }}
+        >
+          <CheckCircle2 className="w-[10px] h-[10px]" strokeWidth={2.5} />
+          COMPATIBLE
         </span>
       )
     }
     if (status === 'incompatible') {
       return (
         <span
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20"
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide"
+          style={{ background: 'rgba(239,68,68,0.18)', backdropFilter: 'blur(8px)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}
           title={getCompatibilityReason(reason)}
         >
-          <XCircle className="w-3 h-3" />
-          {t('onlinefix.incompatible')}
+          <XCircle className="w-[10px] h-[10px]" strokeWidth={2.5} />
+          INCOMPATIBLE
         </span>
       )
     }
@@ -175,48 +186,77 @@ export default function OnlineFixPage() {
   ]
 
   return (
-    <div className="px-6 py-5 w-full">
-      {/* Search + filters */}
-      <div className="mb-5 flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-text-muted pointer-events-none">
-            <Search className="w-5 h-5" />
+    <div className="px-6 py-5 w-full animate-fade-in">
+      {/* Warning banner */}
+      {!hideWarning && (
+        <div
+          className="flex items-start gap-3.5 p-4 rounded-xl mb-5 animate-fade-in"
+          style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)' }}
+        >
+          <span
+            className="flex-shrink-0 w-[38px] h-[38px] rounded-xl flex items-center justify-center"
+            style={{ background: 'rgba(234,179,8,0.15)' }}
+          >
+            <AlertTriangle className="w-[19px] h-[19px]" style={{ color: '#eab308' }} strokeWidth={1.8} />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13.5px] font-bold mb-1" style={{ color: '#fde68a' }}>Usa los fixes bajo tu responsabilidad</p>
+            <p className="text-[12.5px] leading-relaxed text-text-secondary" style={{ textWrap: 'pretty' }}>
+              El fix modifica archivos del juego para habilitar el multijugador. Haz una copia de seguridad antes de aplicarlo y desactívalo antes de verificar archivos en Steam.
+            </p>
           </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('onlinefix.searchPlaceholder')}
-            className="w-full min-h-[52px] pr-12 py-3 rounded-xl bg-white/[0.06] text-base text-text-bright placeholder:text-text-muted border border-white/[0.12] focus:border-accent/50 focus:outline-none transition-colors"
-            style={{ paddingLeft: '48px' }}
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-text-muted hover:text-text-bright hover:bg-white/[0.08] transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
+          <button
+            onClick={dismissWarning}
+            className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center bg-transparent border-none text-text-dim hover:bg-white/[0.08] hover:text-white cursor-pointer transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
+      )}
+
+      {/* Search */}
+      <div className="relative mb-4">
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-text-muted pointer-events-none">
+          <Search className="w-[18px] h-[18px]" />
+        </div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder={t('onlinefix.searchPlaceholder')}
+          className="w-full min-h-[52px] pr-12 py-3 rounded-xl bg-white/[0.06] text-[15px] text-text-bright placeholder:text-text-muted border border-white/[0.12] focus:border-accent/50 focus:outline-none transition-colors outline-none"
+          style={{ paddingLeft: '48px' }}
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-text-muted hover:text-text-bright hover:bg-white/[0.08] transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Filter tabs */}
-      <div className="mb-5 flex items-center gap-2 overflow-x-auto pb-1">
-        <Filter className="w-5 h-5 text-text-muted mr-1 flex-shrink-0" />
-        {filterTabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setFilter(tab.id)}
-            className={`px-5 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors ${
-              filter === tab.id
-                ? 'bg-accent/25 text-accent border border-accent/50'
-                : 'bg-white/[0.06] text-text-bright border border-white/[0.10] hover:bg-white/[0.12] hover:text-text-bright'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1">
+        <Filter className="w-[18px] h-[18px] text-text-dim mr-1 flex-shrink-0" strokeWidth={1.8} />
+        {filterTabs.map((tab) => {
+          const active = filter === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setFilter(tab.id)}
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors cursor-pointer"
+              style={{
+                background: active ? 'rgba(59,178,247,0.25)' : 'rgba(255,255,255,0.06)',
+                color: active ? '#3BB2F7' : '#e4e4e7',
+                border: `1px solid ${active ? 'rgba(59,178,247,0.5)' : 'rgba(255,255,255,0.1)'}`,
+              }}
+            >
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Games grid */}
@@ -231,7 +271,7 @@ export default function OnlineFixPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
-          {filteredGames.map((game) => {
+          {filteredGames.map((game, idx) => {
             const compat = resolveCompat(game.appId)
             const fixStatus = fixStatusMap[game.appId]
             const hasFix = fixStatus?.hasFix ?? false
@@ -242,78 +282,113 @@ export default function OnlineFixPage() {
             return (
               <Card3D
                 key={game.appId}
-                className={`group/card cursor-pointer ${
-                  isDisabled ? 'opacity-60' : ''
-                } ${hasFix ? 'ring-1 ring-accent/30' : ''}`}
+                className="group/card cursor-pointer"
+                style={{ opacity: isDisabled ? 0.55 : 1 }}
               >
-                <div className={`relative aspect-[2/3] overflow-hidden rounded-xl transition-all duration-300 shadow-card hover:shadow-card-hover ${
-                  hasFix ? 'ring-1 ring-accent/30' : ''
-                }`}>
-                  <CoverImage
-                    src={getCoverUrl(game.appId)}
-                    fallbackSrc={`https://depotbox.org/api/images/steam-header/${game.appId}`}
-                    alt={game.name}
-                    className="w-full h-full object-cover"
-                  />
+                <div
+                  className="relative aspect-[2/3] overflow-hidden rounded-xl transition-all duration-300"
+                  style={{
+                    border: `1px solid ${isDisabled ? 'rgba(255,255,255,0.06)' : hoveredCard === idx ? 'rgba(59,178,247,0.55)' : 'rgba(255,255,255,0.06)'}`,
+                    boxShadow: isDisabled
+                      ? '0 8px 28px rgba(0,0,0,0.35)'
+                      : hoveredCard === idx
+                        ? '0 0 0 1px rgba(59,178,247,0.55), 0 0 26px rgba(59,178,247,0.3), 0 14px 40px rgba(0,0,0,0.5)'
+                        : '0 8px 28px rgba(0,0,0,0.35)',
+                    transform: !isDisabled && hoveredCard === idx ? 'translateY(-4px)' : 'none',
+                    animation: 'card-enter 0.4s ease-out both',
+                    animationDelay: `${Math.min(idx, 8) * 0.05}s`,
+                  }}
+                  onMouseEnter={() => !isDisabled && setHoveredCard(idx)}
+                  onMouseLeave={() => setHoveredCard(-1)}
+                >
+                  <div
+                    className="w-full h-full transition-all duration-[400ms] ease-out"
+                    style={{
+                      transform: !isDisabled && hoveredCard === idx ? 'scale(1.05)' : 'scale(1)',
+                      filter: !isDisabled && hoveredCard === idx ? 'brightness(0.6)' : 'brightness(1)',
+                    }}
+                  >
+                    <CoverImage
+                      src={getCoverUrl(game.appId)}
+                      fallbackSrc={`https://depotbox.org/api/images/steam-header/${game.appId}`}
+                      alt={game.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
 
-                  <div className="absolute top-2.5 left-2.5 right-2.5 flex flex-wrap gap-1 pointer-events-none z-10">
+                  <div className="absolute top-2.5 left-2.5 right-2.5 flex flex-wrap gap-1.5 pointer-events-none z-10">
                     {statusBadge(compat.status, compat.reason)}
                     {hasFix && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-accent/20 text-accent border border-accent/30">
-                        {t('onlinefix.installed')}
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide"
+                        style={{ background: 'rgba(59,178,247,0.2)', backdropFilter: 'blur(8px)', color: '#3BB2F7', border: '1px solid rgba(59,178,247,0.35)' }}
+                      >
+                        <Zap className="w-[10px] h-[10px] fill-current" stroke="none" />
+                        FIX ACTIVO
                       </span>
                     )}
                     {!hasSteamApi && fixStatus && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
-                        {t('onlinefix.noSteamApi')}
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wide"
+                        style={{ background: 'rgba(234,179,8,0.18)', color: '#eab308', border: '1px solid rgba(234,179,8,0.3)' }}
+                      >
+                        NO STEAM API
                       </span>
                     )}
                   </div>
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                  <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(9,9,11,0.9) 0%, rgba(9,9,11,0.2) 40%, transparent 65%)' }} />
 
-                  <div className="absolute bottom-0 left-0 right-0 p-3 pt-8 z-10">
-                    <p className="text-sm font-bold text-white leading-tight line-clamp-2 drop-shadow-md">
+                  <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
+                    <p className="text-sm font-bold text-white leading-tight line-clamp-2" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
                       {game.name || `App ${game.appId}`}
                     </p>
                     <p className="text-[10px] text-text-dim font-mono mt-0.5">AppID {game.appId}</p>
                     {compat.reason && compat.status === 'incompatible' && (
-                      <p className="text-[11px] text-red-400/80 mt-1 line-clamp-1" title={getCompatibilityReason(compat.reason)}>
+                      <p className="text-[10.5px] mt-1" style={{ color: 'rgba(248,113,113,0.85)' }} title={getCompatibilityReason(compat.reason)}>
                         {getCompatibilityReason(compat.reason)}
                       </p>
                     )}
                   </div>
 
-                  <div
-                    className={`absolute inset-0 z-20 flex flex-col justify-end transition-all duration-300 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none ${
-                      isDisabled ? 'opacity-0' : 'opacity-0 group-hover/card:opacity-100'
-                    }`}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      onClick={(e) => { e.stopPropagation(); hasFix ? handleRemove(game.appId, game.name || '') : handleGenerate(game.appId, game.name || '') }}
-                      disabled={isLoading || isDisabled}
-                      className={`pointer-events-auto flex items-center justify-center gap-2 mx-3 mb-3 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg ${
-                        hasFix
-                          ? 'text-white bg-white/[0.15] hover:bg-white/[0.25] border border-white/20'
-                          : 'text-black bg-accent hover:bg-accent-hover shadow-accent/25'
-                      } ${isLoading ? 'opacity-70 cursor-wait' : ''}`}
+                  {!isDisabled && (
+                    <div
+                      className="absolute inset-0 z-20 flex flex-col justify-end p-3 transition-all duration-300"
+                      style={{
+                        background: 'linear-gradient(to top, rgba(9,9,11,0.92), rgba(9,9,11,0.4) 55%, transparent)',
+                        backdropFilter: 'blur(3px)',
+                        opacity: hoveredCard === idx ? 1 : 0,
+                        pointerEvents: hoveredCard === idx ? 'auto' : 'none',
+                      }}
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      {isLoading ? (
-                        <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-                      ) : hasFix ? (
-                        <>
-                          <Trash2 className="w-5 h-5" />
-                          {t('onlinefix.remove')}
-                        </>
-                      ) : (
-                        <>
-                          <Zap className="w-5 h-5" />
-                          {t('onlinefix.generate')}
-                        </>
-                      )}
-                    </button>
-                  </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); hasFix ? handleRemove(game.appId, game.name || '') : handleGenerate(game.appId, game.name || '') }}
+                        disabled={isLoading}
+                        className="flex items-center justify-center gap-2 w-full py-[11px] rounded-xl text-sm font-bold border-none cursor-pointer transition-all"
+                        style={{
+                          color: hasFix ? '#fff' : '#0b0b0d',
+                          background: hasFix ? 'rgba(255,255,255,0.14)' : 'linear-gradient(135deg,#3BB2F7,#6ED0FF)',
+                          border: hasFix ? '1px solid rgba(255,255,255,0.22)' : 'none',
+                          boxShadow: hasFix ? 'none' : '0 6px 20px rgba(59,178,247,0.4)',
+                        }}
+                      >
+                        {isLoading ? (
+                          <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                        ) : hasFix ? (
+                          <>
+                            <Trash2 className="w-[15px] h-[15px]" />
+                            Quitar fix
+                          </>
+                        ) : (
+                          <>
+                            <Zap className="w-[15px] h-[15px] fill-current" stroke="none" />
+                            Generar fix
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </Card3D>
             )

@@ -8,7 +8,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && tsc -p electron/tsconfig.json",
-    "dist": "electron-builder",
+    "clean": "node -e \"require('fs-extra').removeSync('dist'); require('fs-extra').removeSync('dist-electron'); try { require('fs-extra').emptyDirSync('release') } catch {}\"",
+    "predist": "node -e \"try { require('fs-extra').emptyDirSync('release') } catch {}\"",
+    "dist": "electron-builder && node scripts/cleanup-dist.js",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p electron/tsconfig.json --noEmit",
     "electron:dev": "concurrently -n vite,electron -c green,magenta \"vite\" \"wait-on tcp:5173 && electron .\"",
@@ -27,6 +29,7 @@
     "dotenv": "^16.4.7",
     "electron-updater": "^6.8.9",
     "framer-motion": "^12.42.2",
+    "fs-extra": "^11.3.6",
     "fuse.js": "^7.4.2",
     "koffi": "^3.1.1",
     "lodash.escaperegexp": "^4.1.2",
@@ -40,12 +43,12 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
-    "7zip-min": "^3.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^20.19.43",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "7zip-min": "^3.0.1",
     "autoprefixer": "^10.4.19",
     "concurrently": "^8.2.2",
     "electron": "^31.7.7",
@@ -72,6 +75,7 @@
     "appId": "com.ycore.desktop",
     "productName": "Y-core",
     "icon": "public/logo.ico",
+    "compression": "store",
     "directories": {
       "output": "release"
     },
@@ -83,10 +87,27 @@
       "tools/**/*",
       "build/**/*",
       "public/logo.ico",
-      "public/logo.svg"
+      "public/logo.svg",
+      "package.json",
+      "node_modules/**/*",
+      "!node_modules/.bin",
+      "!node_modules/**/*.{md,markdown,map,ts}",
+      "!node_modules/**/{test,tests,__tests__,example,examples,.github,.vscode}/**",
+      "!**/*.d.ts"
+    ],
+    "asarUnpack": [
+      "**/*.node",
+      "**/*.dll",
+      "**/node_modules/koffi/**",
+      "**/node_modules/@koromix/**",
+      "resources/native/**",
+      "electron/dll/**",
+      "native/opensteamtool/**"
     ],
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis"
+      ],
       "signAndEditExecutable": false
     },
     "nsis": {

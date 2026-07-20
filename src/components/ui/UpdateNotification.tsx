@@ -67,7 +67,7 @@ export function UpdateNotification() {
 
     setRetryCount(1)
     const downloadUrl = `https://github.com/yummancito/Y-CORE/releases/download/v${updateAvailable.version}/Y-core-Setup-${updateAvailable.version}.exe`
-    console.log('Falling back to manual download:', downloadUrl)
+    // Logger.info would go here in production
     setUpdateError(null)
     window.steamtools?.manualDownloadUpdate?.(downloadUrl).then((result) => {
       setManualInstallerPath(result.path)

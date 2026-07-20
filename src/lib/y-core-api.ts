@@ -220,6 +220,21 @@ export async function downloadManifest(
   return Buffer.from(arrayBuffer)
 }
 
+// ===== Support chat =====
+
+export interface SupportChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export async function sendSupportMessage(messages: SupportChatMessage[]): Promise<string> {
+  const resp = await apiFetch<{ reply: string }>('/api/support/chat', {
+    method: 'POST',
+    body: JSON.stringify({ messages }),
+  })
+  return resp.reply
+}
+
 // Re-export types for convenience
 export type {
   GameSummary,

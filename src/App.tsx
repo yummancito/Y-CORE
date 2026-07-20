@@ -15,6 +15,7 @@ const AddGame = lazy(() => import('./pages/AddGame'))
 const ImportGame = lazy(() => import('./pages/ImportGame'))
 const LogsPage = lazy(() => import('./pages/LogsPage'))
 const StorePage = lazy(() => import('./pages/StorePage'))
+const GameDetailPage = lazy(() => import('./pages/GameDetailPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const OnlineFixPage = lazy(() => import('./pages/OnlineFixPage'))
 const DrmRemoverPage = lazy(() => import('./pages/DrmRemoverPage'))
@@ -34,6 +35,7 @@ function AppRoutes() {
         <Routes>
           <Route path="/" element={<LibraryPage />} />
           <Route path="/store" element={<StorePage />} />
+          <Route path="/store/:appId" element={<GameDetailPage />} />
           <Route path="/add-game" element={<AddGame />} />
           <Route path="/import-game" element={<ImportGame />} />
           <Route path="/logs" element={<LogsPage />} />

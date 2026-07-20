@@ -24,10 +24,15 @@ export function addCoverCacheBuster(url: string): string {
 
 export function getCoverFallbackUrls(appId: string): string[] {
   if (!appId || !/^\d+$/.test(appId)) return []
+  // Diverse CDN hosts + image variants for maximum resilience.
+  // header.jpg on cloudflare is intentionally excluded — it's the primary fallbackSrc.
   return [
-    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`,
+    `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_231x87.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_616x353.jpg`,
     `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`,
-    `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/capsule_231x87.jpg`,
+    `https://depotbox.org/api/images/steam-header/${appId}`,
   ]
 }
 

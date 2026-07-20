@@ -105,6 +105,20 @@ export function getSteamUserId(): string | null {
   }
 }
 
+export function getSteamBuildId(): string | null {
+  const steamPath = getSteamPath()
+  if (!steamPath) return null
+  const manifestPath = path.join(steamPath, 'steamapps', 'appmanifest_753.acf')
+  if (!fs.existsSync(manifestPath)) return null
+  try {
+    const content = fs.readFileSync(manifestPath, 'utf-8')
+    const match = content.match(/"buildid"\s+"(\d+)"/)
+    return match ? match[1] : null
+  } catch {
+    return null
+  }
+}
+
 export function isValidAppId(appId: string): boolean {
   return /^\d+$/.test(appId)
 }

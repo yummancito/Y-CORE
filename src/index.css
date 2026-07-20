@@ -94,8 +94,8 @@
   --amber-soft: rgba(255, 200, 44, 0.1);
 
   /* Scrollbar */
-  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
-  --scrollbar-hover: rgba(255, 255, 255, 0.2);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+  --scrollbar-hover: rgba(255, 255, 255, 0.35);
 
   /* Shadows - layered, realistic */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -663,6 +663,13 @@ input[type="color"]::-webkit-color-swatch {
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes card-shoot {
+  0% { opacity: 0; transform: translateY(80px) scale(0.85); }
+  45% { opacity: 1; transform: translateY(-8px) scale(1.05); }
+  70% { transform: translateY(4px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -1061,6 +1068,11 @@ input[type="color"]::-webkit-color-swatch {
   transform: translateY(0);
 }
 
+/* High-quality image rendering */
+img {
+  image-rendering: auto;
+}
+
 /* Scrollbar — dark custom (like Discord/Steam) */
 ::-webkit-scrollbar {
   width: 10px;
@@ -1074,6 +1086,7 @@ input[type="color"]::-webkit-color-swatch {
   border-radius: 5px;
   border: 2px solid transparent;
   background-clip: padding-box;
+  min-height: 32px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-hover);
@@ -1082,6 +1095,23 @@ input[type="color"]::-webkit-color-swatch {
 }
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* Modern scrollbar for media galleries and horizontal containers */
+.scrollbar-modern::-webkit-scrollbar {
+  height: 6px;
+}
+.scrollbar-modern::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-modern::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+  border: none;
+  min-height: 32px;
+}
+.scrollbar-modern::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,0.3);
 }
 
 /* Smooth hover transitions everywhere */

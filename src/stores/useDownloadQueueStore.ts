@@ -5,14 +5,21 @@ export interface QueueItem {
   name: string
 }
 
+export interface ImportProgress {
+  appId: string
+  status: string
+}
+
 interface DownloadQueueStore {
   queue: QueueItem[]
   processing: boolean
   current: QueueItem | null
+  importProgress: ImportProgress | null
   enqueue: (item: QueueItem) => void
   dequeue: () => QueueItem | undefined
   setProcessing: (v: boolean) => void
   setCurrent: (item: QueueItem | null) => void
+  setImportProgress: (v: ImportProgress | null) => void
   remove: (appId: string) => void
   clear: () => void
 }
@@ -21,6 +28,7 @@ export const useDownloadQueueStore = create<DownloadQueueStore>((set, get) => ({
   queue: [],
   processing: false,
   current: null,
+  importProgress: null,
   enqueue: (item) => {
     const exists = get().queue.some((q) => q.appId === item.appId) || get().current?.appId === item.appId
     if (exists) return
@@ -35,6 +43,7 @@ export const useDownloadQueueStore = create<DownloadQueueStore>((set, get) => ({
   },
   setProcessing: (v) => set({ processing: v }),
   setCurrent: (item) => set({ current: item }),
+  setImportProgress: (v) => set({ importProgress: v }),
   remove: (appId) => set((s) => ({ queue: s.queue.filter((q) => q.appId !== appId) })),
   clear: () => set({ queue: [] }),
 }))

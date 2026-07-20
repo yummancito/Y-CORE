@@ -15,7 +15,7 @@ function isOrphanGame(name: string | undefined, appId: string): boolean {
   if (!rawName) return true
   if (rawName === appId) return true
   if (/^app\s*\d*$/i.test(rawName)) return true
-  if (rawName.toLowerCase() === 'appid') return true
+  if (rawName.toLowerCase() === 'appid' || rawName.toLowerCase() === 'appid_') return true
   if (rawName === 'Unknown' || rawName === 'Desconocido' || rawName === 'Inconnu' || rawName === 'Desconhecido' || rawName === 'Unbekannt' || rawName === '未知' || rawName === 'अज्ञात') return true
   return false
 }
@@ -60,10 +60,11 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
       const result = await window.steamtools.listInstalledGames()
       if (result.success) {
         const allGames = (result.games || []).filter((g) => g.appId !== STEAMWORKS_REDIST_APP_ID)
-        const filtered = allGames.filter((g) => !isOrphanGame(g.name, g.appId))
+        // Show all games: non-orphans + previously attempted orphans (even if resolution failed)
+        const filtered = allGames.filter((g) => !isOrphanGame(g.name, g.appId) || _attemptedOrphans.has(g.appId))
         set({ games: filtered, loading: false })
 
-        // Background: re-resolve orphan games with generic names.
+        // Background: re-resolve NEW orphan games with generic names.
         // Skip any orphan we've already tried — this prevents an infinite
         // reload loop when resolution keeps reporting "resolved" for names
         // that still read as orphans on the next listing.

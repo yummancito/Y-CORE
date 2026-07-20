@@ -24,6 +24,7 @@ import { usePageHeader } from '../components/layout/AppShell'
 import { getCoverUrl } from '../domain/utils'
 import { CoverImage } from '../components/ui/CoverImage'
 import { Card3D } from '../components/ui/Card3D'
+import { ConfirmModal } from '../components/ui/ConfirmModal'
 
 export default function LibraryPage() {
   const { searchQuery, sortBy, loadGames, setSearchQuery, setSortBy, loading, error } = useLibraryStore()
@@ -33,6 +34,8 @@ export default function LibraryPage() {
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [showSortDropdown, setShowSortDropdown] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; game: InstalledGame } | null>(null)
+  const [hoveredCard, setHoveredCard] = useState(-1)
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void; variant?: 'danger' | 'warning'; confirmLabel?: string; cancelLabel?: string } | null>(null)
   const sortDropdownRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -100,8 +103,14 @@ export default function LibraryPage() {
 
   usePageHeader(
     <div className="flex items-center w-full h-11">
-      <div className="flex items-center gap-4 h-full flex-shrink-0">
-        <h1 className="text-xl font-bold text-text-bright leading-none">{t('library.title')}</h1>
+      <div className="flex items-center gap-3 h-full flex-shrink-0">
+          <h1 className="text-xl font-bold text-text-bright leading-none">{t('library.title')}</h1>
+        <span
+          className="flex-shrink-0 text-xs font-semibold px-[11px] py-[5px] rounded-full"
+          style={{ color: '#3BB2F7', background: 'rgba(59,178,247,0.12)', border: '1px solid rgba(59,178,247,0.25)' }}
+        >
+          {allFiltered.length} {t('library.games')}
+        </span>
       </div>
 
       <div className="flex-1 flex items-center justify-center h-full">
@@ -177,15 +186,21 @@ export default function LibraryPage() {
   }
 
   const handleDeleteGame = async (game: InstalledGame) => {
-    const confirmed = window.confirm(t('library.deleteConfirm'))
-    if (!confirmed) return
-    const result = await window.steamtools.deleteGame(game.appId, game.installDir)
-    if (result.success) {
-      showToast('success', t('library.gameRemoved'))
-      await loadGames()
-    } else {
-      showToast('error', result.error || t('library.failedRemove'))
-    }
+    setConfirmDialog({
+      title: `¿Desinstalar ${game.name || 'este juego'}?`,
+      message: 'Se eliminarán los archivos del juego de tu equipo. Tus partidas guardadas en la nube no se borrarán.',
+      variant: 'danger',
+      confirmLabel: 'Desinstalar',
+      onConfirm: async () => {
+        const result = await window.steamtools.deleteGame(game.appId, game.installDir)
+        if (result.success) {
+          showToast('success', t('library.gameRemoved'))
+          await loadGames()
+        } else {
+          showToast('error', result.error || t('library.failedRemove'))
+        }
+      },
+    })
   }
 
   const handleOpenLocation = async (game: InstalledGame) => {
@@ -291,48 +306,115 @@ export default function LibraryPage() {
           </div>
         ) : (
           <>
+            {/* Recently played hero */}
+            {(() => {
+              const sortedByPlayed = [...games].sort((a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0))
+              const lastPlayed = sortedByPlayed[0]
+              if (!lastPlayed) return null
+              const heroUrl = `https://cdn.akamai.steamstatic.com/steam/apps/${lastPlayed.appId}/library_hero.jpg`
+              return (
+                <section
+                  className="relative w-full h-[260px] rounded-[18px] overflow-hidden mb-7 animate-fade-in"
+                  style={{ border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 16px 48px rgba(0,0,0,0.45)' }}
+                >
+                  <img
+                    src={heroUrl}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                  />
+                  <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, rgba(9,9,11,0.9) 0%, rgba(9,9,11,0.5) 50%, transparent 80%)' }} />
+                  <div className="absolute inset-0 flex flex-col justify-center px-9" style={{ maxWidth: '520px' }}>
+                    <span className="text-[11px] font-bold tracking-[0.1em] uppercase mb-2" style={{ color: '#3BB2F7' }}>Jugado recientemente</span>
+                    <h2 className="text-[30px] font-extrabold text-white tracking-[-0.02em] mb-2" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+                      {lastPlayed.name || `App ${lastPlayed.appId}`}
+                    </h2>
+                    <p className="text-sm text-text-secondary mb-[18px]">
+                      Última sesión: {lastPlayed.lastPlayed ? new Date(lastPlayed.lastPlayed * 1000).toLocaleDateString() : '—'}{lastPlayed.playtime ? ` · ${Math.round(lastPlayed.playtime / 60)} h jugadas` : ''}
+                    </p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => handleLaunchGame(lastPlayed.appId)}
+                        className="flex items-center gap-2.5 px-7 py-3.5 rounded-xl text-sm font-bold text-white border-none cursor-pointer transition-all hover:brightness-110 hover:-translate-y-px"
+                        style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', boxShadow: '0 8px 24px rgba(34,197,94,0.35)' }}
+                      >
+                        <Play className="w-[17px] h-[17px] fill-current" />
+                        Jugar
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              )
+            })()}
+
+            {/* Section title */}
+            <div className="flex items-center mb-4">
+              <h2 className="text-[17px] font-bold text-white m-0">Todos los juegos</h2>
+            </div>
+
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
-              {visibleGames.map((game) => (
+              {visibleGames.map((game, idx) => (
                 <Card3D
                   key={game.appId}
                   className="group/card cursor-pointer"
                   onContextMenu={(e) => handleContextMenu(e, game)}
                 >
-                  <div className="relative aspect-[2/3] overflow-hidden rounded-xl transition-all duration-300 shadow-card hover:shadow-card-hover">
-                    <CoverImage
-                      src={getCoverUrl(game.appId)}
-                      fallbackSrc={`https://depotbox.org/api/images/steam-header/${game.appId}`}
-                      alt={game.name}
-                      className="w-full h-full object-cover"
-                    />
+                  <div
+                    className="relative aspect-[2/3] overflow-hidden rounded-xl transition-all duration-300"
+                    style={{
+                      border: `1px solid ${hoveredCard === idx ? 'rgba(59,178,247,0.55)' : 'rgba(255,255,255,0.06)'}`,
+                      boxShadow: hoveredCard === idx
+                        ? '0 0 0 1px rgba(59,178,247,0.55), 0 0 26px rgba(59,178,247,0.3), 0 14px 40px rgba(0,0,0,0.5)'
+                        : '0 8px 28px rgba(0,0,0,0.35)',
+                      transform: hoveredCard === idx ? 'translateY(-4px)' : 'none',
+                      animation: 'card-enter 0.4s ease-out both',
+                      animationDelay: `${Math.min(idx, 8) * 0.05}s`,
+                    }}
+                    onMouseEnter={() => setHoveredCard(idx)}
+                    onMouseLeave={() => setHoveredCard(-1)}
+                  >
+                    <div
+                      className="w-full h-full transition-all duration-[400ms] ease-out"
+                      style={{
+                        transform: hoveredCard === idx ? 'scale(1.05)' : 'scale(1)',
+                        filter: hoveredCard === idx ? 'brightness(0.55)' : 'brightness(1)',
+                      }}
+                    >
+                      <CoverImage
+                        src={getCoverUrl(game.appId)}
+                        fallbackSrc={`https://depotbox.org/api/images/steam-header/${game.appId}`}
+                        alt={game.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
 
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
 
-                      <div className="absolute bottom-0 left-0 right-0 p-3 pt-8 z-10">
-                        <p className="text-sm font-bold text-white leading-tight line-clamp-2 drop-shadow-md">
-                          {game.name || t('library.unknown')}
-                        </p>
-                      </div>
+                    <div className="absolute bottom-0 left-0 right-0 p-3 pt-8 z-10">
+                      <p className="text-sm font-bold text-white leading-tight line-clamp-2 drop-shadow-md">
+                        {game.name || t('library.unknown')}
+                      </p>
+                    </div>
 
-                      <div
-                        className="absolute inset-0 z-20 flex flex-col justify-end opacity-0 group-hover/card:opacity-100 transition-all duration-300 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"
-                        onClick={(e) => e.stopPropagation()}
+                    <div
+                      className="absolute inset-0 z-20 flex items-center justify-center transition-opacity duration-300 ease-out"
+                      style={{
+                        background: 'rgba(9,9,11,0.35)',
+                        backdropFilter: 'blur(4px)',
+                        opacity: hoveredCard === idx ? 1 : 0,
+                        pointerEvents: hoveredCard === idx ? 'auto' : 'none',
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        className="flex items-center gap-2 px-[22px] py-[11px] rounded-xl text-sm font-bold text-white border-none cursor-pointer transition-all hover:brightness-110"
+                        onClick={(e) => { e.stopPropagation(); handleLaunchGame(game.appId) }}
+                        style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', boxShadow: '0 6px 20px rgba(34,197,94,0.4)' }}
                       >
-                        <button
-                          className="pointer-events-auto flex items-center justify-center gap-2 mx-3 mb-2 px-5 py-2.5 rounded-xl text-sm font-bold text-black bg-accent hover:bg-accent-hover transition-all shadow-lg shadow-accent/25"
-                          onClick={(e) => { e.stopPropagation(); handleLaunchGame(game.appId) }}
-                        >
-                          <Play className="w-6 h-6 fill-current" />
-                          {t('library.play')}
-                        </button>
-                        <button
-                          className="pointer-events-auto flex items-center justify-center gap-2 mx-3 mb-4 px-5 py-2.5 rounded-xl text-sm font-bold text-white bg-red-500/80 hover:bg-red-500 transition-all shadow-lg shadow-red-500/20"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteGame(game) }}
-                        >
-                          <Trash2 className="w-6 h-6" />
-                          {t('library.deleteGame')}
-                        </button>
-                      </div>
+                        <Play className="w-[15px] h-[15px] fill-current" />
+                        Jugar
+                      </button>
+                    </div>
                   </div>
                 </Card3D>
               ))}
@@ -345,7 +427,7 @@ export default function LibraryPage() {
             )}
             {visibleCount >= games.length && games.length > GAMES_PER_PAGE && (
               <p className="text-center text-xs text-text-dim py-4">
-                {games.length} {t('library.games')}
+          {allFiltered.length} {t('library.games')}
               </p>
             )}
           </>
@@ -412,6 +494,20 @@ export default function LibraryPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Confirm Modal */}
+      {confirmDialog && (
+        <ConfirmModal
+          open={!!confirmDialog}
+          onClose={() => setConfirmDialog(null)}
+          onConfirm={confirmDialog.onConfirm}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          variant={confirmDialog.variant}
+          confirmLabel={confirmDialog.confirmLabel}
+          cancelLabel={confirmDialog.cancelLabel}
+        />
       )}
     </div>
   )

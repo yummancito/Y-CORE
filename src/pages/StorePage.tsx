@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Search, Loader2, X, Package, ArrowUp,
-  LayoutGrid,
+  LayoutGrid, Star,
 } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { useToastStore } from '../stores/useToastStore'
@@ -9,7 +10,7 @@ import { useLibraryStore } from '../stores/useLibraryStore'
 import { useDownloadQueueStore } from '../stores/useDownloadQueueStore'
 import { usePageHeader } from '../components/layout/AppShell'
 import {
-  listGames, installGame, getJobStatus, reportDownloaded, searchGamesCombined,
+  listGames, searchGamesCombined,
   type GameSummary,
 } from '../lib/y-core-api'
 import { CATEGORIES, type CategoryId, getPrimaryCategoryFromName } from '../lib/categories'
@@ -17,9 +18,8 @@ import { getLauncherInfo } from '../lib/onlinefix-compatibility'
 import { useRecommendationStore } from '../stores/useRecommendationStore'
 import { useSettingsStore } from '../stores/useSettingsStore'
 import { GameCard, GameCardSkeleton, getDefaultGameImageUrl, type MergedGame } from '../components/store/GameCard'
-import { GameDetailModal } from '../components/store/GameDetailModal'
-
-interface InstallResult { type: 'success' | 'error' | 'info'; message: string }
+import { ConfirmModal } from '../components/ui/ConfirmModal'
+import { DonationModal } from '../components/ui/DonationModal'
 
 type Tab = 'browse'
 
@@ -30,6 +30,15 @@ const GAMES_CACHE_TTL = 5 * 60 * 1000
 function getPrimaryCategoryForGame(game: MergedGame): CategoryId | null {
   if (game.category) return game.category
   return getPrimaryCategoryFromName(game.name)
+}
+
+// The backend's is_tool/is_dlc flags aren't reliably set (e.g. /api/search omits
+// is_tool entirely), so we also filter obvious non-game apps by name as a safety net.
+const NON_GAME_NAME_PATTERN = /\b(dev\s?kit|devkit|playtest|dedicated server|server tool|sdk|mod\s?tool|editor|benchmark)\b/i
+
+function isNonGameApp(name: string | undefined | null): boolean {
+  if (!name) return false
+  return NON_GAME_NAME_PATTERN.test(name)
 }
 
 function sortSearchResults(games: MergedGame[], query: string): MergedGame[] {
@@ -63,6 +72,8 @@ function gameSummaryToMerged(g: GameSummary): MergedGame {
     header_image_url: g.header_image_url || null,
     category: null,
     source: 'catalog',
+    is_dlc: g.is_dlc,
+    is_tool: g.is_tool,
   }
 }
 
@@ -73,21 +84,24 @@ function filterByCategory(games: MergedGame[], categoryId: CategoryId): MergedGa
 
 // ---- Main Store Page ----
 export default function StorePage() {
+  const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('browse')
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState<MergedGame[] | null>(null)
   const [searching, setSearching] = useState(false)
   const [allGames, setAllGames] = useState<MergedGame[]>([])
-  const [categorySections, setCategorySections] = useState<{ title: string; icon: React.ComponentType<{ className?: string }>; games: MergedGame[] }[]>([])
-  const [sectionsLoading, setSectionsLoading] = useState(true)
   const [browseFilter, setBrowseFilter] = useState<CategoryId>('all')
-  const [browseLoading, setBrowseLoading] = useState(false)
-  const [browseVisibleCount, setBrowseVisibleCount] = useState(60)
-  const [installing, setInstalling] = useState<string | null>(null)
-  const [selectedGame, setSelectedGame] = useState<MergedGame | null>(null)
+  const [browseLoading, setBrowseLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [hideInstalled, setHideInstalled] = useState(true)
-  const [importProgress, setImportProgress] = useState<{ appId: string; status: string } | null>(null)
+  const [heroIndex, setHeroIndex] = useState(0)
+  const [heroPaused, setHeroPaused] = useState(false)
+  const heroTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void; variant?: 'danger' | 'warning'; confirmLabel?: string; cancelLabel?: string } | null>(null)
+  const [showDonation, setShowDonation] = useState(false)
+  const pendingConfirmRef = useRef<{ resolve: (v: boolean) => void } | null>(null)
   const { showTools, showAdult, loadFromConfig: loadSettings } = useSettingsStore()
 
   // Load content settings from config
@@ -98,7 +112,9 @@ export default function StorePage() {
   const { showToast } = useToastStore()
   const { games: installedGames } = useLibraryStore()
   const consumedAppIds = useRecommendationStore((s) => s.consumedAppIds)
-  const consumeGame = useRecommendationStore((s) => s.consumeGame)
+  const currentInstall = useDownloadQueueStore((s) => s.current)
+  const importProgress = useDownloadQueueStore((s) => s.importProgress)
+  const installing = currentInstall?.appId ?? null
   const resetConsumed = useRecommendationStore((s) => s.resetConsumed)
 
   const installedAppIds = useMemo(() => {
@@ -131,68 +147,101 @@ export default function StorePage() {
     return out
   }, [])
 
-  const setSplash = useCallback((status: string, percent: number) => {
-    window.steamtools?.setSplashStatus?.(status, percent).catch?.(() => {})
-  }, [])
+  const loadOffsetRef = useRef(0)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+  const animStylesRef = useRef<Record<string, { animation: string; animationDelay: string }>>({})
+  const loadingMoreRef = useRef(false)
 
-  const loadAllGames = useCallback(async (): Promise<MergedGame[]> => {
-    const start = performance.now()
-    setSplash(t('store.loadingCatalog'), 15)
-
-    const cache = _gamesCache
-    if (cache && Date.now() - cache.timestamp < GAMES_CACHE_TTL && cache.showAdult === showAdult) {
-      setSplash(t('store.preparingStore'), 75)
-      return cache.games
-    }
-
-    const BATCH_SIZE = 200
-    const MAX_GAMES = 600
-    let allGames: MergedGame[] = []
-    let offset = 0
-    while (offset < MAX_GAMES) {
-      const resp = await listGames({ limit: BATCH_SIZE, offset })
-      if (!resp.games || resp.games.length === 0) break
-      allGames.push(...resp.games.map(gameSummaryToMerged))
-      offset += BATCH_SIZE
-      if (resp.games.length < BATCH_SIZE) break
-    }
-
-    let games: MergedGame[] = dedupeByAppId(allGames)
+  const filterGames = useCallback((raw: MergedGame[]): MergedGame[] => {
+    return dedupeByAppId(raw)
       .filter((g) => g.app_id && /^\d+$/.test(g.app_id) && g.name && g.name.trim() !== '')
       .filter((g) => !installedAppIds.has(g.app_id))
+      .filter((g) => !g.is_tool && !g.is_dlc && !isNonGameApp(g.name))
       .filter((g) => showAdult || getPrimaryCategoryForGame(g) !== 'nsfw')
+  }, [dedupeByAppId, installedAppIds, showAdult])
 
-    _gamesCache = { games, timestamp: Date.now(), showAdult }
-    window.steamtools?.addLog?.({ level: 'INFO', message: `[Perf] store catalog fetched: ${games.length} games in ${Math.ceil(offset / BATCH_SIZE)} batches` })?.catch?.(() => {})
+  const loadInitialGames = useCallback(async () => {
+    const cache = _gamesCache
+    if (cache && Date.now() - cache.timestamp < GAMES_CACHE_TTL && cache.showAdult === showAdult) {
+      setAllGames(cache.games)
+      setBrowseLoading(false)
+      return
+    }
+    setBrowseLoading(true)
+    try {
+      const resp = await listGames({ limit: 60, offset: 0 })
+      const games = resp.games ? filterGames(resp.games.map(gameSummaryToMerged)) : []
+      loadOffsetRef.current = resp.games?.length ?? 0
+      setHasMore((resp.games?.length ?? 0) > 0)
+      setAllGames(games)
+      if (games.length > 0) {
+        _gamesCache = { games, timestamp: Date.now(), showAdult }
+      }
+    } catch (err: any) {
+      showToast('error', `${t('store.failedLoad')}: ${err.message}`)
+    } finally {
+      setBrowseLoading(false)
+    }
+  }, [filterGames, showAdult, showToast])
 
-    setSplash(t('store.preparingStore'), 75)
-    window.steamtools?.addLog?.({ level: 'INFO', message: `[Perf] loadAllGames took ${(performance.now() - start).toFixed(0)}ms, ${games.length} games ready` })?.catch?.(() => {})
-    return games
-  }, [installedAppIds, dedupeByAppId, setSplash, showAdult])
-
-  const loadAllGamesRef = useRef(loadAllGames)
-  loadAllGamesRef.current = loadAllGames
+  const loadMoreGames = useCallback(async () => {
+    if (loadingMoreRef.current || !hasMore) return
+    loadingMoreRef.current = true
+    setLoadingMore(true)
+    try {
+      const resp = await listGames({ limit: 60, offset: loadOffsetRef.current })
+      const newGames = resp.games ? filterGames(resp.games.map(gameSummaryToMerged)) : []
+      loadOffsetRef.current += resp.games?.length ?? 0
+      setHasMore((resp.games?.length ?? 0) > 0)
+      if (newGames.length > 0) {
+        setAllGames(prev => {
+          const merged = dedupeByAppId([...prev, ...newGames])
+          _gamesCache = { games: merged, timestamp: Date.now(), showAdult }
+          return merged
+        })
+      }
+    } catch (err: any) {
+      showToast('error', `${t('store.failedLoad')}: ${err.message}`)
+    } finally {
+      loadingMoreRef.current = false
+      setLoadingMore(false)
+    }
+  }, [hasMore, filterGames, showToast])
 
   useEffect(() => {
-    let cancelled = false
-    setBrowseLoading(true)
-
-    loadAllGamesRef.current()
-      .then((games) => {
-        if (cancelled) return
-        setAllGames(games)
-      })
-      .catch((err) => {
-        if (cancelled) return
-        showToast('error', `${t('store.failedLoad')}: ${err.message}`)
-      })
-      .finally(() => {
-        if (cancelled) return
-        setBrowseLoading(false)
-      })
-    return () => { cancelled = true }
+    loadInitialGames().catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [showAdult])
+
+  // Infinite scroll via IntersectionObserver + scroll fallback
+  // loadingMore in deps ensures observer reconnects after sentinel remounts
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasMore) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreGames()
+        }
+      },
+      { rootMargin: '400px' }
+    )
+    observer.observe(el)
+
+    // Scroll fallback: if the observer gets stale, a scroll near bottom still triggers load
+    const main = document.querySelector('main')
+    const onScroll = () => {
+      if (!main || !hasMore || loadingMoreRef.current) return
+      const nearBottom = main.scrollTop + main.clientHeight >= main.scrollHeight - 400
+      if (nearBottom) loadMoreGames()
+    }
+    if (main) main.addEventListener('scroll', onScroll, { passive: true })
+
+    return () => {
+      observer.disconnect()
+      if (main) main.removeEventListener('scroll', onScroll)
+    }
+  }, [hasMore, loadMoreGames, loadingMore])
 
   const browseFilteredGames = useMemo(() => {
     const filtered = showAdult ? allGames : allGames.filter(g => getPrimaryCategoryForGame(g) !== 'nsfw')
@@ -207,16 +256,10 @@ export default function StorePage() {
       return rawName && rawName !== g.app_id && !/^app\s*\d*$/i.test(rawName) && rawName.toLowerCase() !== 'appid'
     })
     if (hideInstalled) games = games.filter(g => !installedAppIds.has(g.app_id))
-    return games.slice(0, browseVisibleCount)
-  }, [browseFilteredGames, browseVisibleCount, hideInstalled, installedAppIds])
-
-  useEffect(() => {
-    setBrowseVisibleCount(60)
-  }, [browseFilter])
+    return games
+  }, [browseFilteredGames, hideInstalled, installedAppIds])
 
   const searchAbortRef = useRef<AbortController | null>(null)
-  const pollAbortRef = useRef<AbortController | null>(null)
-  const pollJobRef = useRef<((jobId: string, appId: string, gameName?: string) => Promise<void>) | null>(null)
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setSearchResults(null); return }
     if (q.trim().length < 2) return
@@ -224,90 +267,56 @@ export default function StorePage() {
     const abortController = new AbortController()
     searchAbortRef.current = abortController
     setSearching(true)
+
     try {
       const resp = await searchGamesCombined(q.trim(), 50, showAdult ? 'all' : 'exclude')
       if (abortController.signal.aborted) return
 
-      // Separate catalog results (already games) from depotbox results (need type check)
-      const catalogGames: MergedGame[] = []
-      const depotboxGames: MergedGame[] = []
-      for (const g of resp.games) {
-        const merged: MergedGame = {
-          app_id: g.app_id,
-          name: g.name,
-          header_image_url: g.header_image_url || null,
-          category: null,
-          source: g.source === 'depotbox' ? 'import' as const : 'catalog' as const,
-          is_dlc: g.is_dlc,
-        }
-        if (g.source === 'depotbox') {
-          depotboxGames.push(merged)
-        } else {
-          catalogGames.push(merged)
-        }
-      }
+      // Convert all results to MergedGame, filter installed + nsfw
+      const merged = resp.games.map(g => ({
+        app_id: g.app_id,
+        name: g.name,
+        header_image_url: g.header_image_url || null,
+        category: null,
+        source: (g.source === 'depotbox' ? 'import' : 'catalog') as 'catalog' | 'import',
+        is_dlc: g.is_dlc,
+      } satisfies MergedGame))
 
-      // Filter installed games from catalog results immediately
-      // Also filter NSFW from catalog when showAdult is false (DepotBox already filters server-side)
-      const filteredCatalog = catalogGames
-        .filter((g) => !installedAppIds.has(g.app_id))
-        .filter((g) => showAdult || getPrimaryCategoryForGame(g) !== 'nsfw')
+      const filtered = merged.filter(g => {
+        const rawName = g.name?.trim()
+        const isOrphaned = !rawName || rawName === g.app_id || /^app\s*\d*$/i.test(rawName) || rawName.toLowerCase() === 'appid'
+        if (isOrphaned) return false
+        if (installedAppIds.has(g.app_id)) return false
+        if (g.is_dlc) return false
+        if (isNonGameApp(g.name)) return false
+        if (!showAdult && getPrimaryCategoryForGame(g) === 'nsfw') return false
+        return true
+      })
 
-      // If showTools is true AND showAdult is true, skip type checking entirely
-      if (showTools && showAdult) {
-        const filteredDepotbox = depotboxGames.filter(g => !installedAppIds.has(g.app_id))
-        const allResults = sortSearchResults([...filteredCatalog, ...filteredDepotbox], q.trim())
-        setSearchResults(allResults)
-        return
-      }
-
-      // Show catalog results immediately, then check depotbox types
-      setSearchResults(filteredCatalog)
-
-      // Check depotbox app types for tool and/or adult filtering
-      const depotboxAppIds = depotboxGames.map(g => g.app_id)
-      if (depotboxAppIds.length === 0) {
-        return
-      }
-
-      const typeResults = await window.steamtools.checkAppTypes(depotboxAppIds)
-      if (abortController.signal.aborted) return
-
-      // Filter depotbox games: exclude tools, adult, installed, and orphaned entries
-      const filteredDepotbox = depotboxGames
-        .filter(g => {
-          // Exclude entries without a real name (orphaned app IDs)
-          const rawName = g.name?.trim()
-          const isOrphaned = !rawName || rawName === g.app_id || /^app\s*\d*$/i.test(rawName) || rawName.toLowerCase() === 'appid'
-          if (isOrphaned) return false
-          if (!showAdult && getPrimaryCategoryForGame(g) === 'nsfw') return false
-          const info = typeResults[g.app_id]
-          if (!info) return true
-          if (!showTools && !info.isGame) return false
-          if (info.isAdult && !showAdult) return false
-          return true
-        })
-        .filter(g => !installedAppIds.has(g.app_id))
-
-      // Merge catalog + filtered depotbox, then sort by relevance
-      const allResults = sortSearchResults([...filteredCatalog, ...filteredDepotbox], q.trim())
-      setSearchResults(allResults)
+      const sorted = sortSearchResults(filtered, q.trim())
+      setSearchResults(sorted)
     } catch (err: any) {
       if (abortController.signal.aborted) return
       showToast('error', `${t('store.searchFailed')}: ${err.message}`)
     } finally {
       if (!abortController.signal.aborted) setSearching(false)
     }
-  }, [showToast, installedAppIds, showTools, showAdult])
+  }, [showToast, installedAppIds, showAdult])
 
   useEffect(() => {
     const timeout = setTimeout(() => doSearch(query), 400)
     return () => clearTimeout(timeout)
   }, [query, doSearch])
 
-  const GOLDSRC_MOD_APP_IDS = new Set([
-    '10', '20', '30', '40', '50', '60', '80', '100', '130',
-  ])
+  const FEATURED_GAMES = [
+    { id: '1245620', name: 'ELDEN RING', tag: 'Destacado de la semana', desc: 'Álzate, Sinluz. Explora las Tierras Intermedias en el aclamado RPG de acción de FromSoftware.' },
+    { id: '1091500', name: 'Cyberpunk 2077', tag: 'Popular', desc: 'Sumérgete en Night City, una megalópolis obsesionada con el poder, el glamur y las modificaciones corporales.' },
+    { id: '1174180', name: 'Red Dead Redemption 2', tag: 'Clásico moderno', desc: 'La épica historia de Arthur Morgan y la banda de Van der Linde, en la América del cambio de siglo.' },
+    { id: '2358720', name: 'Black Myth: Wukong', tag: 'Novedad', desc: 'Un RPG de acción inspirado en la mitología china y el clásico Viaje al Oeste.' },
+  ] as const
+
+  const heroCdn = (id: string) => `https://cdn.akamai.steamstatic.com/steam/apps/${id}/library_hero.jpg`
+  const heroHeaderCdn = (id: string) => `https://cdn.akamai.steamstatic.com/steam/apps/${id}/header.jpg`
 
   const enqueueGame = useDownloadQueueStore((s) => s.enqueue)
 
@@ -315,175 +324,38 @@ export default function StorePage() {
     const launcherInfo = getLauncherInfo(game.app_id)
     if (launcherInfo) {
       const message = t('store.incompatibleLauncher').replace('{launcher}', launcherInfo.launcher)
-      if (!window.confirm(`${t('store.incompatibleLauncherTitle')}\n\n${message}\n\n${t('store.installAnyway')}?`)) {
-        return
-      }
+      setConfirmDialog({
+        title: t('store.incompatibleLauncherTitle'),
+        message: `${message}\n\n${t('store.installAnyway')}?`,
+        variant: 'warning',
+        onConfirm: () => enqueueGame({ appId: game.app_id, name: game.name || `App ${game.app_id}` }),
+      })
+      return
     }
     enqueueGame({ appId: game.app_id, name: game.name || `App ${game.app_id}` })
   }
 
-  const processQueue = useCallback(async () => {
-    const { processing, dequeue, setProcessing, setCurrent } = useDownloadQueueStore.getState()
-    if (processing) return
-    const item = dequeue()
-    if (!item) return
-
-    setProcessing(true)
-    setCurrent(item)
-    setInstalling(item.appId)
-    try {
-      const closeResult = await window.steamtools.closeSteam()
-      if (closeResult && !closeResult.success) {
-        showToast('error', closeResult.error || t('store.failedCloseSteam'))
-        return
-      }
-
-      if (GOLDSRC_MOD_APP_IDS.has(item.appId)) {
-        const baseResp = await installGame('70')
-        if (baseResp.status === 'ready' && baseResp.game) {
-          const result = await window.steamtools.storeInstallGame({
-            app_id: '70',
-            name: 'Half-Life',
-            lua_content: baseResp.game.lua_content,
-            manifest_files: baseResp.game.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
-            depot_keys: baseResp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
-          })
-          if (!result.success) {
-            showToast('error', result.errors?.[0] || result.error || t('store.failedInstallBase'))
-            return
-          }
-          try { await reportDownloaded('70') } catch {}
-        } else if (baseResp.status === 'queued') {
-          await pollJobRef.current!(baseResp.job_id!, '70')
-        }
-      }
-
-      const resp = await installGame(item.appId)
-
-      if (resp.status === 'ready' && resp.game) {
-        const result = await window.steamtools.storeInstallGame({
-          app_id: resp.game.app_id,
-          name: resp.game.name,
-          lua_content: resp.game.lua_content,
-          manifest_files: resp.game.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
-          depot_keys: resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
-        })
-
-        const actions: InstallResult[] = []
-        if (result.actions) for (const a of result.actions) actions.push({ type: 'info', message: a })
-        if (result.errors) for (const e of result.errors) actions.push({ type: 'error', message: e })
-        if (result.success) {
-          actions.push({ type: 'success', message: `${item.name} installed` })
-          try { await reportDownloaded(item.appId) } catch {}
-          consumeGame(item.appId)
-        }
-        for (const action of actions) {
-          window.steamtools.addLog({
-            level: action.type === 'error' ? 'ERROR' : 'INFO',
-            message: `[Store] ${action.message}`,
-          }).catch((e) => console.warn('[Store] addLog failed:', e))
-        }
-        if (!result.success) {
-          showToast('error', result.errors?.[0] || result.error || t('store.installFailed'))
-        }
-      } else if (resp.status === 'queued' && resp.job_id) {
-        await pollJobRef.current!(resp.job_id, item.appId, item.name)
-      } else {
-        showToast('error', t('store.unexpectedResponse'))
-      }
-    } catch (err: any) {
-      window.steamtools.addLog({ level: 'ERROR', message: `[Store] Install failed: ${err.message}` }).catch((e) => console.warn('[Store] addLog failed:', e))
-      showToast('error', err.message)
-    } finally {
-      setInstalling(null)
-      setImportProgress(null)
-      setCurrent(null)
-      setProcessing(false)
-      // If queue is empty, offer restart
-      if (useDownloadQueueStore.getState().queue.length === 0) {
-        const shouldRestart = window.confirm(t('store.restartPrompt'))
-        if (shouldRestart) {
-          const r = await window.steamtools.restartSteam()
-          if (!r?.success) showToast('error', r?.error || t('store.restartFailed'))
-        }
-      }
-      processQueue()
-    }
-  }, [showToast, setInstalling, setImportProgress, consumeGame])
-
-  // Start processing whenever the queue changes
-  const queue = useDownloadQueueStore((s) => s.queue)
-  const processing = useDownloadQueueStore((s) => s.processing)
+  // Auto-play hero carousel — advance every 6s, pause on hover
   useEffect(() => {
-    if (!processing && queue.length > 0) {
-      processQueue()
+    if (heroPaused) {
+      if (heroTimerRef.current) {
+        clearInterval(heroTimerRef.current)
+        heroTimerRef.current = null
+      }
+      return
     }
-  }, [queue, processing, processQueue])
-
-  const pollJob = async (jobId: string, appId: string, gameName?: string) => {
-    pollAbortRef.current?.abort()
-    const abortController = new AbortController()
-    pollAbortRef.current = abortController
-
-    setImportProgress({ appId, status: 'queued' })
-
-    let attempts = 0
-    const maxAttempts = 200
-    while (attempts < maxAttempts) {
-      if (abortController.signal.aborted) return
-      await new Promise(resolve => setTimeout(resolve, 3000))
-      if (abortController.signal.aborted) return
-      attempts++
-
-      let job
-      try {
-        job = await getJobStatus(jobId)
-      } catch (err: any) {
-        window.steamtools?.addLog?.({ level: 'WARN', message: `[Store] pollJob: getJobStatus error (attempt ${attempts}): ${err.message}` })?.catch?.(() => {})
-        continue
-      }
-
-      if (job.status === 'completed' && job.result) {
-        setImportProgress(null)
-        const result = await window.steamtools.storeInstallGame({
-          app_id: job.result.app_id,
-          name: job.result.name,
-          lua_content: job.result.lua_content,
-          manifest_files: job.result.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
-          depot_keys: job.result.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
-        })
-        if (result.success) {
-          try { await reportDownloaded(appId) } catch {}
-          consumeGame(appId)
-        } else {
-          showToast('error', result.errors?.[0] || result.error || `${t('store.installFailed')} after import`)
-        }
-        return
-      }
-
-      if (job.status === 'failed') {
-        setImportProgress(null)
-        showToast('error', job.error_message || t('store.importFailed'))
-        return
-      }
-
-      setImportProgress({ appId, status: job.status })
-    }
-
-    if (abortController.signal.aborted) return
-    setImportProgress(null)
-    showToast('error', t('store.importTimeout'))
-  }
-
-  pollJobRef.current = pollJob
-
-  useEffect(() => {
+    heroTimerRef.current = setInterval(() => {
+      setHeroIndex((prev) => (prev + 1) % FEATURED_GAMES.length)
+    }, 6000)
     return () => {
-      pollAbortRef.current?.abort()
+      if (heroTimerRef.current) {
+        clearInterval(heroTimerRef.current)
+        heroTimerRef.current = null
+      }
     }
-  }, [])
+  }, [heroPaused])
 
-  const cardProps = { onInstall: handleInstall, installing, onSelect: setSelectedGame }
+  const cardProps = { onInstall: handleInstall, installing, onSelect: (g: MergedGame) => navigate(`/store/${g.app_id}`) }
   const showSearch = query.trim().length >= 2 && searchResults !== null
 
   usePageHeader(
@@ -541,6 +413,81 @@ export default function StorePage() {
         </div>
       )}
 
+      {/* Hero carousel */}
+      {tab === 'browse' && !showSearch && (
+        <section
+          onMouseEnter={() => setHeroPaused(true)}
+          onMouseLeave={() => setHeroPaused(false)}
+          className="relative w-full h-[300px] rounded-[18px] overflow-hidden mb-3 animate-fade-in"
+          style={{ border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 16px 48px rgba(0,0,0,0.45)' }}
+        >
+          {FEATURED_GAMES.map((g, i) => (
+            <div
+              key={g.id}
+              className="absolute inset-0"
+              style={{
+                opacity: i === heroIndex ? 1 : 0,
+                transform: i === heroIndex ? 'scale(1.04)' : 'scale(1)',
+                transition: 'opacity 1s ease, transform 7s linear',
+                pointerEvents: i === heroIndex ? 'auto' : 'none',
+              }}
+            >
+              <img
+                src={heroCdn(g.id)}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).src = heroHeaderCdn(g.id) }}
+              />
+              <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, rgba(9,9,11,0.92) 0%, rgba(9,9,11,0.55) 45%, transparent 80%)' }} />
+              <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(9,9,11,0.7), transparent 45%)' }} />
+              <div className="absolute inset-0 flex flex-col justify-center pl-14 pr-10" style={{ maxWidth: '620px' }}>
+                <span className="flex items-center gap-2 text-[11px] font-bold tracking-[0.1em] uppercase mb-2.5" style={{ color: '#3BB2F7' }}>
+                  <Star className="w-3.5 h-3.5 fill-current" />
+                  {g.tag}
+                </span>
+                <h2 className="text-[36px] font-extrabold text-white leading-[1.05] tracking-[-0.02em] mb-2.5" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+                  {g.name}
+                </h2>
+                <p className="text-sm leading-relaxed text-[#d4d4d8] mb-5 max-w-[520px]">{g.desc}</p>
+                <div className="flex gap-3 items-center">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleInstall({ app_id: g.id, name: g.name, source: 'catalog' } as MergedGame) }}
+                    className="flex items-center gap-2.5 px-[26px] py-3.5 rounded-xl text-sm font-bold text-white border-none cursor-pointer transition-all hover:brightness-110 hover:-translate-y-px"
+                    style={{ background: 'linear-gradient(135deg,#3BB2F7,#2A8FD1)', boxShadow: '0 8px 24px rgba(59,178,247,0.4)' }}
+                  >
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    {t('store.install')}
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate(`/store/${g.id}`) }}
+                    className="flex items-center gap-2 px-[22px] py-3.5 rounded-xl text-sm font-semibold cursor-pointer transition-all"
+                    style={{ color: '#e4e4e7', background: 'rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.12)' }}
+                  >
+                    {t('store.seeDetails') || 'Ver detalles'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+          {/* Navigation arrows removed intentionally */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 z-10">
+            {FEATURED_GAMES.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setHeroIndex(i)}
+                className="rounded-full border-none cursor-pointer p-0 transition-all duration-[400ms]"
+                style={{
+                  width: i === heroIndex ? '32px' : '12px',
+                  height: '10px',
+                  background: i === heroIndex ? '#3BB2F7' : 'rgba(255,255,255,0.5)',
+                  boxShadow: i === heroIndex ? '0 0 12px rgba(59,178,247,0.6)' : 'none',
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Search results */}
       {showSearch && (() => {
         const visibleResults = hideInstalled ? searchResults!.filter(g => !installedAppIds.has(g.app_id)) : searchResults!
@@ -578,11 +525,13 @@ export default function StorePage() {
                 <button
                   key={cat.id}
                   onClick={() => setBrowseFilter(cat.id as CategoryId)}
-                  className={`flex items-center gap-2.5 h-11 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    active
-                      ? 'bg-accent/20 text-accent border border-accent/30 shadow-[0_0_16px_rgba(39,185,242,0.15)]'
-                      : 'bg-white/[0.04] border border-white/[0.08] text-text-secondary hover:text-text-bright hover:bg-white/[0.08]'
-                  }`}
+                  className="flex items-center gap-2.5 h-11 px-4 rounded-xl text-sm font-medium transition-all duration-200"
+                  style={{
+                    background: active ? 'rgba(59,178,247,0.2)' : 'rgba(255,255,255,0.04)',
+                    color: active ? '#3BB2F7' : '#a1a1aa',
+                    border: `1px solid ${active ? 'rgba(59,178,247,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                    boxShadow: active ? '0 0 16px rgba(59,178,247,0.15)' : 'none',
+                  }}
                 >
                   <Icon className="w-5 h-5" />
                   {cat.label}
@@ -594,24 +543,45 @@ export default function StorePage() {
           {browseVisibleGames.length > 0 && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-                {browseVisibleGames.map(g => <GameCard key={g.app_id} game={g} src={getDefaultGameImageUrl(g)} isInstalled={installedAppIds.has(g.app_id)} {...cardProps} />)}
+                {browseVisibleGames.map((g, idx) => {
+                  if (!animStylesRef.current[g.app_id]) {
+                    const animCounter = Object.keys(animStylesRef.current).length
+                    const relativeIdx = animCounter % 60
+                    // Initial batch (first 60): full staggered animation
+                    // Scroll-loaded (60+): fast appearance, almost instant
+                    const isInitialBatch = animCounter < 60
+                    animStylesRef.current[g.app_id] = isInitialBatch
+                      ? {
+                          animation: `card-shoot 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both`,
+                          animationDelay: `${Math.min(relativeIdx, 20) * 0.08}s`,
+                        }
+                      : {
+                          animation: `card-shoot 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both`,
+                          animationDelay: `${Math.min(relativeIdx, 6) * 0.03}s`,
+                        }
+                  }
+                  return (
+                    <div key={g.app_id} style={animStylesRef.current[g.app_id]}>
+                      <GameCard game={g} src={getDefaultGameImageUrl(g)} isInstalled={installedAppIds.has(g.app_id)} {...cardProps} />
+                    </div>
+                  )
+                })}
               </div>
-              {browseVisibleCount < browseFilteredGames.length && (
-                <div className="flex justify-center pt-4">
-                  <button
-                    onClick={() => setBrowseVisibleCount(c => c + 60)}
-                    className="px-6 py-3 rounded-xl bg-white/[0.05] border border-white/[0.08] text-sm font-medium text-text-secondary hover:text-text-bright hover:bg-white/[0.08] transition-colors"
-                  >
-                    {t('store.loadMore')} ({browseFilteredGames.length - browseVisibleCount})
-                  </button>
+              {hasMore && (
+                <div ref={sentinelRef} className="h-4" />
+              )}
+              {loadingMore && (
+                <div className="flex items-center justify-center gap-3 py-6 text-text-dim">
+              <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#3BB2F7' }} />
+              <span className="text-lg font-semibold">Cargando más juegos...</span>
                 </div>
               )}
             </>
           )}
 
-          {browseLoading && browseFilteredGames.length === 0 && (
+          {browseLoading && (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-              {Array.from({ length: 30 }).map((_, i) => (
+              {Array.from({ length: 12 }).map((_, i) => (
                 <GameCardSkeleton key={i} />
               ))}
             </div>
@@ -626,16 +596,6 @@ export default function StorePage() {
         </div>
       )}
 
-      {/* Game Detail Modal */}
-      {selectedGame && (
-        <GameDetailModal
-          game={selectedGame}
-          installing={installing}
-          onInstall={handleInstall}
-          onClose={() => setSelectedGame(null)}
-        />
-      )}
-
       {/* Scroll to top */}
       <button
         onClick={() => {
@@ -647,6 +607,27 @@ export default function StorePage() {
       >
         <ArrowUp className="w-6 h-6" />
       </button>
+
+      {/* Confirm Modal */}
+      {confirmDialog && (
+        <ConfirmModal
+          open={!!confirmDialog}
+          onClose={() => setConfirmDialog(null)}
+          onConfirm={confirmDialog.onConfirm}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          variant={confirmDialog.variant}
+          confirmLabel={confirmDialog.confirmLabel}
+          cancelLabel={confirmDialog.cancelLabel}
+        />
+      )}
+
+      {/* Donation Modal */}
+      <DonationModal
+        open={showDonation}
+        onClose={() => setShowDonation(false)}
+        onDismissForever={() => setShowDonation(false)}
+      />
     </div>
   )
 }

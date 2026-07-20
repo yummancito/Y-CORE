@@ -61,6 +61,31 @@ bot-tickets/
 bot-seguridad/
 bot-discord-y-core/
 
+# ===== Build Artifacts & Temp Files =====
+
+# Built installers
+Y-core-Setup-*.exe
+Y-core-*-x64.exe
+
+# Auto-update manifests
+latest.yml
+latest-mac.yml
+latest-linux.yml
+
+# Asar extraction (debug)
+asar-extract/
+asar.txt
+
+# npm lockfile (project uses pnpm)
+package-lock.json
+package-lock.yaml
+
+# Windows temp artifacts
+nul
+
+# Tool metadata
+.freebuff/
+
 # ===== Public Release Exclusions =====
 
 # API backend (private — not open source)
@@ -68,12 +93,8 @@ apps/
 
 # Native DLLs and injection logic (private)
 native/
-electron/modules/dll-inject.ts
-electron/modules/depot-keys.ts
-electron/modules/manifest-sync.ts
 electron/modules/signature-cache.ts
 electron/modules/signature-report.ts
-electron/modules/goldsrc.ts
 electron/modules/store-ipc.ts
 electron/modules/steam-ipc.ts
 

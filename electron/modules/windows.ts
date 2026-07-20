@@ -211,6 +211,11 @@ export function createWindow(): void {
     state.mainWindow?.close()
   })
 
+  // Open DevTools for debugging (video loading issues, etc.)
+  if (!app.isPackaged) {
+    win.webContents.openDevTools({ mode: 'detach' })
+  }
+
   const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173/'
   if (process.env.VITE_DEV_SERVER_URL || !app.isPackaged) {
     win.loadURL(devServerUrl)
@@ -227,7 +232,8 @@ export function createWindow(): void {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self' http://localhost:5173 ws://localhost:5173 http://localhost:3000 https://y-core-render-api-rxwd.onrender.com",
+        "connect-src 'self' http://localhost:5173 ws://localhost:5173 http://localhost:3000 https://y-core-render-api-rxwd.onrender.com https://store.steampowered.com",
+        "media-src 'self' https:",
       ].join('; ')
     : [
         "default-src 'self'",
@@ -235,7 +241,8 @@ export function createWindow(): void {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self' https://api.ycore.app https://y-core-render-api-rxwd.onrender.com",
+        "connect-src 'self' https://api.ycore.app https://y-core-render-api-rxwd.onrender.com https://store.steampowered.com",
+        "media-src 'self' https:",
       ].join('; ')
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {

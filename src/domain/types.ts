@@ -20,6 +20,7 @@ export interface InstalledGame {
   bytesDownloaded: number
   autoUpdateBehavior: string
   manifestFile: string
+  playtime?: number
 }
 
 export interface LibraryFoldersResult {
