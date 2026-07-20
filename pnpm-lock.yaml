@@ -32,6 +32,12 @@ importers:
       fuse.js:
         specifier: ^7.4.2
         version: 7.4.2
+      graceful-fs:
+        specifier: ^4.2.11
+        version: 4.2.11
+      jsonfile:
+        specifier: ^6.1.0
+        version: 6.2.1
       koffi:
         specifier: ^3.1.1
         version: 3.1.1
@@ -59,6 +65,9 @@ importers:
       react-window:
         specifier: ^2.2.7
         version: 2.2.7(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      universalify:
+        specifier: ^2.0.1
+        version: 2.0.1
       zustand:
         specifier: ^5.0.14
         version: 5.0.14(@types/react@18.3.31)(react@18.3.1)
