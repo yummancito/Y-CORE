@@ -143,39 +143,38 @@ function makeConnection(sock: net.Socket): CmConnection {
     pendingOffset: 0,
   }
 
-  // Pre-handshake packet assembler. Caller (handshake.ts) provides the EMsg
-  // size via lookup; this consumes raw bytes and emits completed packets.
+  // Pre-handshake packet assembler.
+  //
+  // Steam CM TCP wire framing (ALL packets, pre- and post-handshake):
+  //   [u32le payload_length][4-byte magic "VT01"][payload_length bytes payload]
+  //
+  // The magic is 0x56 0x54 0x30 0x31 = "VT01". Without stripping this 8-byte
+  // header, we misread the length (0x00000018=24) as the EMsg → "unmapped EMsg".
+  // The payload itself is the struct whose first u32le IS the real EMsg (109/111).
+  const MAGIC_VT01 = 0x56543031 // "VT01" as u32be; on the wire it's bytes 56 54 30 31
   function ingestPre(chunk: Buffer): void {
     state.preBuf = state.preBuf.length === 0
       ? chunk
       : Buffer.concat([state.preBuf, chunk])
-    // Try to extract exactly one packet at a time. EMsg at offset 0..3.
-    while (state.preBuf.length >= 4) {
-      const emsg = state.preBuf.readUInt32LE(0)
-      const size = PRE_HANDSHAKE_EMSG_BY_SIZE[emsg]
-      if (size === undefined) {
-        // Unknown pre-handshake EMsg: throw instead of advancing; safer to
-        // surface to caller than silently consume.
+    // Each frame: 4-byte length + 4-byte magic + payload.
+    while (state.preBuf.length >= 8) {
+      const payloadLen = state.preBuf.readUInt32LE(0)
+      const magic = state.preBuf.readUInt32BE(4)
+      if (magic !== MAGIC_VT01) {
         const err = new Error(
-          `ingestPre: unknown pre-handshake EMsg ${emsg} (no fixed-size mapping); buffer head hex=${state.preBuf.subarray(0, 8).toString('hex')}`,
+          `ingestPre: bad frame magic 0x${magic.toString(16)} (expected VT01/0x56543031); head hex=${state.preBuf.subarray(0, 12).toString('hex')}`,
         )
-      // Notify every waiter with `null` (Promises reject via the wrapped
-      // branch in readPreHandshakePacket), then destroy the socket so the
-      // 'data' handler doesn't bubble an unhandled exception. Eager-fire:
-      // setting `length = 0` would drop callbacks without invoking them,
-      // forcing the 15s setTimeout to reject instead of failing fast.
-      while (state.preWaiters.length > 0) state.preWaiters.shift()!(null)
-      try {
-        sock.destroy(err)
-      } catch {
-        // best-effort: socket might already be closed by remote for unused-EMsg
+        while (state.preWaiters.length > 0) state.preWaiters.shift()!(null)
+        try { sock.destroy(err) } catch { /* best-effort */ }
+        return
       }
-      return
-      }
-      if (state.preBuf.length < size) return
-      const packet = state.preBuf.subarray(0, size)
-      state.preBuf = state.preBuf.subarray(size)
-      const pre: PreHandshakePacket = { emsg, payload: packet }
+      const totalFrameLen = 8 + payloadLen
+      if (state.preBuf.length < totalFrameLen) return // wait for more bytes
+      const payload = state.preBuf.subarray(8, totalFrameLen)
+      state.preBuf = state.preBuf.subarray(totalFrameLen)
+      // The real EMsg is the first u32le of the payload struct.
+      const emsg = payload.length >= 4 ? payload.readUInt32LE(0) : -1
+      const pre: PreHandshakePacket = { emsg, payload }
       if (state.preWaiters.length > 0) {
         state.preWaiters.shift()!(pre)
       } else {
@@ -192,8 +191,9 @@ function makeConnection(sock: net.Socket): CmConnection {
         chunk,
       ])
       state.pendingOffset = 0
-      if (state.pendingBuffer.length < 4) return
-      state.pendingLength = state.pendingBuffer.readUInt32LE(0) + 4
+      // Frame = [u32le encrypted_length][4-byte magic VT01][encrypted].
+      if (state.pendingBuffer.length < 8) return
+      state.pendingLength = state.pendingBuffer.readUInt32LE(0) + 8
     } else {
       state.pendingBuffer = Buffer.concat([
         state.pendingBuffer.subarray(state.pendingOffset),
@@ -207,7 +207,8 @@ function makeConnection(sock: net.Socket): CmConnection {
       state.pendingOffset = 0
       let decoded: Buffer
       try {
-        decoded = decryptPacket(state.sessionKey!, packet.subarray(4))
+        // Skip the 8-byte frame header ([length][VT01]); decrypt the rest.
+        decoded = decryptPacket(state.sessionKey!, packet.subarray(8))
       } catch (err) {
         // AES decrypt failure usually means protocol mismatch / rotation / wrong
         // session key. Surface as explicit error to any active waiter, then
@@ -229,8 +230,8 @@ function makeConnection(sock: net.Socket): CmConnection {
       } else {
         state.postQueue.push(decoded)
       }
-      state.pendingLength = state.pendingBuffer.length >= 4
-        ? state.pendingBuffer.readUInt32LE(0) + 4
+      state.pendingLength = state.pendingBuffer.length >= 8
+        ? state.pendingBuffer.readUInt32LE(0) + 8
         : null
     }
   }
@@ -309,16 +310,22 @@ function makeConnection(sock: net.Socket): CmConnection {
           'writePreHandshakeBuffer called after handshake completed; use writePostHandshakeBuffer',
         )
       }
-      sock.write(buf)
+      // Wrap in Steam's CM frame: [u32le payload_length][4-byte magic "VT01"][payload].
+      const header = Buffer.alloc(8)
+      header.writeUInt32LE(buf.length, 0)
+      header.write('VT01', 4, 'ascii')
+      sock.write(Buffer.concat([header, buf]))
     },
     writePostHandshakeBuffer(buf: Buffer) {
       if (state.sessionKey === null) {
         throw new Error('writePostHandshakeBuffer called before handshake completed')
       }
       const encrypted = encryptPacket(state.sessionKey, buf)
-      const lenBuf = Buffer.alloc(4)
-      lenBuf.writeUInt32LE(encrypted.length, 0)
-      sock.write(Buffer.concat([lenBuf, encrypted]))
+      // Frame: [u32le encrypted_length][4-byte magic "VT01"][encrypted].
+      const header = Buffer.alloc(8)
+      header.writeUInt32LE(encrypted.length, 0)
+      header.write('VT01', 4, 'ascii')
+      sock.write(Buffer.concat([header, encrypted]))
     },
     close: () =>
       new Promise<void>((resolve) => {
