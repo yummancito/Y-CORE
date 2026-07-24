@@ -380,16 +380,19 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
               consumeGame(item.appId)
               safeAddLog('INFO', `[Install] ${item.name} downloaded via steampipe (appId=${resp.game.app_id})`)
             } else {
-              fallbackReason = 'spawn-failed'
-              await useSettingsStore.getState().setInstallFallbackReason(fallbackReason)
-              showToast('error', steampipeResult.error || 'Steampipe download failed')
-              safeAddLog('WARN', `[Install] Steampipe failed: ${steampipeResult.error}`)
+              // El usuario ELIGIÓ explícitamente "Sin Steam". NO caemos a Steam.
+              // Abortamos y mostramos el error de steampipe.
+              aborted = true
+              const errDetail = (steampipeResult.errors && steampipeResult.errors.length > 0)
+                ? steampipeResult.errors.join('; ')
+                : (steampipeResult.error || 'Descarga sin Steam falló')
+              showToast('error', `Descarga sin Steam falló: ${errDetail}`, 8000)
+              safeAddLog('WARN', `[Install] Steampipe failed (no fallback to Steam): ${errDetail}`)
             }
           } catch (err: any) {
-            fallbackReason = 'spawn-failed'
-            await useSettingsStore.getState().setInstallFallbackReason(fallbackReason)
-            showToast('error', err.message || 'Steampipe error')
-            safeAddLog('WARN', `[Install] Steampipe error: ${err.message}`)
+            aborted = true
+            showToast('error', `Error en descarga sin Steam: ${err.message}`, 8000)
+            safeAddLog('WARN', `[Install] Steampipe error (no fallback): ${err.message}`)
           }
         }
 

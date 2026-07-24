@@ -294,7 +294,7 @@ export async function installGameCore(
   const steamAppsPath = getSteamAppsPath()
   if (steamAppsPath) {
     const depotIdsWithKeys = new Set(depotKeys.map((k) => k.depot_id))
-    const acfResult = await createAppManifestFromLua(steamAppsPath, appId, cleanedLua, depotIdsWithKeys)
+    const acfResult = await createAppManifestFromLua(appId, cleanedLua, gameName, depotIdsWithKeys)
     if (acfResult.success) {
       actions.push(`appmanifest_${appId}.acf created`)
       if (GOLDSRC_MOD_APP_IDS.has(appId)) {          const baseAcfResult = await createGoldSrcBaseAppManifest(cleanedLua, depotIdsWithKeys)
