@@ -36,35 +36,41 @@ async function downloadGameWithoutSteam(
   const actions: string[] = []
   const errors: string[] = []
   const appNum = parseInt(appId, 10)
+  let successCount = 0
 
   try {
-    // Solo descargar depots que tenemos manifests para
-    const depotsToDownload = depotKeys.filter(dk =>
-      manifestFiles.some(m => m.depot_id === dk.depot_id)
-    )
+    // Crear un map de depotId -> manifest para lookup rápido
+    const manifestMap = new Map(manifestFiles.map(m => [m.depot_id, m.manifest_gid]))
 
-    if (depotsToDownload.length === 0) {
+    if (manifestMap.size === 0) {
       return {
         success: false,
-        error: 'No depots with manifests available to download',
-        errors: ['No manifest files found for any depot'],
+        error: 'No manifest files available to download',
+        errors: ['Cannot download without manifest files'],
       }
     }
 
-    safeAddLog('INFO', `[Steampipe] Starting download for ${gameName} (appId=${appId}) with ${depotsToDownload.length} depots`)
+    safeAddLog('INFO', `[Steampipe] Starting download for ${gameName} (appId=${appId}) with ${manifestMap.size} manifest(s)`)
 
     // Descargar cada depot que tenemos manifest
-    for (const depotKey of depotsToDownload) {
-      const manifest = manifestFiles.find(m => m.depot_id === depotKey.depot_id)!
-      const depotNum = parseInt(depotKey.depot_id, 10)
+    for (const [depotId, manifestId] of manifestMap) {
+      const depotNum = parseInt(depotId, 10)
+      const depotKey = depotKeys.find(k => k.depot_id === depotId)
+
+      if (!depotKey) {
+        errors.push(`Depot ${depotNum}: No depot key available`)
+        safeAddLog('WARN', `[Steampipe] Depot ${depotNum} has no key, skipping`)
+        continue
+      }
 
       try {
-        safeAddLog('INFO', `[Steampipe] Downloading depot ${depotNum} (manifest: ${manifest.manifest_gid})`)
+        safeAddLog('INFO', `[Steampipe] Downloading depot ${depotNum} (manifest: ${manifestId})`)
+        showToast('info', `Descargando depot ${depotNum}...`)
 
         const downloadResult = await window.steamtools.downloadDepot({
           appId: appNum,
           depotId: depotNum,
-          manifestId: manifest.manifest_gid,
+          manifestId: manifestId,
           installDir: `C:\\Users\\${process.env.USERNAME || 'User'}\\AppData\\Local\\Y-core\\Games\\${appId}`,
           cellId: 0,
         })
@@ -72,28 +78,29 @@ async function downloadGameWithoutSteam(
         if (downloadResult.success) {
           const sizeMB = (downloadResult.bytesDownloaded / 1024 / 1024).toFixed(2)
           const durationSec = (downloadResult.durationMs / 1000).toFixed(1)
-          actions.push(`Depot ${depotNum}: ${sizeMB} MB in ${durationSec}s`)
-          safeAddLog('INFO', `[Steampipe] Depot ${depotNum} downloaded successfully: ${sizeMB} MB`)
+          actions.push(`✓ Depot ${depotNum}: ${sizeMB} MB (${durationSec}s)`)
+          safeAddLog('INFO', `[Steampipe] Depot ${depotNum} downloaded: ${sizeMB} MB`)
+          successCount++
         } else {
-          const errMsg = `Depot ${depotNum}: ${downloadResult.errorMessage || 'unknown error'}`
-          errors.push(errMsg)
-          safeAddLog('WARN', `[Steampipe] ${errMsg}`)
+          const errMsg = downloadResult.errorMessage || 'unknown error'
+          errors.push(`Depot ${depotNum}: ${errMsg}`)
+          safeAddLog('WARN', `[Steampipe] Depot ${depotNum} failed: ${errMsg}`)
         }
       } catch (err: any) {
-        const errMsg = `Depot ${depotNum} error: ${err.message}`
-        errors.push(errMsg)
-        safeAddLog('ERROR', `[Steampipe] ${errMsg}`)
+        const errMsg = err.message || String(err)
+        errors.push(`Depot ${depotNum}: ${errMsg}`)
+        safeAddLog('ERROR', `[Steampipe] Depot ${depotNum} exception: ${errMsg}`)
       }
     }
 
-    if (errors.length === 0) {
-      const msg = `${gameName} downloaded successfully to C:\\Users\\{user}\\AppData\\Local\\Y-core\\Games\\${appId}\\`
+    safeAddLog('INFO', `[Steampipe] Download summary: ${successCount}/${manifestMap.size} depots downloaded`)
+
+    if (successCount > 0) {
+      const msg = `${gameName}: ${successCount}/${manifestMap.size} depots downloaded to AppData/Local/Y-core/Games/${appId}`
       actions.push(msg)
-      safeAddLog('INFO', `[Steampipe] ${gameName} downloaded completely`)
-      return { success: true, actions }
+      return { success: errors.length === 0, actions, errors }
     } else {
-      safeAddLog('WARN', `[Steampipe] ${gameName} completed with errors: ${errors.join('; ')}`)
-      return { success: false, error: errors[0], actions, errors }
+      return { success: false, error: 'No depots downloaded successfully', actions, errors }
     }
   } catch (err: any) {
     const errMsg = err.message || String(err)
