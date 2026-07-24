@@ -35,46 +35,73 @@ async function downloadGameWithoutSteam(
 
   const actions: string[] = []
   const errors: string[] = []
+  const appNum = parseInt(appId, 10)
 
   try {
-    // Descargar cada depot
-    for (const depotKey of depotKeys) {
-      const manifest = manifestFiles.find(m => m.depot_id === depotKey.depot_id)
-      if (!manifest) {
-        errors.push(`No manifest found for depot ${depotKey.depot_id}`)
-        continue
+    // Solo descargar depots que tenemos manifests para
+    const depotsToDownload = depotKeys.filter(dk =>
+      manifestFiles.some(m => m.depot_id === dk.depot_id)
+    )
+
+    if (depotsToDownload.length === 0) {
+      return {
+        success: false,
+        error: 'No depots with manifests available to download',
+        errors: ['No manifest files found for any depot'],
       }
+    }
+
+    safeAddLog('INFO', `[Steampipe] Starting download for ${gameName} (appId=${appId}) with ${depotsToDownload.length} depots`)
+
+    // Descargar cada depot que tenemos manifest
+    for (const depotKey of depotsToDownload) {
+      const manifest = manifestFiles.find(m => m.depot_id === depotKey.depot_id)!
+      const depotNum = parseInt(depotKey.depot_id, 10)
 
       try {
+        safeAddLog('INFO', `[Steampipe] Downloading depot ${depotNum} (manifest: ${manifest.manifest_gid})`)
+
         const downloadResult = await window.steamtools.downloadDepot({
-          appId: parseInt(appId, 10),
-          depotId: parseInt(depotKey.depot_id, 10),
+          appId: appNum,
+          depotId: depotNum,
           manifestId: manifest.manifest_gid,
           installDir: `C:\\Users\\${process.env.USERNAME || 'User'}\\AppData\\Local\\Y-core\\Games\\${appId}`,
           cellId: 0,
         })
 
         if (downloadResult.success) {
-          actions.push(`Downloaded depot ${depotKey.depot_id}: ${(downloadResult.bytesDownloaded / 1024 / 1024).toFixed(2)} MB`)
+          const sizeMB = (downloadResult.bytesDownloaded / 1024 / 1024).toFixed(2)
+          const durationSec = (downloadResult.durationMs / 1000).toFixed(1)
+          actions.push(`Depot ${depotNum}: ${sizeMB} MB in ${durationSec}s`)
+          safeAddLog('INFO', `[Steampipe] Depot ${depotNum} downloaded successfully: ${sizeMB} MB`)
         } else {
-          errors.push(`Failed to download depot ${depotKey.depot_id}: ${downloadResult.errorMessage}`)
+          const errMsg = `Depot ${depotNum}: ${downloadResult.errorMessage || 'unknown error'}`
+          errors.push(errMsg)
+          safeAddLog('WARN', `[Steampipe] ${errMsg}`)
         }
       } catch (err: any) {
-        errors.push(`Error downloading depot ${depotKey.depot_id}: ${err.message}`)
+        const errMsg = `Depot ${depotNum} error: ${err.message}`
+        errors.push(errMsg)
+        safeAddLog('ERROR', `[Steampipe] ${errMsg}`)
       }
     }
 
     if (errors.length === 0) {
-      actions.push(`${gameName} downloaded successfully without Steam`)
+      const msg = `${gameName} downloaded successfully to C:\\Users\\{user}\\AppData\\Local\\Y-core\\Games\\${appId}\\`
+      actions.push(msg)
+      safeAddLog('INFO', `[Steampipe] ${gameName} downloaded completely`)
       return { success: true, actions }
     } else {
+      safeAddLog('WARN', `[Steampipe] ${gameName} completed with errors: ${errors.join('; ')}`)
       return { success: false, error: errors[0], actions, errors }
     }
   } catch (err: any) {
+    const errMsg = err.message || String(err)
+    safeAddLog('ERROR', `[Steampipe] Fatal error: ${errMsg}`)
     return {
       success: false,
-      error: err.message,
-      errors: [err.message],
+      error: errMsg,
+      errors: [errMsg],
     }
   }
 }
@@ -448,18 +475,30 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
         }
 
         if (!usedSteamCmd && !usedSteampipe && !aborted) {
-          let result = await window.steamtools.storeInstallGame({
-            app_id: resp.game.app_id,
-            name: resp.game.name,
-            lua_content: resp.game.lua_content,
-            manifest_files: resp.game.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
-            depot_keys: resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
-          })
+          // First, try with Steam if installed
+          const canUseSteam = await window.steamtools?.getSteamPath?.().then((r) => r.success).catch(() => false)
 
-          // Fallback: si Steam no está disponible, intenta descargar sin Steam
-          if (!result.success && result.error?.includes('Steam installation not found') && resp.game.depot_keys.length > 0) {
-            safeAddLog('INFO', `[Install] Steam not found, attempting download without Steam for ${item.name}`)
-            showToast('info', 'Steam no encontrado, descargando sin Steam...')
+          let result: any = null
+
+          if (canUseSteam) {
+            result = await window.steamtools.storeInstallGame({
+              app_id: resp.game.app_id,
+              name: resp.game.name,
+              lua_content: resp.game.lua_content,
+              manifest_files: resp.game.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
+              depot_keys: resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
+            })
+          }
+
+          // Fallback: si Steam no está disponible O storeInstallGame falló, usa steampipe
+          if (!result?.success && resp.game.depot_keys.length > 0) {
+            if (!canUseSteam) {
+              safeAddLog('INFO', `[Install] Steam not found, downloading without Steam for ${item.name}`)
+              showToast('info', 'Steam no encontrado, descargando sin Steam...')
+            } else {
+              safeAddLog('INFO', `[Install] storeInstallGame failed, trying steampipe fallback for ${item.name}`)
+              showToast('info', 'Usando fallback: steampipe...')
+            }
             try {
               result = await downloadGameWithoutSteam(
                 resp.game.app_id,
@@ -470,10 +509,19 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
             } catch (fallbackErr: any) {
               result = {
                 success: false,
-                error: `Fallback failed: ${fallbackErr.message}`,
+                error: `Steampipe fallback failed: ${fallbackErr.message}`,
                 actions: [],
-                errors: [`Fallback failed: ${fallbackErr.message}`],
+                errors: [`Steampipe fallback failed: ${fallbackErr.message}`],
               }
+            }
+          }
+
+          if (!result) {
+            result = {
+              success: false,
+              error: 'No installation method available',
+              actions: [],
+              errors: ['Steam is not installed and steampipe is not available'],
             }
           }
 
