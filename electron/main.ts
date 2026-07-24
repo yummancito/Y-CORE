@@ -11,11 +11,20 @@ const loadDlls = () => {
     const dllPath = path.join(__dirname, 'dll')
     if (process.platform === 'win32' && fs.existsSync(dllPath)) {
       process.env.PATH = `${dllPath};${process.env.PATH}`
-      require(path.join(dllPath, 'OpenSteamTool.dll'))
-      logger.info('OpenSteamTool DLLs loaded successfully', 'dll')
+      try {
+        const nativeBind = require('./dll/OpenSteamTool.node')
+        if (nativeBind) {
+          logger.info('OpenSteamTool native bindings loaded successfully', 'dll')
+        }
+      } catch (_nodeErr) {
+        // Fallback: if .node doesn't exist, just ensure PATH is set for child processes
+        if (fs.existsSync(path.join(dllPath, 'OpenSteamTool.dll'))) {
+          logger.info('OpenSteamTool DLLs available in PATH (lazy-loaded by child processes)', 'dll')
+        }
+      }
     }
   } catch (err: any) {
-    logger.warn(`Failed to load DLLs: ${err?.message}`, 'dll')
+    logger.warn(`Componentes de soporte de Steam no pudieron cargarse (la app sigue funcionando en modo limitado). Detalle: ${err?.message ?? 'sin detalle'}`, 'dll')
   }
 }
 loadDlls()
@@ -40,10 +49,43 @@ import { registerStoreImageHandlers } from './modules/store-images'
 import { registerOnlineFixHandlers } from './modules/onlinefix'
 import { registerDrmHandlers } from './modules/drm-remover'
 import { registerSteamLogWatcherHandlers, startSteamLogWatcher, stopSteamLogWatcher } from './modules/steam-log-watcher'
+import { cleanupStaleNativeVersions, getNativeDiagnostics } from './modules/ycore-native'
+import {
+  startSteamCmdInstall,
+  cancelSteamCmdInstall,
+  isSteamCmdAvailable,
+  getActiveJobs,
+  shutdownAllSteamCmdJobs,
+} from './modules/steamcmd-manager'
+// Phase 2 — pure-Node SteamKit anonymous F2P auth handler (steampipe:probeAnonymous).
+// Round-6 fix per reviewer: previously exported but never wired into whenReady.
+import { registerSteampipeHandlers } from './modules/steampipe'
 import { startAcfWatcher } from './modules/manifest-sync'
 import { initDiscordRpc, shutdownDiscordRpc } from './modules/discord-rpc'
 
 // ============================================
+// ---------------------------------------------------------------------------
+// Limpieza de DLLs nativos obsoletos
+//
+// electron-updater reemplaza el código del asar correctamente, pero las DLLs
+// versionadas en resources/native/v*/ se acumulan en cada update. Las
+// borramos al cerrar la app. Usamos `app.on('will-quit')` (Electron-canonical)
+// en lugar de `process.once('beforeExit')` — este último requiere event loop
+// vacío, y nuestra app tiene timers vivos (auto-updater 4h, manifest-sync 5s,
+// Discord RPC watcher, steam log watcher), por lo que beforeExit no dispara
+// de forma confiable cuando el usuario minimiza a la bandeja y luego sale.
+// ---------------------------------------------------------------------------
+app.on('will-quit', () => {
+  try {
+    cleanupStaleNativeVersions(app.getVersion())
+  } catch (err) {
+    logger.warn(
+      `[native-cleanup] will-quit failed: ${(err as Error)?.message ?? err}`,
+      'main'
+    )
+  }
+})
+
 // Crash Handling — log errors and notify user
 // ============================================
 
@@ -115,6 +157,165 @@ app.whenReady().then(async () => {
   registerAuthHandlers({ showMainWindow, createLoginWindow })
   registerAppHandlers({ showMainWindow, createLoginWindow: () => {} })
   registerSteamHandlers()
+  registerSteampipeHandlers()
+
+  // Diagnóstico nativo (ycore.dll) — disponible tanto en dev como empaquetado,
+  // así devs y operadores pueden inspeccionar el estado del binario sin abrir logs.
+  ipcMain.handle('app:getNativeDiagnostics', () => {
+    try {
+      return getNativeDiagnostics()
+    } catch (err: any) {
+      logger.error(`[main] getNativeDiagnostics error: ${err?.message ?? err}`, 'native')
+      return { isAvailable: false, mismatch: false, failureReason: String(err?.message ?? err) }
+    }
+  })
+
+  // SteamCMD IPC — expone electron/modules/steamcmd-manager.ts al renderer.
+  // Cada handler envuelve try/catch con categoría 'steamcmd' para que
+  // cualquier excepción (sync o async) quede registrada en ycore.log.
+  ipcMain.handle('steamcmd:start', async (_event, opts) => {
+    if (!opts?.appId) {
+      logger.warn('[steamcmd] start sin appId', 'steamcmd')
+      return {
+        success: false,
+        error: 'appId es requerido',
+        errorKey: 'errors.steamcmd.spawnFailed',
+      }
+    }
+    try {
+      // Sanitización del installDir: solo aceptamos rutas dentro de
+      // userData/Library/. El renderer no debe poder crear carpetas fuera
+      // de nuestro root (defensa en profundidad del contextBridge).
+      // Si el renderer omite installDir, default = ${userData}/Library/${appId}.
+      const libraryRoot = path.resolve(app.getPath('userData'), 'Library')
+      const requested = opts.installDir
+        ? path.resolve(opts.installDir)
+        : path.join(libraryRoot, String(opts.appId))
+      if (requested !== libraryRoot && !requested.startsWith(libraryRoot + path.sep)) {
+        logger.warn(
+          `[steamcmd] installDir fuera de library root: ${requested} (appId=${opts.appId})`,
+          'steamcmd',
+        )
+        return {
+          success: false,
+          error: `installDir fuera de library root: ${requested}`,
+          errorKey: 'errors.steamcmd.installDirCreateFailed',
+        }
+      }
+      return await startSteamCmdInstall({ ...opts, installDir: requested })
+    } catch (err: any) {
+      logger.error(
+        `[steamcmd] start appId=${opts?.appId} falló: ${err?.message ?? err}`,
+        'steamcmd',
+      )
+      return {
+        success: false,
+        error: String(err?.message ?? err),
+        errorKey: 'errors.steamcmd.spawnFailed',
+      }
+    }
+  })
+
+  ipcMain.handle('steamcmd:cancel', async (_event, appId: string) => {
+    if (!appId) {
+      logger.warn('[steamcmd] cancel sin appId', 'steamcmd')
+      return { success: false, appId: '', error: 'appId es requerido' }
+    }
+    try {
+      return cancelSteamCmdInstall(appId)
+    } catch (err: any) {
+      logger.warn(
+        `[steamcmd] cancel appId=${appId} falló: ${err?.message ?? err}`,
+        'steamcmd',
+      )
+      return { success: false, appId, error: String(err?.message ?? err) }
+    }
+  })
+
+  ipcMain.handle('steamcmd:isAvailable', () => {
+    try {
+      return isSteamCmdAvailable()
+    } catch (err: any) {
+      logger.warn(`[steamcmd] isAvailable falló: ${err?.message ?? err}`, 'steamcmd')
+      return false
+    }
+  })
+
+  ipcMain.handle('steamcmd:list', () => {
+    try {
+      return getActiveJobs()
+    } catch (err: any) {
+      logger.warn(`[steamcmd] list falló: ${err?.message ?? err}`, 'steamcmd')
+      return []
+    }
+  })
+
+  // H1.7.3 — dispara la descarga del binario SteamCMD desde el renderer
+  // cuando el caché está vacío (install-method = auto/steamcmd).
+  // La promesa dura segundos, retorna JSON estándar { success, error?, errorKey? }.
+  //
+  // H1.7.4 — bug fix: el handler ANTES retornaba success:true aunque el
+  // fetcher devolviera { success: false } porque fetchSteamCmd no throwea
+  // en errores de extracción (los retorna como payload). El renderer creía
+  // que había descargado OK y abortaba el install sin razón. Ahora
+  // propagamos el success/error/exito del fetcher al renderer para
+  // diferenciar "descargó" de "falló la extracción".
+  ipcMain.handle('steamcmd:fetch', async () => {
+    try {
+      const { fetchSteamCmd } = await import('./modules/steamcmd-fetcher')
+      const result = await fetchSteamCmd({})
+      if (!result.success) {
+        logger.warn(
+          `[steamcmd] fetch on-demand result no exitoso: ${result.error ?? '<no error msg>'} (errorKey=${result.errorKey ?? 'none'})`,
+          'steamcmd',
+        )
+        return {
+          success: false,
+          error: result.error ?? 'fetch sin success ni error message (caso bug)',
+          errorKey: result.errorKey,
+        }
+      }
+      logger.info(
+        `[steamcmd] fetch on-demand completado (source=${result.source} binPath=${result.binPath ?? 'n/a'})`,
+        'steamcmd',
+      )
+      return {
+        success: true,
+        binPath: result.binPath,
+        source: result.source,
+      }
+    } catch (err: any) {
+      logger.warn(
+        `[steamcmd] fetch on-demand throw: ${err?.message ?? err}`,
+        'steamcmd',
+      )
+      return {
+        success: false,
+        error: String(err?.message ?? err),
+      }
+    }
+  })
+
+  // H1.5 — kick-off best-effort del fetcher si SteamCMD no está disponible.
+  // Import lazy para evitar cargar 7zip-min hasta que sepamos que hace falta.
+  // No bloquea el arranque: la app arranca con cliente legacy mientras SteamCMD
+  // descarga en background. El operador también puede disparar manualmente con
+  // `ycore fetch-steamcmd` desde Settings o CLI.
+  if (!isSteamCmdAvailable()) {
+    setImmediate(() => {
+      void import('./modules/steamcmd-fetcher').then(({ fetchSteamCmd }) =>
+        fetchSteamCmd({}).catch((err: unknown) => {
+          logger.warn(
+            `[auto-fetch-steamcmd] falló (best-effort): ${
+              err instanceof Error ? err.message : String(err)
+            }. El operador puede disparar 'ycore fetch-steamcmd' manualmente.`,
+            'steamcmd',
+          )
+        }),
+      )
+    })
+  }
+
   registerStoreHandlers(invalidateGamesCache)
 
   createSplashWindow()
@@ -304,23 +505,27 @@ app.whenReady().then(async () => {
         throw new Error('Invalid installer path')
       }
 
-      logger.info(`Running manual installer: ${installerPath}`, 'updater')
-      setIsQuitting(true)
-      // Force a clean exit (bypass minimize-to-tray) so the installer can replace the exe
-      try {
-        BrowserWindow.getAllWindows().forEach((w) => {
-          w.removeAllListeners('close')
-          w.destroy()
-        })
-      } catch {}
-      if (state.tray) {
-        try { state.tray.destroy() } catch {}
-      }
-      // Run installer with /S for silent install, then quit
-      exec(`"${installerPath}" /S`, (err: Error | null) => {
-        if (err) logger.error(`Installer error: ${err.message}`, 'updater')
-      })
-      setTimeout(() => app.quit(), 1000)
+  logger.info(`Running manual installer: ${installerPath}`, 'updater')
+  setIsQuitting(true)
+  // Force a clean exit (bypass minimize-to-tray) so the installer can replace the exe
+  try {
+    BrowserWindow.getAllWindows().forEach((w) => {
+      w.removeAllListeners('close')
+      w.destroy()
+    })
+  } catch {}
+  if (state.tray) {
+    try { state.tray.destroy() } catch {}
+  }
+  // Spawn NSIS con detached + unref() → corre INDEPENDIENTE de nuestro proceso.
+  // Antes usábamos exec() + setTimeout(quit, 1000): NSIS arrancaba mientras
+  // Y-core.exe seguía vivo (file-lock activo) y fallaba silenciosamente porque
+  // /S suprime cualquier UI de error. Con spawn detached, el instalador vive
+  // en su propio proceso y unref() libera el IPC handle → podemos salir ya.
+  const { spawn } = require('child_process')
+  spawn(installerPath, ['/S'], { detached: true, stdio: 'ignore' }).unref()
+  // Salir inmediato, sin esperar al instalador. Esto libera el .exe ASAP.
+  app.quit()
     })
   } else {
     ipcMain.handle('app:installUpdate', () => {
@@ -333,6 +538,11 @@ app.whenReady().then(async () => {
 app.on('before-quit', () => {
   setIsQuitting(true)
   saveUsername()
+  // Cerrar jobs SteamCMD ANTES de los watchers: si SteamCMD tiene un child
+  // activo, su muerte emite un último evento FAILED al renderer mientras
+  // todavía hay ventanas para mostrarlo. Detener los log-watchers primero
+  // silenciaría esos eventos.
+  shutdownAllSteamCmdJobs('app quitting')
   stopSteamLogWatcher()
   shutdownDiscordRpc()
 })

@@ -50,23 +50,37 @@ async function apiFetch<T>(
   }
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 30000)
+  const timeout = setTimeout(() => controller.abort(), 60000) // Increased timeout to 60s
 
   try {
     const resp = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: controller.signal })
     clearTimeout(timeout)
 
     if (!resp.ok) {
-      const errorBody = await resp.json().catch(() => ({ error: 'Request failed' }))
-      const err = new Error(errorBody.error || `HTTP ${resp.status}`)
+      const errorBody = await resp.json().catch(() => ({}))
+      // Envelope JSON: parseError del renderer desempaqueta y sustituye {status}
+      const env = JSON.stringify({
+        k: errorBody.error && /^[a-z]+\.[a-z]+/.test(errorBody.error) ? errorBody.error : 'errors.api.httpRequest',
+        p: { status: resp.status },
+        t: errorBody.error || `HTTP ${resp.status}`,
+      })
+      const err = new Error(env)
       ;(err as any).status = resp.status
       throw err
     }
 
     if (resp.status === 204) return undefined as T
     return resp.json() as T
-  } finally {
+  } catch (err) {
     clearTimeout(timeout)
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(JSON.stringify({
+        k: 'errors.api.timeout',
+        p: {},
+        t: 'API request timed out after 60s',
+      }))
+    }
+    throw err
   }
 }
 
@@ -189,7 +203,7 @@ export async function pollJobUntilDone(
     attempts++
   }
 
-  throw new Error('Job polling timed out')
+  throw new Error('errors.api.jobTimeout')
 }
 
 // ===== Manifests =====
@@ -213,7 +227,12 @@ export async function downloadManifest(
   const resp = await fetch(getManifestDownloadUrl(appId, depotId, manifestGid), { headers })
 
   if (!resp.ok) {
-    throw new Error(`Failed to download manifest: ${resp.status}`)
+    // Envelope JSON con k (i18n key), p (params status), t (detalle)
+    throw new Error(JSON.stringify({
+      k: 'errors.api.downloadManifest',
+      p: { status: resp.status },
+      t: `Failed to download manifest: ${resp.status}`,
+    }))
   }
 
   const arrayBuffer = await resp.arrayBuffer()

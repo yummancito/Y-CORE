@@ -1,9 +1,31 @@
 import { useCallback, useEffect, useRef } from 'react'
+import path from 'path'
+import { useSettingsStore, type InstallFallbackReason } from '../stores/useSettingsStore'
 import { t } from '../lib/i18n'
 import { useToastStore } from '../stores/useToastStore'
 import { useDownloadQueueStore } from '../stores/useDownloadQueueStore'
 import { useRecommendationStore } from '../stores/useRecommendationStore'
+import { useSteamCmdJobsStore } from '../stores/useSteamCmdJobsStore'
 import { installGame, getJobStatus, reportDownloaded } from '../lib/y-core-api'
+import { extractMissingDepotIds, buildDepotboxLinks } from '../lib/parse-error'
+
+/**
+ * H1.7 (missing-depots UX fix) — toma una lista de mensajes de error del
+ * backend y los enriquece con URLs de depotbox.org si detectamos el patrón
+ * "Missing depot keys for: ...". Steam nos prohíbe scrape nosotros mismos;
+ * mostramos al usuario exactamente qué depot necesita clave externa y un
+ * enlace directo al proveedor comunitario que sí las ofrece.
+ */
+function enrichErrorsWithDepotLinks(errors: string[] | undefined): string[] {
+  if (!errors || errors.length === 0) return []
+  return errors.map((err) => {
+    const missing = extractMissingDepotIds(err)
+    if (missing.length === 0) return err
+    const links = buildDepotboxLinks(missing)
+    const extra = t('errors.missingDepots')
+    return `${err}\n${extra}\n${links}`
+  })
+}
 
 interface InstallResult { type: 'success' | 'error' | 'info'; message: string }
 
@@ -16,6 +38,84 @@ export interface RestartPrompt {
   message: string
   onConfirm: () => void
   confirmLabel?: string
+}
+
+/**
+ * H1.4 — clasifica el errorKey de SteamCMD hacia una razón de fallback
+ * humanamente visible en SettingsPage. Si llega un errorKey no clasificado,
+ * logueamos warning para que devs lo agreguen al switch sin pasar
+ * desapercibido.
+ */
+function reasonFromSteamCmdErrorKey(errorKey?: string): InstallFallbackReason {
+  switch (errorKey) {
+    case 'errors.steamcmd.notFound':
+    case 'errors.steamcmd.installDirCreateFailed':
+    case 'errors.steamcmd.alreadyRunning':
+      return 'steamcmd-not-available'
+    case 'errors.steamcmd.notAnonymous':
+      return 'notAnonymous'
+    case 'errors.steamcmd.spawnFailed':
+      return 'spawn-failed'
+    default:
+      if (errorKey) {
+        // Visible: nuevo errorKey sin clasificar — agregar al switch.
+        try {
+          const fn = window.steamtools?.addLog
+          if (fn) fn({ level: 'WARN', message: `[Install] unknown SteamCMD errorKey="${errorKey}", defaulting to 'stalled'` }).catch(() => {})
+        } catch { /* non-Electron */ }
+      }
+      return 'stalled'
+  }
+}
+
+/**
+ * H1.4 — wrapper robusto para window.steamtools.addLog que sobrevive en
+ * contextos no-Electron (tests, CLI). El patrón `?.addLog?.(...)?.catch?.()`
+ * evita TypeError si addLog está undefined (el `.catch` no es opcional).
+ */
+function safeAddLog(level: 'INFO' | 'WARN' | 'ERROR', message: string): void {
+  const fn = window.steamtools?.addLog
+  if (fn) fn({ level, message }).catch(() => { /* swallow */ })
+}
+
+/**
+ * H1.4 — flujo de install vía SteamCMD cuando esté disponible.
+ *
+ * Retorna:
+ *   { success: true }            → install manager aceptó la request.
+ *   { success: false, reason }   → la request falló; caller debe hacer fallback a cliente.
+ *
+ * IMPORTANTE: NO pasamos installDir desde renderer — main side lo computa
+ * como ${userData}/Library/${appId} (ver H1.2 IPC handler en electron/main.ts).
+ * El renderer no tiene acceso a userData absoluto, así que cualquier path
+ * calculado acá fallaría el sanitization check del gatekeeper.
+ */
+async function trySteamCmdInstallFlow(
+  appId: string,
+  gameName: string,
+): Promise<{ success: boolean; reason?: InstallFallbackReason }> {
+  // 1. Steam debe estar cerrado antes del fork (SteamCMD toma el lock).
+  const closeResult = await window.steamtools?.closeSteam?.()
+  if (closeResult && !closeResult.success) {
+    return { success: false, reason: 'spawn-failed' }
+  }
+
+  try {
+    const result = await window.steamtools?.startSteamCmdInstall?.({ appId })
+    if (!result?.success) {
+      return {
+        success: false,
+        reason: reasonFromSteamCmdErrorKey(result?.errorKey) || 'stalled',
+      }
+    }
+    if (result.queued) {
+      // Concurrency llena; el manager arrancará cuando libere slot. Para el
+      // processor esto cuenta como "success" eventual salvo polled FAILED.
+    }
+    return { success: true }
+  } catch {
+    return { success: false, reason: 'spawn-failed' }
+  }
 }
 
 // Processes the global download queue. Mounted once at the app shell level so
@@ -124,30 +224,154 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
       const resp = await installGame(item.appId)
 
       if (resp.status === 'ready' && resp.game) {
-        const result = await window.steamtools.storeInstallGame({
-          app_id: resp.game.app_id,
-          name: resp.game.name,
-          lua_content: resp.game.lua_content,
-          manifest_files: resp.game.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
-          depot_keys: resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
+        // Reflejar el job como 'preparing' de inmediato en el store para que
+        // /downloads lo muestre en cuanto el install es despachable. El
+        // bridge de SteamCMD va a sobrescribir upsertActive con el primer
+        // progress event real (típicamente ~50-200 ms más tarde). Para el
+        // camino Lua (sin eventos SteamCMD) el estado queda en 'preparing'
+        // hasta que el dispatch termina — no abrimos ningún modal, la
+        // página /downloads es la única superficie de progreso.
+        const { upsertActive } = useSteamCmdJobsStore.getState()
+        upsertActive({
+          appId: String(resp.game.app_id),
+          gameName: resp.game.name,
+          state: 'preparing',
+          percent: 0,
+          bytesDownloaded: 0,
+          bytesTotal: 0,
+          speed: 0,
+          eta: null,
+          currentFile: null,
+          error: null,
+          retries: 0,
+          peakSpeed: 0,
+          elapsedSec: 0,
+          startedAt: Date.now(),
+          lastUpdatedAt: Date.now(),
         })
 
-        const actions: InstallResult[] = []
-        if (result.actions) for (const a of result.actions) actions.push({ type: 'info', message: a })
-        if (result.errors) for (const e of result.errors) actions.push({ type: 'error', message: e })
-        if (result.success) {
-          actions.push({ type: 'success', message: `${item.name} installed` })
-          try { await reportDownloaded(item.appId) } catch {}
-          consumeGame(item.appId)
+        // H1.4 — dispatch entre SteamCMD y cliente Lua.
+        const { installMethod } = useSettingsStore.getState()
+        const wantsSteamCmd = installMethod === 'steamcmd' || installMethod === 'auto'
+        let usedSteamCmd = false
+        let aborted = false
+        let fallbackReason: InstallFallbackReason | null = null
+
+        if (wantsSteamCmd) {
+          let available = await window.steamtools?.isSteamCmdAvailable?.()
+          // H1.7.3 — SteamCMD no está descargado pero el usuario quiere
+          // SteamCMD (o auto). Descargamos en background con toast visible
+          // y reintentamos. Sin esto el dispatcher caía silenciosamente a
+          // cliente Lua y el usuario quedaba sin saber por qué SteamCMD
+          // "no funciona".
+          if (!available && window.steamtools?.fetchSteamCmd) {
+            showToast(
+              'info',
+              t('install.fetchingSteamCmd') ||
+                'Descargando SteamCMD por primera vez (~10 MB)...',
+            )
+            safeAddLog('INFO', `[Install] SteamCMD no disponible, disparando fetch on-demand`)
+            const fetchResult = await window.steamtools.fetchSteamCmd()
+            if (fetchResult?.success) {
+              available = await window.steamtools?.isSteamCmdAvailable?.()
+              if (available) {
+                showToast('success', t('install.steamCmdReady') || 'SteamCMD listo.')
+                safeAddLog('INFO', `[Install] SteamCMD descargado y disponible`)
+              }
+            } else {
+              safeAddLog(
+                'WARN',
+                `[Install] SteamCMD on-demand failed: ${fetchResult?.error ?? 'unknown'}`,
+              )
+            }
+          }
+          if (available) {
+            const steamResult = await trySteamCmdInstallFlow(
+              String(resp.game.app_id),
+              resp.game.name,
+            )
+            if (steamResult.success) {
+              usedSteamCmd = true
+              try { await reportDownloaded(item.appId) } catch {}
+              consumeGame(item.appId)
+              safeAddLog('INFO', `[Install] ${item.name} started via SteamCMD (appId=${resp.game.app_id})`)
+            } else {
+              fallbackReason = steamResult.reason ?? 'stalled'
+              await useSettingsStore.getState().setInstallFallbackReason(fallbackReason)
+              // H1.7.5 — sanity log para devs: si reason es spawn-failed
+              // cuando solo estaba el binario ausente, lvl=WARN.
+              if (fallbackReason === 'spawn-failed') {
+                safeAddLog(
+                  'WARN',
+                  `[Install] SteamCMD returned reason='spawn-failed' \u2014 \u00bffue el binario ausente o un spawn real? Ver electron/modules/steamcmd-manager.ts.`,
+                )
+              }
+              showToast('info', t('install.fallbackToClient') || `SteamCMD no se pudo (${fallbackReason}), usando cliente Steam.`)
+              safeAddLog('WARN', `[Install] SteamCMD fallback a cliente: ${fallbackReason}`)
+            }
+          } else {
+            // H1.7.4 — fix de "el cmd no funciona": el comportamiento correcto
+            // depende de qué método eligió el usuario.
+            if (installMethod === 'steamcmd') {
+              // Usuario FORZÓ SteamCMD. Respetamos su decisión: NO caemos al
+              // cliente Lua. Eso era exactamente el bug original. ABORTAMOS
+              // el install y dejamos que vaya a Configuración → SteamCMD.
+              // NO persistimos `lastInstallFallbackReason` porque NO ocurrió
+              // un fallback — sería misleading: el banner amber diría
+              // "cayó al cliente Steam" cuando en realidad abortamos.
+              showToast(
+                'error',
+                t('install.steamCmdRequired') ||
+                  'SteamCMD no está disponible y elegiste SteamCMD. Abrí Configuración → SteamCMD o cambiá a Steam Client / Auto.',
+                8000,
+              )
+              safeAddLog('WARN', `[Install] SteamCMD forzado pero no disponible; install ABORTADO (no fallback). appId=${item.appId}`)
+              aborted = true
+            } else {
+              // 'auto' o 'steamclient': ambos son consentimientos explícitos o
+              // implícitos de caer al cliente Lua. Persistimos la razón para
+              // que SettingsPage muestre el banner amber con el motivo.
+              fallbackReason = 'steamcmd-not-available'
+              await useSettingsStore.getState().setInstallFallbackReason(fallbackReason)
+              if (installMethod === 'auto') {
+                showToast(
+                  'info',
+                  t('install.fallbackToClient') ||
+                    'SteamCMD no disponible, usando cliente Steam como alternativa.',
+                )
+              }
+              // 'steamclient' es silent (es el método elegido, no es fallback).
+            }
+          }
         }
-        for (const action of actions) {
-          window.steamtools.addLog({
-            level: action.type === 'error' ? 'ERROR' : 'INFO',
-            message: `[Install] ${action.message}`,
-          }).catch((e) => console.warn('[Install] addLog failed:', e))
-        }
-        if (!result.success) {
-          showToast('error', result.errors?.[0] || result.error || t('store.installFailed'))
+
+        if (!usedSteamCmd && !aborted) {
+          const result = await window.steamtools.storeInstallGame({
+            app_id: resp.game.app_id,
+            name: resp.game.name,
+            lua_content: resp.game.lua_content,
+            manifest_files: resp.game.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
+            depot_keys: resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
+          })
+
+          const actions: InstallResult[] = []
+          if (result.actions) for (const a of result.actions) actions.push({ type: 'info', message: a })
+          if (result.errors) for (const e of result.errors) actions.push({ type: 'error', message: e })
+          if (result.success) {
+            actions.push({ type: 'success', message: `${item.name} installed` })
+            try { await reportDownloaded(item.appId) } catch {}
+            consumeGame(item.appId)
+          }
+          for (const action of actions) {
+            window.steamtools.addLog({
+              level: action.type === 'error' ? 'ERROR' : 'INFO',
+              message: `[Install] ${action.message}`,
+            }).catch((e) => console.warn('[Install] addLog failed:', e))
+          }
+          if (!result.success) {
+            const enriched = enrichErrorsWithDepotLinks(result.errors)
+            showToast('error', enriched[0] || result.error || t('store.installFailed'))
+          }
         }
       } else if (resp.status === 'queued' && resp.job_id) {
         await pollJobRef.current!(resp.job_id, item.appId, item.name)
@@ -155,8 +379,21 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
         showToast('error', t('store.unexpectedResponse'))
       }
     } catch (err: any) {
-      window.steamtools.addLog({ level: 'ERROR', message: `[Install] Install failed: ${err.message}` }).catch((e) => console.warn('[Install] addLog failed:', e))
-      showToast('error', err.message)
+      const errorMsg = err.message || 'Unknown error'
+      window.steamtools.addLog({ level: 'ERROR', message: `[Install] Install failed: ${errorMsg}` }).catch((e) => console.warn('[Install] addLog failed:', e))
+      let displayMsg = errorMsg
+      if (displayMsg.includes('429') || displayMsg.includes('rate limit')) {
+        displayMsg = t('errors.api.rateLimited', { default: 'Too many requests, try again in a moment' })
+      } else if (displayMsg.includes('403') || displayMsg.includes('Forbidden')) {
+        displayMsg = t('errors.api.forbidden', { default: 'You don\'t have permission to download this game' })
+      } else if (displayMsg.includes('404') || displayMsg.includes('Not Found')) {
+        displayMsg = t('errors.api.notFound', { default: 'Game not found or no longer available' })
+      } else if (displayMsg.includes('subscription') || displayMsg.includes('suscripción')) {
+        displayMsg = t('errors.api.needsSubscription', { default: 'This game requires an active subscription' })
+      } else if (displayMsg.includes('timeout')) {
+        displayMsg = t('errors.api.timeout', { default: 'Request timed out, please try again' })
+      }
+      showToast('error', displayMsg)
     } finally {
       setImportProgress(null)
       setCurrent(null)
