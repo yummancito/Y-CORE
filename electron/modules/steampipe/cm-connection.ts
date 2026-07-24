@@ -29,7 +29,7 @@
 // CmConnection interface (issue #5 cleanup).
 // ============================================================================
 
-import tls from 'tls'
+import net from 'net'
 import type { CmServer } from './types'
 import { decryptPacket, encryptPacket } from './aes-session'
 
@@ -86,12 +86,15 @@ export function connectToCm(opts: {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS
 
   return new Promise((resolve, reject) => {
-    const sock = tls.connect(
+    // Steam CM servers on ports 27017/27018 speak RAW TCP, not TLS. The
+    // encryption is Steam's own ChannelEncrypt handshake (AES-256-CBC over
+    // plain TCP), negotiated after connect — there is NO TLS layer. Using
+    // tls.connect() here would hang forever because the server never speaks
+    // the TLS handshake. Only the WebSocket CM endpoints (port 443) use TLS.
+    const sock = net.connect(
       {
         host,
         port,
-        servername: host, // SNI; Valve's CM fleet responds per SNI host
-        rejectUnauthorized: true,
       },
       () => {
         const conn: CmConnection = makeConnection(sock)
@@ -106,7 +109,7 @@ export function connectToCm(opts: {
   })
 }
 
-function makeConnection(sock: tls.TLSSocket): CmConnection {
+function makeConnection(sock: net.Socket): CmConnection {
   // Two-state machine: pre-handshake accumulates a single known-size packet and
   // emits when complete; post-handshake reads u32le length prefix then more.
   const state: {
