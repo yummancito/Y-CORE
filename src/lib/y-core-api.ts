@@ -151,6 +151,22 @@ export async function installGame(appId: string): Promise<InstallResponse> {
   })
 }
 
+/**
+ * Obtiene las depot keys de un juego desde el backend Y-core API.
+ * El endpoint /api/games/{appId}/depot-keys devuelve las claves de descifrado
+ * que Y-core consigue de su base de datos (depotbox). Estas se usan para
+ * descargar depots directamente vía steampipe sin necesidad de Steam.
+ */
+export async function fetchDepotKeysFromApi(appId: string): Promise<{ depot_id: string; key: string }[]> {
+  const data = await apiFetch<{ depot_keys?: { depot_id: string; decryption_key: string }[] }>(
+    `/api/games/${appId}/depot-keys`
+  )
+  return (data.depot_keys || []).map((k) => ({
+    depot_id: k.depot_id,
+    key: k.decryption_key,
+  }))
+}
+
 export async function reportDownloaded(appId: string): Promise<void> {
   await apiFetch(`/api/games/${appId}/downloaded`, { method: 'POST' })
 }

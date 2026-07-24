@@ -6,7 +6,7 @@ import { useToastStore } from '../stores/useToastStore'
 import { useDownloadQueueStore } from '../stores/useDownloadQueueStore'
 import { useRecommendationStore } from '../stores/useRecommendationStore'
 import { useSteamCmdJobsStore } from '../stores/useSteamCmdJobsStore'
-import { installGame, getJobStatus, reportDownloaded } from '../lib/y-core-api'
+import { installGame, getJobStatus, reportDownloaded, fetchDepotKeysFromApi } from '../lib/y-core-api'
 import { extractMissingDepotIds, buildDepotboxLinks } from '../lib/parse-error'
 
 interface DepotKey {
@@ -365,14 +365,35 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
         let fallbackReason: InstallFallbackReason | null = null
 
         // Try steampipe first if user explicitly chose it
-        if (wantsSteampipe && resp.game.depot_keys.length > 0) {
+        if (wantsSteampipe) {
           safeAddLog('INFO', `[Install] Using steampipe (direct CDN download) for ${item.name}`)
           showToast('info', 'Descargando con steampipe (sin Steam)...')
           try {
+            // El API /install a veces devuelve depot_keys vacío; en ese caso
+            // las pedimos explícitamente al endpoint /depot-keys (misma fuente
+            // que usa el flujo de Steam via fetchDepotKeys en electron).
+            let depotKeys = resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key }))
+            if (depotKeys.length === 0) {
+              safeAddLog('INFO', `[Install] depot_keys empty from /install, fetching from /depot-keys endpoint`)
+              try {
+                depotKeys = await fetchDepotKeysFromApi(String(resp.game.app_id))
+                safeAddLog('INFO', `[Install] Fetched ${depotKeys.length} depot keys from API for steampipe`)
+              } catch (keyErr: any) {
+                safeAddLog('WARN', `[Install] Failed to fetch depot keys: ${keyErr.message}`)
+              }
+            }
+
+            if (depotKeys.length === 0) {
+              aborted = true
+              showToast('error', 'No se pudieron obtener las depot keys para descargar sin Steam', 8000)
+              safeAddLog('WARN', `[Install] Steampipe aborted: no depot keys available`)
+              throw new Error('__steampipe_no_keys__')
+            }
+
             const steampipeResult = await downloadGameWithoutSteam(
               String(resp.game.app_id),
               resp.game.name,
-              resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
+              depotKeys,
               resp.game.manifest_files
             )
             if (steampipeResult.success) {
@@ -392,8 +413,11 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
             }
           } catch (err: any) {
             aborted = true
-            showToast('error', `Error en descarga sin Steam: ${err.message}`, 8000)
-            safeAddLog('WARN', `[Install] Steampipe error (no fallback): ${err.message}`)
+            // __steampipe_no_keys__ ya mostró su toast; no duplicar.
+            if (err?.message !== '__steampipe_no_keys__') {
+              showToast('error', `Error en descarga sin Steam: ${err.message}`, 8000)
+              safeAddLog('WARN', `[Install] Steampipe error (no fallback): ${err.message}`)
+            }
           }
         }
 
