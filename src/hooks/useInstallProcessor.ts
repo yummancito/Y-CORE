@@ -65,7 +65,6 @@ async function downloadGameWithoutSteam(
 
       try {
         safeAddLog('INFO', `[Steampipe] Downloading depot ${depotNum} (manifest: ${manifestId})`)
-        showToast('info', `Descargando depot ${depotNum}...`)
 
         const downloadResult = await window.steamtools.downloadDepot({
           appId: appNum,
