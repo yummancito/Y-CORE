@@ -387,16 +387,24 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
       }).catch((e) => console.warn('[Install] addLog failed:', e))
 
       let displayMsg = errorMsg
+
+      // Try to extract backend error details from JSON
+      try {
+        const parsed = JSON.parse(errorMsg)
+        if (parsed.t) displayMsg = parsed.t
+        if (parsed.p?.details) displayMsg = parsed.p.details + ' (' + parsed.t + ')'
+      } catch {}
+
       if (displayMsg.includes('429') || displayMsg.includes('rate limit')) {
-        displayMsg = t('errors.api.rateLimited')
+        displayMsg = displayMsg + ' — ' + t('errors.api.rateLimited')
       } else if (displayMsg.includes('403') || displayMsg.includes('Forbidden')) {
-        displayMsg = t('errors.api.forbidden')
+        displayMsg = displayMsg + ' — ' + t('errors.api.forbidden')
       } else if (displayMsg.includes('404') || displayMsg.includes('Not Found')) {
-        displayMsg = t('errors.api.notFound')
-      } else if (displayMsg.includes('subscription') || displayMsg.includes('suscripción') || displayMsg.includes('Subscription')) {
-        displayMsg = 'Este juego requiere autenticación real de Steam (no es F2P). El servidor no pudo obtenerlo anónimamente.'
+        displayMsg = displayMsg + ' — ' + t('errors.api.notFound')
+      } else if (displayMsg.includes('subscription') || displayMsg.includes('suscripción') || displayMsg.includes('Subscription') || displayMsg.includes('requires login')) {
+        displayMsg = 'BACKEND ERROR - Depot Keys: ' + displayMsg + '\n\nEste juego requiere keys de depot que el servidor no pudo obtener. Motivos posibles: (1) Juego de pago sin keys públicas, (2) Server de depot keys caído, (3) Juego removido de Steam.'
       } else if (displayMsg.includes('timeout')) {
-        displayMsg = t('errors.api.timeout')
+        displayMsg = displayMsg + ' — ' + t('errors.api.timeout')
       }
       showToast('error', displayMsg)
     } finally {
