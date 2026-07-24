@@ -70,7 +70,9 @@ async function downloadGameWithoutSteam(
           appId: appNum,
           depotId: depotNum,
           manifestId: manifestId,
-          installDir: `C:\\Users\\${process.env.USERNAME || 'User'}\\AppData\\Local\\Y-core\\Games\\${appId}`,
+          // installDir vacío → el main process resuelve
+          // ${userData}/Games/${appId} (el renderer no tiene acceso a rutas absolutas).
+          installDir: '',
           cellId: 0,
         })
 

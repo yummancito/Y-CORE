@@ -17,7 +17,9 @@
 // that's "F2P-content access; nothing else."
 // ============================================================================
 
-import { ipcMain } from 'electron'
+import { ipcMain, app } from 'electron'
+import path from 'path'
+import fs from 'fs'
 import { logger } from '../../logger'
 import { getCmServerList } from './cm-directory'
 import { connectAndHandshake } from './handshake'
@@ -183,13 +185,24 @@ export function registerSteampipeHandlers(): void {
         'steampipe',
       )
       try {
+        // Resolver installDir: si el renderer no lo especifica (string vacío),
+        // usamos ${userData}/Games/${appId}. El renderer no tiene acceso a
+        // rutas absolutas del sistema, así que el main process las computa.
+        let installDir = opts.installDir
+        if (!installDir || installDir.trim() === '') {
+          installDir = path.join(app.getPath('userData'), 'Games', String(opts.appId))
+        }
+        if (!fs.existsSync(installDir)) {
+          fs.mkdirSync(installDir, { recursive: true })
+        }
+
         const manifestId =
           typeof opts.manifestId === 'string' ? BigInt(opts.manifestId) : opts.manifestId
         const result = await downloadDepot({
           appId: opts.appId,
           depotId: opts.depotId,
           manifestId,
-          installDir: opts.installDir,
+          installDir,
           cellId: opts.cellId ?? 0,
         })
         return result
