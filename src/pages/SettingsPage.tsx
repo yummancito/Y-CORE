@@ -445,7 +445,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* 3 picker cards (radio role) */}
+              {/* 4 picker cards (radio role) */}
               <div className="flex flex-col gap-2.5" role="radiogroup" aria-label={t('installMethod.ariaGroup')}>
                 {([
                   {
@@ -462,6 +462,14 @@ export default function SettingsPage() {
                     titleKey: 'installMethod.steamcmd.title',
                     descKey: 'installMethod.steamcmd.desc',
                     tipKey: 'installMethod.steamcmd.tip',
+                    recommended: false,
+                  },
+                  {
+                    key: 'steampipe' as const,
+                    icon: Download,
+                    titleKey: 'installMethod.steampipe.title',
+                    descKey: 'installMethod.steampipe.desc',
+                    tipKey: 'installMethod.steampipe.tip',
                     recommended: false,
                   },
                   {

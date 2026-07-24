@@ -83,7 +83,7 @@ export const DEFAULT_CUSTOMIZATION: Customization = {
  *   - 'steamclient' → solo cliente Lua (flujo legacy).
  *   - 'auto'        → SteamCMD si está disponible; sino cliente.
  */
-export type InstallMethod = 'steamcmd' | 'steamclient' | 'auto'
+export type InstallMethod = 'steamcmd' | 'steamclient' | 'auto' | 'steampipe'
 
 /**
  * H1.4 — razón por la que el último install cayó a cliente. Persistido para que
@@ -235,7 +235,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           }
 
           // H1.3 — hydra installMethod desde config. Valores fuera del enum caen al default sin efecto.
-          if (c.installMethod === 'steamcmd' || c.installMethod === 'steamclient' || c.installMethod === 'auto') {
+          if (c.installMethod === 'steamcmd' || c.installMethod === 'steamclient' || c.installMethod === 'auto' || c.installMethod === 'steampipe') {
             set({ installMethod: c.installMethod })
           }
 
