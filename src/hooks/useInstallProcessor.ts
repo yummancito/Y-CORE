@@ -356,6 +356,7 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
 
         // H1.4 — dispatch entre SteamCMD, steampipe y cliente Lua.
         const { installMethod } = useSettingsStore.getState()
+        safeAddLog('INFO', `[Install] Dispatch: installMethod="${installMethod}" appId=${item.appId} depotKeys=${resp.game.depot_keys.length}`)
         const wantsSteamCmd = installMethod === 'steamcmd' || installMethod === 'auto'
         const wantsSteampipe = installMethod === 'steampipe'
         let usedSteamCmd = false
