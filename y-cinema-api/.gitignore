@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+coverage/
+
+# Prisma
+prisma/dev.db
+
+# Docker volumes se persisten en el volumen nombrado, no en el repo

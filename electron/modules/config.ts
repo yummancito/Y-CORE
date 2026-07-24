@@ -25,6 +25,17 @@ const ALLOWED_CONFIG_KEYS = new Set([
   'steamLogMonitor',
   'steamPath',
   'tourDone',
+  // 'forceSignaturePending' se removió: ahora el flag de forzado vive solo
+  // en runtime (useSignaturePendingStore.isForced) sin necesidad de
+  // persistirse entre sesiones. El toggle de SettingsPage fuerza el modal
+  // inmediatamente al activarse y al cerrarlo el modal se libera solo.
+  // H1.3 — método de instalación preferido ('steamcmd' | 'steamclient' | 'auto').
+  // Si 'steamcmd' y el binario no está disponible, dispatcher cae a cliente.
+  'installMethod',
+  // H1.4 — razón por la que el último install cayo a cliente. Útil para UI
+  // ("SteamCMD no se pudo porque: stalled | notAnonymous | notFound").
+  // Reset manual: el operador puede forzar re-intento cambiando installMethod.
+  'lastInstallFallbackReason',
 ])
 
 const MAX_CONFIG_DEPTH = 3

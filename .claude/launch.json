@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vite",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev"],
+      "port": 5173
+    },
+    {
+      "name": "electron-dev",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "electron:dev"],
+      "port": 5173
+    }
+  ]
+}

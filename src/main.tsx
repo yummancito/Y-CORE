@@ -5,6 +5,9 @@ import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import './index.css'
 import { detectSystemLanguage, setLanguage } from './lib/i18n'
+import { installMockSteamtools } from './lib/mockSteamtools'
+
+installMockSteamtools()
 
 function applySystemTheme(root: HTMLElement) {
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches

@@ -165,12 +165,19 @@ interface NativeBinding {
 let binding: NativeBinding | null = null
 let loadAttempted = false
 let loadFailureReason = ''
+let loadedDllPath: string | null = null
+let nativeManifest: { packedFor: string; dllFileSha256: string; dllSizeBytes: number; packedAt: string; buildHost: string; source: string } | null = null
 
 /** Rutas donde puede vivir el DLL, en orden: empaquetado → dev. */
 function candidateDllPaths(): string[] {
   const paths: string[] = []
   try {
     if (app.isPackaged) {
+      // Primero: versión empaquetada exactamente para esta appVersion.
+      // Cada release trae `resources/native/vX.Y.Z/ycore.dll` así que
+      // electron-updater deja el DLL correcto y el loader lo encuentra siempre.
+      paths.push(path.join(process.resourcesPath, 'native', `v${app.getVersion()}`, 'ycore.dll'))
+      // Fallback legacy (instalaciones anteriores al fix-exe.js con versioning):
       paths.push(path.join(process.resourcesPath, 'native', 'ycore.dll'))
       paths.push(path.join(process.resourcesPath, 'ycore.dll'))
     }
@@ -181,6 +188,45 @@ function candidateDllPaths(): string[] {
   paths.push(path.join(root, 'native', 'ycore', 'build', 'ycore.dll'))
   paths.push(path.join(root, 'resources', 'native', 'ycore.dll'))
   return paths
+}
+
+/** Lee `version.json` desde el hermano del DLL si existe. */
+function readManifestFor(dllPath: string) {
+  try {
+    const manifestPath = path.join(path.dirname(dllPath), 'version.json')
+    if (!fs.existsSync(manifestPath)) return null
+    const raw = fs.readFileSync(manifestPath, 'utf-8')
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+/** Borra versiones viejas (`v*`) que ya no matchean la appVersion actual. */
+export function cleanupStaleNativeVersions(appVersion: string) {
+  // Guard contra catastrophic wipe: si app.getVersion() devuelve string
+  // vacío (caso raro pero real si Electron no parsea metadata), `current`
+  // sería `"v"` y el loop borraría TODAS las carpetas v*/ incluyendo la
+  // actual. Mejor no hacer nada que romper la app.
+  if (!appVersion) return
+  if (!app.isPackaged) return
+  try {
+    const nativeRoot = path.join(process.resourcesPath, 'native')
+    if (!fs.existsSync(nativeRoot)) return
+    const current = `v${appVersion}`
+    for (const entry of fs.readdirSync(nativeRoot)) {
+      if (entry.startsWith('v') && entry !== current) {
+        try {
+          fs.rmSync(path.join(nativeRoot, entry), { recursive: true, force: true })
+          logger.info(`[ycore-native] cleanup: borrada versión obsoleta ${entry}`, 'native')
+        } catch (err: any) {
+          logger.warn(`[ycore-native] cleanup: no pude borrar ${entry}: ${err.message}`, 'native')
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn(`[ycore-native] cleanup: ${err.message}`, 'native')
+  }
 }
 
 /**
@@ -207,6 +253,33 @@ function ensureLoaded(): boolean {
     return false
   }
 
+  // Capturar la ruta REAL del DLL cargado (no la primera existente), funciona
+  // tanto en producción (path versionado) como en dev (path de build local).
+  loadedDllPath = dllPath
+
+  // Lee el version.json del DLL versionado (si existe) para diagnóstico.
+  const candidateManifest = readManifestFor(dllPath)
+  if (candidateManifest) {
+    nativeManifest = candidateManifest
+    if (app.isPackaged && app.getVersion) {
+      try {
+        const appVer = app.getVersion()
+        // Local copy: TS doesn't narrow module-level `let` through if-checks.
+        if (nativeManifest && nativeManifest.packedFor && nativeManifest.packedFor !== appVer) {
+          logger.warn(
+            `[ycore-native] DLL packedFor="${nativeManifest.packedFor}" pero app es v${appVer}. ` +
+            `Esto indica un bug de stamping en el build. Funcionalidad DLL deshabilitada por seguridad.`,
+            'native'
+          )
+          // Bloqueamos la carga: podría haber incompatibilidad binaria.
+          loadFailureReason = `DLL version mismatch: dll=${nativeManifest.packedFor}, app=${appVer}`
+          binding = null
+          return false
+        }
+      } catch {}
+    }
+  }
+
   try {
     // require perezoso: si koffi falta, no queremos romper el arranque.
     const koffi = require('koffi')
@@ -230,7 +303,17 @@ function ensureLoaded(): boolean {
       isProcessRunning: lib.func('int ycore_is_process_running(const char* e, _Out_ int* out)'),
     }
 
-    logger.info(`[ycore-native] DLL cargado v${binding.version()} desde ${dllPath}`, 'native')
+    logger.info(`[ycore-native] DLL cargado v${binding.version()} desde ${dllPath}${nativeManifest ? ` (sha256=${nativeManifest.dllFileSha256.slice(0, 8)}…, packedFor=v${nativeManifest.packedFor})` : ''}`, 'native')
+
+    // Limpieza diferida de versiones obsoletas (caso normal, non-blocking).
+    // La red de seguridad para force-quit / crash dentro de esos 5s vive
+    // top-level en electron/main.ts (registrada una sola vez, no se duplica
+    // cada vez que ensureLoaded() corre en tests).
+    try {
+      const appVer = app.getVersion?.()
+      if (appVer) setTimeout(() => cleanupStaleNativeVersions(appVer), 5000)
+    } catch {}
+
     return true
   } catch (err: any) {
     binding = null
@@ -253,6 +336,47 @@ export function getNativeVersion(): string | null {
     return binding.version()
   } catch {
     return null
+  }
+}
+
+/**
+ * Payload completo de diagnóstico nativo. Se devuelve por IPC al renderer
+ * para mostrar estado del DLL en Settings → Diagnóstico y para reportes.
+ */
+export interface NativeDiagnosticsPayload {
+  isAvailable: boolean
+  loadedAt: string | null
+  dllVersion: string | null
+  dllPath: string | null
+  appVersion: string | null
+  manifest: { packedFor: string; dllFileSha256: string; dllSizeBytes: number; packedAt: string; buildHost: string; source: string } | null
+  mismatch: boolean
+  failureReason: string | null
+}
+
+export function getNativeDiagnostics(): NativeDiagnosticsPayload {
+  // Forzamos la carga si el caller pide diagnósticos antes de invocar
+  // cualquier otra función nativa. Sin esto el payload devuelve todo null.
+  const loaded = ensureLoaded()
+  const appVer = (() => { try { return app.getVersion() } catch { return null } })()
+  const mf = nativeManifest
+  const mismatch = Boolean(
+    mf?.packedFor &&
+    appVer &&
+    mf.packedFor !== appVer
+  )
+  // Usamos la ruta REAL del DLL cargada en ensureLoaded(), no una aproximación
+  // por orden de fallback (que mentiría si coexistieran legacy + versioned).
+  const dllPath = loadedDllPath
+  return {
+    isAvailable: loaded && binding !== null,
+    loadedAt: loaded ? new Date().toISOString() : null,
+    dllVersion: getNativeVersion(),
+    dllPath,
+    appVersion: appVer,
+    manifest: mf,
+    mismatch,
+    failureReason: loadFailureReason || null,
   }
 }
 

@@ -9,6 +9,76 @@ import { useSteamCmdJobsStore } from '../stores/useSteamCmdJobsStore'
 import { installGame, getJobStatus, reportDownloaded } from '../lib/y-core-api'
 import { extractMissingDepotIds, buildDepotboxLinks } from '../lib/parse-error'
 
+interface DepotKey {
+  depot_id: string
+  key: string
+}
+
+interface ManifestFile {
+  depot_id: string
+  manifest_gid: string
+}
+
+async function downloadGameWithoutSteam(
+  appId: string,
+  gameName: string,
+  depotKeys: DepotKey[],
+  manifestFiles: ManifestFile[]
+): Promise<{ success: boolean; error?: string; actions?: string[]; errors?: string[] }> {
+  if (!window.steamtools?.downloadDepot) {
+    return {
+      success: false,
+      error: 'steampipe:downloadDepot not available',
+      errors: ['steampipe module not available in this build'],
+    }
+  }
+
+  const actions: string[] = []
+  const errors: string[] = []
+
+  try {
+    // Descargar cada depot
+    for (const depotKey of depotKeys) {
+      const manifest = manifestFiles.find(m => m.depot_id === depotKey.depot_id)
+      if (!manifest) {
+        errors.push(`No manifest found for depot ${depotKey.depot_id}`)
+        continue
+      }
+
+      try {
+        const downloadResult = await window.steamtools.downloadDepot({
+          appId: parseInt(appId, 10),
+          depotId: parseInt(depotKey.depot_id, 10),
+          manifestId: manifest.manifest_gid,
+          installDir: `C:\\Users\\${process.env.USERNAME || 'User'}\\AppData\\Local\\Y-core\\Games\\${appId}`,
+          cellId: 0,
+        })
+
+        if (downloadResult.success) {
+          actions.push(`Downloaded depot ${depotKey.depot_id}: ${(downloadResult.bytesDownloaded / 1024 / 1024).toFixed(2)} MB`)
+        } else {
+          errors.push(`Failed to download depot ${depotKey.depot_id}: ${downloadResult.errorMessage}`)
+        }
+      } catch (err: any) {
+        errors.push(`Error downloading depot ${depotKey.depot_id}: ${err.message}`)
+      }
+    }
+
+    if (errors.length === 0) {
+      actions.push(`${gameName} downloaded successfully without Steam`)
+      return { success: true, actions }
+    } else {
+      return { success: false, error: errors[0], actions, errors }
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      error: err.message,
+      errors: [err.message],
+    }
+  }
+}
+
 /**
  * H1.7 (missing-depots UX fix) — toma una lista de mensajes de error del
  * backend y los enriquece con URLs de depotbox.org si detectamos el patrón
@@ -346,13 +416,34 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
         }
 
         if (!usedSteamCmd && !aborted) {
-          const result = await window.steamtools.storeInstallGame({
+          let result = await window.steamtools.storeInstallGame({
             app_id: resp.game.app_id,
             name: resp.game.name,
             lua_content: resp.game.lua_content,
             manifest_files: resp.game.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
             depot_keys: resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
           })
+
+          // Fallback: si Steam no está disponible, intenta descargar sin Steam
+          if (!result.success && result.error?.includes('Steam installation not found') && resp.game.depot_keys.length > 0) {
+            safeAddLog('INFO', `[Install] Steam not found, attempting download without Steam for ${item.name}`)
+            showToast('info', 'Steam no encontrado, descargando sin Steam...')
+            try {
+              result = await downloadGameWithoutSteam(
+                resp.game.app_id,
+                resp.game.name,
+                resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
+                resp.game.manifest_files
+              )
+            } catch (fallbackErr: any) {
+              result = {
+                success: false,
+                error: `Fallback failed: ${fallbackErr.message}`,
+                actions: [],
+                errors: [`Fallback failed: ${fallbackErr.message}`],
+              }
+            }
+          }
 
           const actions: InstallResult[] = []
           if (result.actions) for (const a of result.actions) actions.push({ type: 'info', message: a })

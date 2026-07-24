@@ -253,6 +253,24 @@ export async function installGameCore(
     errors.push(`Hook DLL: ${hookResult.error}`)
   }
 
+  // H1.7.2 — strip depots sin clave del Lua antes de escribirlo a disco.
+  // Si dejamos addappid(<depot-sin-key>) en el Lua, Steam al arrancar lo lee
+  // vía stplug-in e intenta descifrar ese depot; como config.vdf no tiene
+  // su clave → "Steam cannot decrypt these depots" y el install falla aunque
+  // tengamos el 90%+ de las claves. El catalog API devuelve 7/10 keys porque
+  // Steam nos prohíbe scrapear DLC/OST/regional. Lo correcto: instalar SOLO
+  // el subset que sí podemos descifrar.
+  const { cleanedLua, strippedDepots } = stripDepotsWithoutKeys(
+    luaContent,
+    appId,
+    depotKeys,
+  )
+  if (strippedDepots.length > 0) {
+    actions.push(
+      `Depots sin clave omitidos (${strippedDepots.length}): ${strippedDepots.join(', ')} \u2014 consegilos en depotbox.org si los necesit\u00e1s`,
+    )
+  }
+
   const scriptsDir = getLuaScriptsDir()
   if (scriptsDir) {
     if (!(await pathExists(scriptsDir))) {
@@ -260,7 +278,7 @@ export async function installGameCore(
     }
     const luaFileName = `${appId}.lua`
     const luaDest = path.join(scriptsDir, luaFileName)
-    await fs.promises.writeFile(luaDest, luaContent, 'utf-8')
+    await fs.promises.writeFile(luaDest, cleanedLua, 'utf-8')
     actions.push(`Lua: ${luaFileName} \u2192 config\\\\stplug-in`)
   }
 
@@ -276,11 +294,10 @@ export async function installGameCore(
   const steamAppsPath = getSteamAppsPath()
   if (steamAppsPath) {
     const depotIdsWithKeys = new Set(depotKeys.map((k) => k.depot_id))
-    const acfResult = await createAppManifestFromLua(steamAppsPath, appId, luaContent, depotIdsWithKeys)
+    const acfResult = await createAppManifestFromLua(steamAppsPath, appId, cleanedLua, depotIdsWithKeys)
     if (acfResult.success) {
       actions.push(`appmanifest_${appId}.acf created`)
-      if (GOLDSRC_MOD_APP_IDS.has(appId)) {
-        const baseAcfResult = await createGoldSrcBaseAppManifest(luaContent, depotIdsWithKeys)
+      if (GOLDSRC_MOD_APP_IDS.has(appId)) {          const baseAcfResult = await createGoldSrcBaseAppManifest(cleanedLua, depotIdsWithKeys)
         if (baseAcfResult.success) {
           actions.push('appmanifest_70.acf created for Half-Life base depots')
         } else {
@@ -290,6 +307,59 @@ export async function installGameCore(
     } else {
       errors.push(`Failed to create appmanifest: ${acfResult.error}`)
     }
+  }
+
+  // H1.9 — wmTools: post-process clean-room emulator drop.
+  // Después de que Lua, depot keys, y ACF estén escritos al Steam tree,
+  // copiamos ycore_steam.dll como steam_api64.dll (o ycore_steam_x86.dll
+  // como steam_api.dll en games 32-bit) al lado del ejecutable del juego
+  // + steam_appid.txt. Eso le da al game launch un emulador local en
+  // user-space sin requerir una instalación Steam-side DLLs
+  // (xinput1_4/dwmapi hooks legacy).
+  //
+  // v5: multi-library SteamApps. Iteramos TODAS las library folders
+  // configuradas en libraryfolders.vdf, buscando cuál contiene el
+  // juego. Falback al path simple (steamAppsPath/common/<appId>) si
+  // el parser falla por DLL nativo ausente.
+  let target: string | null = null
+  try {
+    const { getLibraryFolders } = await import('./ycore-native')
+    const libs = getLibraryFolders()
+    for (const lib of libs) {
+      const cand1 = path.join(lib, 'steamapps', 'common', appId)
+      const cand2 = path.join(lib, 'steamapps', appId)
+      if (fs.existsSync(cand1)) { target = cand1; break }
+      if (fs.existsSync(cand2)) { target = cand2; break }
+    }
+  } catch (libErr: any) {
+    // DLL o libraryfolders.vdf parsing falló — fallback a la heurística
+    // de v4 single (steamAppsPath/common/<appId>).
+    const fallback1 = steamAppsPath ? path.join(steamAppsPath, 'common', appId) : null
+    const fallback2 = steamAppsPath ? path.join(steamAppsPath, appId) : null
+    if (fallback1 && fs.existsSync(fallback1)) target = fallback1
+    else if (fallback2 && fs.existsSync(fallback2)) target = fallback2
+  }
+
+  if (target) {
+    try {
+      const { patchGameFolder } = await import('./local-steam-emulator')
+      const patchResult = patchGameFolder(target, appId)
+      if (patchResult.success) {
+        actions.push(`Clean-room emulator patched at ${target}`)
+        if (patchResult.warnings?.length) {
+          warnings.push(...patchResult.warnings)
+        }
+      } else {
+        warnings.push(`Clean-room emulator patch skipped: ${patchResult.error}`)
+      }
+    } catch (emulatorErr: any) {
+      warnings.push(`Clean-room emulator not available: ${emulatorErr?.message ?? 'import failed'}`)
+    }
+  } else {
+    warnings.push(
+      `Game folder not found in any library folders (appId=${appId}). ` +
+      `Skipping emulator patch.`,
+    )
   }
 
   return { actions, errors, warnings }

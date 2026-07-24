@@ -11,6 +11,8 @@
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
+    "target": "ES2022",
+    "lib": ["ES2022"],
     "forceConsistentCasingInFileNames": true,
     "baseUrl": "..",
     "paths": {

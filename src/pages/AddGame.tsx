@@ -16,6 +16,7 @@ import {
   Trash,
 } from 'lucide-react'
 import { t } from '../lib/i18n'
+import { parseError } from '../lib/parse-error'
 import { useToastStore } from '../stores/useToastStore'
 import { useSteamStore } from '../stores/useSteamStore'
 import { usePageHeader } from '../components/layout/AppShell'
@@ -200,7 +201,7 @@ export default function AddGame() {
         setFiles((prev) => prev.map((f) => f.path === file.path ? {
           ...f,
           status: 'error' as const,
-          message: err.message,
+          message: parseError(err),
         } : f))
       }
     }
@@ -240,18 +241,17 @@ export default function AddGame() {
         setFiles((prev) => prev.map((f) => f.path === pendingConfirm.path ? {
           ...f,
           status: 'error' as const,
-          message: result.error || t('addgame.importFailed'),
+          message: parseError(result.error, 'addgame.importFailed'),
         } : f))
-        showToast('error', result.error || t('addgame.importFailed'))
+        showToast('error', parseError(result.error, 'addgame.importFailed'))
       }
     } catch (err: any) {
       setClosingSteam(false)
       setFiles((prev) => prev.map((f) => f.path === pendingConfirm.path ? {
         ...f,
-        status: 'error' as const,
-        message: err.message,
+        status: 'error' as const,          message: parseError(err),
       } : f))
-      showToast('error', err.message)
+      showToast('error', parseError(err))
     }
 
     setPendingConfirm(null)
@@ -278,7 +278,7 @@ export default function AddGame() {
     if (result.success) {
       showToast('success', t('library.steamRestarted'))
     } else {
-      showToast('error', result.error || t('common.failed'))
+      showToast('error', parseError(result.error, 'common.failed'))
     }
   }
 

@@ -1,32 +1,40 @@
 @echo off
-setlocal enabledelayedexpansion
+rem ============================================================================
+rem build-native.bat — Wrapper que compila ycore.dll y lo deja en resources/native/
+rem Antes apuntaba a `c:\Users\mitch\Desktop\y-core-backup\native\ycore-online`
+rem (de la PC original del autor) y solo funcionaba ahí. Ahora delega en el
+rem build script canónico que ya existe dentro del repo en native/ycore/.
+rem ============================================================================
 
-set VCVARS=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat
-set CMAKE=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe
-set SRC=c:\Users\mitch\Desktop\y-core-backup\native\ycore-online
-set BUILD=c:\Users\mitch\Desktop\y-core-backup\native\build
+setlocal
 
-echo === Building x64 ===
-call "%VCVARS%" x64
-"%CMAKE%" -S "%SRC%" -B "%BUILD%\x64" -A x64 2>&1
-"%CMAKE%" --build "%BUILD%\x64" --config Release --target ycore_steam_api64 2>&1
-if %ERRORLEVEL% neq 0 (
-    echo BUILD FAILED x64
+set "ROOT=%~dp0.."
+set "NATIVE_BUILD=%ROOT%\native\ycore\build.bat"
+
+if not exist "%NATIVE_BUILD%" (
+    echo [ERROR] No encontre %NATIVE_BUILD%. El script canónico no está en el repo.
     exit /b 1
 )
-echo === x64 BUILD OK ===
 
-echo === Building x86 ===
-call "%VCVARS%" x86
-"%CMAKE%" -S "%SRC%" -B "%BUILD%\x86" -A Win32 2>&1
-"%CMAKE%" --build "%BUILD%\x86" --config Release --target ycore_steam_api32 2>&1
-if %ERRORLEVEL% neq 0 (
-    echo BUILD FAILED x86
+echo === Compilando ycore.dll via native\ycore\build.bat ===
+call "%NATIVE_BUILD%"
+if errorlevel 1 (
+    echo [ERROR] Fallo la compilacion de ycore.dll.
     exit /b 1
 )
-echo === x86 BUILD OK ===
 
-echo === Copying DLLs ===
-copy "%BUILD%\x64\Release\ycore_steam_api64.dll" "c:\Users\mitch\Desktop\y-core-backup\resources\native\" >nul 2>&1
-copy "%BUILD%\x86\Release\ycore_steam_api.dll" "c:\Users\mitch\Desktop\y-core-backup\resources\native\" >nul 2>&1
-echo === DONE ===
+echo === Copiando ycore.dll fresco a resources\native\ ===
+if not exist "%ROOT%\native\ycore\build\ycore.dll" (
+    echo [ERROR] %ROOT%\native\ycore\build\ycore.dll no se genero.
+    exit /b 1
+)
+
+if not exist "%ROOT%\resources\native" mkdir "%ROOT%\resources\native"
+copy /y "%ROOT%\native\ycore\build\ycore.dll" "%ROOT%\resources\native\ycore.dll" >nul
+if errorlevel 1 (
+    echo [ERROR] No pude copiar el DLL a resources\native\.
+    exit /b 1
+)
+
+echo === DONE - ycore.dll recompilado y copiado ===
+endlocal

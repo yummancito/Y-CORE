@@ -219,7 +219,7 @@ export async function closeSteamProcess(): Promise<{ success: boolean; error?: s
 
   const closed = await waitForSteamClosed(15000)
   if (!closed) {
-    return { success: false, error: 'Steam is still running. Please close it manually and try again.' }
+    return { success: false, error: 'errors.steam.stillRunning' }
   }
   return { success: true }
 }

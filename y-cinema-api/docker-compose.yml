@@ -1,0 +1,38 @@
+name: y-cinema-api
+
+# Postgres ya no se levanta acá — DATABASE_URL apunta al connection pooler
+# de Supabase (ver docs/ENV.md y prisma/supabase/auth-hook.sql). Redis y
+# Meilisearch siguen siendo self-hosted.
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - ycinema_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.10
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: masterKeyDev
+      MEILI_ENV: development
+    ports:
+      - '7700:7700'
+    volumes:
+      - ycinema_meili_data:/meili_data
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:7700/health']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  ycinema_redis_data:
+  ycinema_meili_data:

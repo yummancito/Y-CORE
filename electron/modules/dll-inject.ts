@@ -237,13 +237,13 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
   const destXinput = path.join(steamPath, 'xinput1_4.dll')
 
   if (!fs.existsSync(hookPath)) {
-    return { success: false, error: `${hookName}.dll not found in app resources`, installed: false }
+    return { success: false, error: 'errors.hook.notFound', installed: false }
   }
   if (!fs.existsSync(dwmapiPath)) {
-    return { success: false, error: 'dwmapi.dll not found in app resources', installed: false }
+    return { success: false, error: 'errors.hook.notFound', installed: false }
   }
   if (!fs.existsSync(xinputPath)) {
-    return { success: false, error: 'xinput1_4.dll not found in app resources', installed: false }
+    return { success: false, error: 'errors.hook.notFound', installed: false }
   }
 
   if (useYCoreTool) {
@@ -352,7 +352,7 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
   })
 
   if (response.response === 0) {
-    return { success: false, error: 'User cancelled hook DLL installation', installed: false }
+    return { success: false, error: 'errors.hook.userCancelled', installed: false }
   }
 
   try {
@@ -373,7 +373,7 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
     if (fs.existsSync(steamlessSrcDir)) fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true })
 
     if (!fs.existsSync(destHook) || !fs.existsSync(destDwmapi) || !fs.existsSync(destXinput)) {
-      return { success: false, error: 'Hook files were not copied to the Steam folder. Try running as administrator or close Steam manually.', installed: false }
+      return { success: false, error: 'errors.hook.notCopied', installed: false }
     }
 
     writeLastBuildId(steamPath, currentBuildId)
@@ -455,10 +455,10 @@ export async function startSteam(): Promise<{ success: boolean; error?: string; 
             logger.info('Steam started', 'steam')
             resolve({ success: true, message: 'Steam started' })
           } else {
-            resolve({ success: false, error: 'steam.exe not found' })
+            resolve({ success: false, error: 'errors.steam.exeNotFound' })
           }
         } else {
-          resolve({ success: false, error: 'Steam path not found' })
+          resolve({ success: false, error: 'errors.steam.pathNotFound' })
         }
       } else if (platform === 'darwin') {
         exec('open -a Steam', (err) => {
@@ -469,7 +469,7 @@ export async function startSteam(): Promise<{ success: boolean; error?: string; 
           resolve(err ? { success: false, error: err.message } : { success: true, message: 'Steam started' })
         })
       } else {
-        resolve({ success: false, error: 'Unsupported platform' })
+        resolve({ success: false, error: 'errors.platform.unsupported' })
       }
     }, 2000)
   })
@@ -478,7 +478,7 @@ export async function startSteam(): Promise<{ success: boolean; error?: string; 
 export async function verifySteam(): Promise<{ success: boolean; error?: string; message?: string }> {
   const steamPath = getSteamPath()
   if (!steamPath) {
-    return { success: false, error: 'Steam path not found' }
+    return { success: false, error: 'errors.steam.pathNotFound' }
   }
 
   const closeResult = await closeSteamProcess()
@@ -504,7 +504,7 @@ export async function verifySteam(): Promise<{ success: boolean; error?: string;
 
   const hookResult = await installHookDll(steamPath)
   if (!hookResult.success) {
-    return { success: false, error: hookResult.error || 'Failed to install Steam hooks' }
+    return { success: false, error: hookResult.error || 'errors.hook.installFailed' }
   }
 
   return startSteam()
@@ -513,7 +513,7 @@ export async function verifySteam(): Promise<{ success: boolean; error?: string;
 export function checkSteamVerification(): { installed: boolean; missing: string[] } {
   const steamPath = getSteamPath()
   if (!steamPath) {
-    return { installed: false, missing: ['Steam path not found'] }
+    return { installed: false, missing: ['errors.steam.pathNotFound'] }
   }
 
   const missing: string[] = []
@@ -538,7 +538,7 @@ export function checkSteamVerification(): { installed: boolean; missing: string[
 export async function retrySignatureCheck(): Promise<{ success: boolean; status?: string; error?: string }> {
   const steamPath = getSteamPath()
   if (!steamPath) {
-    return { success: false, error: 'Steam path not found' }
+    return { success: false, error: 'errors.steam.pathNotFound' }
   }
 
   const results = await ensureAllSignaturesCached(steamPath, 'pattern')

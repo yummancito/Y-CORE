@@ -21,6 +21,9 @@ import {
   FolderOpen,
   Check,
   RefreshCw,
+  Download,
+  Terminal,
+  X,
 } from 'lucide-react'
 import { AlertTriangle } from 'lucide-react'
 import { t } from '../lib/i18n'
@@ -117,7 +120,11 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const { username } = useAuthStore()
   const { showToast } = useToastStore()
-  const { showAdult, showTools, showAddGame, logsVisible, colorTheme, language, setShowAdult, setShowTools, setShowAddGame, setLogsVisible, setColorTheme, setLanguage, loadFromConfig } = useSettingsStore()
+  const {
+    showAdult, showTools, showAddGame, logsVisible, colorTheme, language,
+    setShowAdult, setShowTools, setShowAddGame, setLogsVisible, setColorTheme, setLanguage, loadFromConfig,
+    installMethod, setInstallMethod, lastInstallFallbackReason, clearInstallFallbackReason,
+  } = useSettingsStore()
   const [activeTab, setActiveTab] = useState<SettingsTab>('account')
   const [steamLogMonitor, setSteamLogMonitor] = useState(true)
 
@@ -398,6 +405,128 @@ export default function SettingsPage() {
                 <p>{t('settings.steamPathHowTo2')}</p>
                 <p>{t('settings.steamPathHowTo3')}</p>
                 <p className="font-mono text-[10px] text-text-muted mt-1">C:\Program Files (x86)\Steam</p>
+              </div>
+            </div>
+          </Card>
+
+          {/* Install method picker (H1.6) */}
+          <Card>
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/15 flex items-center justify-center">
+                  <Download className="w-5 h-5 text-accent" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-text-bright">{t('installMethod.title')}</h3>
+                  <p className="text-xs text-text-dim mt-0.5">{t('installMethod.desc')}</p>
+                </div>
+              </div>
+
+              {/* Fallback banner (aparece si el último install cayó a cliente) */}
+              {lastInstallFallbackReason && (
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/30">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-amber-300">
+                      {t('installMethod.lastFallbackTitle')}
+                    </p>
+                    <p className="text-[11px] text-amber-200/80 mt-0.5 leading-relaxed">
+                      {t(`installMethod.fallbackReason.${lastInstallFallbackReason}` as 'installMethod.fallbackReason.steamcmd-not-available')}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void clearInstallFallbackReason()}
+                    className="p-1 rounded-md text-amber-400/60 hover:text-amber-300 hover:bg-amber-500/10 transition-colors shrink-0"
+                    aria-label={t('installMethod.dismissBanner')}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* 3 picker cards (radio role) */}
+              <div className="flex flex-col gap-2.5" role="radiogroup" aria-label={t('installMethod.ariaGroup')}>
+                {([
+                  {
+                    key: 'auto' as const,
+                    icon: Activity,
+                    titleKey: 'installMethod.auto.title',
+                    descKey: 'installMethod.auto.desc',
+                    tipKey: 'installMethod.auto.tip',
+                    recommended: true,
+                  },
+                  {
+                    key: 'steamcmd' as const,
+                    icon: Terminal,
+                    titleKey: 'installMethod.steamcmd.title',
+                    descKey: 'installMethod.steamcmd.desc',
+                    tipKey: 'installMethod.steamcmd.tip',
+                    recommended: false,
+                  },
+                  {
+                    key: 'steamclient' as const,
+                    icon: FolderOpen,
+                    titleKey: 'installMethod.steamclient.title',
+                    descKey: 'installMethod.steamclient.desc',
+                    tipKey: 'installMethod.steamclient.tip',
+                    recommended: false,
+                  },
+                ]).map((m) => {
+                  const Icon = m.icon
+                  const on = installMethod === m.key
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={on ? 'true' : 'false'}
+                          onClick={() => void setInstallMethod(m.key)}
+                      aria-label={t(m.tipKey)}
+                      className={[
+                        'text-left flex gap-3 p-3.5 rounded-xl border transition-all duration-150',
+                        on
+                          ? 'bg-accent/10 border-accent/50 shadow-[0_0_0_1px_rgba(115,115,255,0.15)]'
+                          : 'bg-white/[0.03] border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.05]',
+                      ].join(' ')}
+                    >
+                      <span
+                        className={[
+                          'flex-none w-9 h-9 rounded-lg flex items-center justify-center transition-colors',
+                          on ? 'bg-accent/25 text-accent' : 'bg-white/[0.06] text-text-secondary',
+                        ].join(' ')}
+                      >
+                        <Icon className="w-5 h-5" />
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-text-bright">{t(m.titleKey)}</span>
+                          {m.recommended && (
+                            <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/20 text-accent">
+                              {t('installMethod.recommended')}
+                            </span>
+                          )}
+                        </span>
+                        <span className="block text-[12px] text-text-dim mt-1 leading-relaxed">{t(m.descKey)}</span>
+                        {m.key === 'steamclient' && on && (
+                          <span className="flex items-center gap-1.5 text-[11px] text-amber-300/90 mt-2">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            {t('installMethod.steamclient.openSteamNote')}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className={[
+                          'flex-none mt-1 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors',
+                          on ? 'border-accent' : 'border-white/[0.18]',
+                        ].join(' ')}
+                        aria-hidden="true"
+                      >
+                        {on && <span className="w-2 h-2 rounded-full bg-accent" />}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </Card>

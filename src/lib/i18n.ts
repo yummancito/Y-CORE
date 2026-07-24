@@ -253,6 +253,7 @@ const es: Dict = {
   'library.ready': 'Listo',
   'library.downloading': 'Descargando',
   'downloads.title': 'Descargas',
+  'downloads.subtitle': 'Descargas activas y en cola',
   'downloads.netSpeed': 'Velocidad de red',
   'downloads.diskSpeed': 'Velocidad de disco',
   'downloads.totalProgress': 'Progreso total',
@@ -267,6 +268,40 @@ const es: Dict = {
   'downloads.downloading': 'Descargando',
   'downloads.pause': 'Pausar',
   'downloads.resume': 'Reanudar',
+  // Sidebar downloads nav + page sections (H1.8 — DownloadsPage)
+  'downloads.activeSection': 'En curso',
+  'downloads.queueSection': 'En cola',
+  'downloads.historySection': 'Recientes',
+  'downloads.activeHelp': 'Descargando {name}. Mantené esta página abierta o usá el dock flotante (Esc).',
+  'downloads.idleHelp': 'Sin descargas activas — agregá un juego desde la Tienda.',
+  'downloads.emptyActive': 'Nada en curso',
+  'downloads.emptyActiveHint': 'Cuando instales un juego lo verás acá con su progreso y velocidad.',
+  'downloads.emptyQueue': 'Cola vacía',
+  'downloads.preparing': 'preparando...',
+  'downloads.badgeActiveTooltip': '{active} descarga activa · {queued} en cola',
+  'downloads.badgeQueuedTooltip': '{queued} juegos en cola',
+  'downloads.removed': '“{name}” quitado de la cola',
+  'downloads.jobFailed': 'La descarga de {name} falló: {reason}',
+  'downloads.cancelling': 'Cancelando descarga...',
+  'downloads.removeWillStopSoon': 'Quitado: la subtarea actual termina sola y la cola sigue.',
+  'downloads.removeFromQueue': 'Quitar de la cola',
+  'downloads.clearAll': 'Vaciar cola',
+  'downloads.clearAllHint': 'Quitar todos los juegos de la cola (no cancela la descarga activa).',
+  'downloads.clearConfirm': '¿Vaciar la cola entera?',
+  'downloads.openDock': 'Ver progreso detallado',
+  'downloads.openDockShort': 'Abrir dock detallado',
+  'installDock.pill.stalled': 'Estancado',
+  'installDock.pill.stalledTip': 'La descarga no avanza — reintentando automáticamente.',
+  'installDock.pill.failed': 'Falló',
+  'installDock.pill.failedTip': 'La descarga falló.',
+  'installDock.pill.complete': 'Completado',
+  'installDock.pill.completeTip': 'Descarga completada.',
+  'installDock.pill.downloading': 'Descargando',
+  'installDock.pill.downloadingTip': 'Descarga en curso.',
+  'installDock.badge.steamcmdTip': 'Instalación vía SteamCMD.',
+  'installDock.badge.steamclientTip': 'Instalación vía cliente de Steam.',
+  'installDock.badge.auto': 'Auto',
+  'installDock.badge.autoTip': 'Método de instalación automático.',
   'library.recentlyPlayed': 'Recientemente jugados',
   'library.recentlyInstalled': 'Recientemente instalados',
   'library.new': 'Nuevos',
@@ -549,6 +584,11 @@ const es: Dict = {
   // Store
   'store.title': 'Tienda',
   'store.subtitle': 'Descarga juegos de la base de datos de la comunidad',
+  'store.sort.label': 'Ordenar por',
+  'store.sort.name': 'Nombre',
+  'store.sort.downloads': 'Descargas',
+  'store.sort.rating': 'Valoración',
+  'store.sort.recent': 'Recientes',
   'store.dlc': 'DLC',
   'store.dlcSubtitle': 'Contenido descargable para tus juegos',
   'store.searchPlaceholder': 'Buscar por nombre o AppID...',
@@ -1002,6 +1042,7 @@ const en: Dict = {
   'library.sortBy': 'Sort by',
   'library.downloading': 'Downloading',
   'downloads.title': 'Downloads',
+  'downloads.subtitle': 'Active and queued downloads',
   'downloads.netSpeed': 'Network speed',
   'downloads.diskSpeed': 'Disk speed',
   'downloads.totalProgress': 'Total progress',
@@ -1016,6 +1057,40 @@ const en: Dict = {
   'downloads.downloading': 'Downloading',
   'downloads.pause': 'Pause',
   'downloads.resume': 'Resume',
+  // Sidebar downloads nav + page sections (H1.8 — DownloadsPage)
+  'downloads.activeSection': 'In progress',
+  'downloads.queueSection': 'In queue',
+  'downloads.historySection': 'Recent',
+  'downloads.activeHelp': 'Downloading {name}. Keep this tab open or use the floating dock (Esc).',
+  'downloads.idleHelp': 'No active downloads — add a game from the Store.',
+  'downloads.emptyActive': 'Nothing in progress',
+  'downloads.emptyActiveHint': 'When you install a game you’ll see its progress and speed here.',
+  'downloads.emptyQueue': 'Empty queue',
+  'downloads.preparing': 'preparing...',
+  'downloads.badgeActiveTooltip': '{active} active · {queued} queued',
+  'downloads.badgeQueuedTooltip': '{queued} games queued',
+  'downloads.removed': '“{name}” removed from queue',
+  'downloads.jobFailed': 'Download of {name} failed: {reason}',
+  'downloads.cancelling': 'Cancelling download...',
+  'ownloads.removeWillStopSoon': 'Removed: current subtask will finish on its own, the queue keeps going.',
+  'downloads.removeFromQueue': 'Remove from queue',
+  'downloads.clearAll': 'Clear queue',
+  'downloads.clearAllHint': 'Remove every queued game (does not cancel an active download).',
+  'downloads.clearConfirm': 'Clear the entire queue?',
+  'downloads.openDock': 'See detailed progress',
+  'downloads.openDockShort': 'Open detailed dock',
+  'installDock.pill.stalled': 'Stalled',
+  'installDock.pill.stalledTip': 'Download is not progressing — retrying automatically.',
+  'installDock.pill.failed': 'Failed',
+  'installDock.pill.failedTip': 'Download failed.',
+  'installDock.pill.complete': 'Complete',
+  'installDock.pill.completeTip': 'Download complete.',
+  'installDock.pill.downloading': 'Downloading',
+  'installDock.pill.downloadingTip': 'Download in progress.',
+  'installDock.badge.steamcmdTip': 'Installing via SteamCMD.',
+  'installDock.badge.steamclientTip': 'Installing via Steam client.',
+  'installDock.badge.auto': 'Auto',
+  'installDock.badge.autoTip': 'Automatic install method.',
   'library.recentlyPlayed': 'Recently played',
   'library.recentlyInstalled': 'Recently installed',
   'library.new': 'New',
@@ -1369,6 +1444,11 @@ const en: Dict = {
   // Store
   'store.title': 'Store',
   'store.subtitle': 'Download games from the community database',
+  'store.sort.label': 'Sort by',
+  'store.sort.name': 'Name',
+  'store.sort.downloads': 'Downloads',
+  'store.sort.rating': 'Rating',
+  'store.sort.recent': 'Recent',
   'store.dlc': 'DLC',
   'store.dlcSubtitle': 'Downloadable content for your games',
   'store.searchPlaceholder': 'Search by name or AppID...',
@@ -3902,4 +3982,19 @@ export function setLanguage(lang: string) {
 
 export function t(key: string): string {
   return dicts[currentLang]?.[key] || dicts.en[key] || key
+}
+
+/**
+ * tf — interpolación simple sobre `t()`: reemplaza `{key}` por params[key].
+ * H1.8 sidebar downloads nav lo usa para tooltips parametrizados. Si una key
+ * no existe en el dict activo, mantiene el placeholder `{name}` visible
+ * (en vez de devolver vacío) para que devs detecten keys faltantes rápido.
+ */
+export function tf(key: string, params: Record<string, string | number> = {}): string {
+  const raw = t(key)
+  if (!params || Object.keys(params).length === 0) return raw
+  return raw.replace(/\{(\w+)\}/g, (_match, name) => {
+    const v = params[name]
+    return v == null ? `{${name}}` : String(v)
+  })
 }

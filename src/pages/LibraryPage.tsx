@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Gamepad2,
   Play,
@@ -18,6 +19,7 @@ import {
   Wifi,
 } from 'lucide-react'
 import { t } from '../lib/i18n'
+import { parseError } from '../lib/parse-error'
 import { useLibraryStore, useFilteredLibraryGames } from '../stores/useLibraryStore'
 import { useToastStore } from '../stores/useToastStore'
 import { usePageHeader } from '../components/layout/AppShell'
@@ -25,11 +27,17 @@ import { getCoverUrl } from '../domain/utils'
 import { CoverImage } from '../components/ui/CoverImage'
 import { Card3D } from '../components/ui/Card3D'
 import { ConfirmModal } from '../components/ui/ConfirmModal'
+import { MethodBadge } from '../components/method-badge'
+import { useSettingsStore } from '../stores/useSettingsStore'
+import { useSteamCmdJobsStore } from '../stores/useSteamCmdJobsStore'
 
 export default function LibraryPage() {
   const { searchQuery, sortBy, loadGames, setSearchQuery, setSortBy, loading, error } = useLibraryStore()
   const allFiltered = useFilteredLibraryGames()
+  const navigate = useNavigate()
   const { showToast } = useToastStore()
+  const installMethod = useSettingsStore((s) => s.installMethod)
+  const activeSteamJob = useSteamCmdJobsStore((s) => s.active)
   const [coverErrors, setCoverErrors] = useState<Set<string>>(new Set())
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [showSortDropdown, setShowSortDropdown] = useState(false)
@@ -181,7 +189,7 @@ export default function LibraryPage() {
     if (result.success) {
       showToast('success', t('library.launching'))
     } else {
-      showToast('error', result.error || t('library.launchFailed'))
+      showToast('error', parseError(result.error, 'library.launchFailed'))
     }
   }
 
@@ -197,7 +205,7 @@ export default function LibraryPage() {
           showToast('success', t('library.gameRemoved'))
           await loadGames()
         } else {
-          showToast('error', result.error || t('library.failedRemove'))
+          showToast('error', parseError(result.error, 'library.failedRemove'))
         }
       },
     })
@@ -206,7 +214,7 @@ export default function LibraryPage() {
   const handleOpenLocation = async (game: InstalledGame) => {
     const result = await window.steamtools.openGameLocation(game.appId, game.installDir)
     if (!result.success) {
-      showToast('error', result.error || t('library.openFailed'))
+      showToast('error', parseError(result.error, 'library.openFailed'))
     }
   }
 
@@ -215,7 +223,7 @@ export default function LibraryPage() {
     if (result.success) {
       showToast('info', t('library.verifyStart'))
     } else {
-      showToast('error', result.error || t('library.verifyFailed'))
+      showToast('error', parseError(result.error, 'library.verifyFailed'))
     }
   }
 
@@ -226,14 +234,14 @@ export default function LibraryPage() {
       if (result.success) {
         showToast('success', `${t('onlinefix.disabledSuccess')} ${game.name || t('library.unknown')}`)
       } else {
-        showToast('error', result.error || t('onlinefix.disableFailed'))
+        showToast('error', parseError(result.error, 'onlinefix.disableFailed'))
       }
     } else {
       const result = await window.steamtools.enableOnlineFix(game.appId)
       if (result.success) {
         showToast('success', `${t('onlinefix.enabledSuccess')} ${game.name || t('library.unknown')}`)
       } else {
-        showToast('error', result.error || t('onlinefix.enableFailed'))
+        showToast('error', parseError(result.error, 'onlinefix.enableFailed'))
       }
     }
   }
@@ -386,9 +394,18 @@ export default function LibraryPage() {
                         alt={game.name}
                         className="w-full h-full object-cover"
                       />
-                    </div>
+                    </div>                    <div
+                      className="absolute inset-0 bg-gradient-to-t from-black/85 via-black-20 to-transparent"
+                    />
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+                    {/* Method badge — top-right corner of the cover */}
+                    <div className="absolute top-2 right-2 z-30">
+                      <MethodBadge
+                        method={installMethod}
+                        liveState={activeSteamJob?.appId === game.appId ? activeSteamJob.state : undefined}
+                        onClick={() => navigate('/downloads')}
+                      />
+                    </div>
 
                     <div className="absolute bottom-0 left-0 right-0 p-3 pt-8 z-10">
                       <p className="text-sm font-bold text-white leading-tight line-clamp-2 drop-shadow-md">

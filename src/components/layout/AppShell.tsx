@@ -65,6 +65,12 @@ export function AppShell({ children }: AppShellProps) {
   const { error, open, clearError, retry } = useErrorStore()
   const [pickMode, setPickMode] = useState(false)
   const [pageHeader, setPageHeader] = useState<ReactNode>(null)
+  // IMPORTANTE: memoizamos el value del context. Si fuera un objeto nuevo cada
+  // render, `usePageHeader` en cada página vería cambiar `setHeader` en sus
+  // deps → useEffect corre cleanup `setHeader(null)` → AppShell re-renderiza →
+  // loop infinito ("Maximum update depth exceeded"). El ref estable mata el
+  // loop sin tocar la lógica de cada page.
+  const headerContextValue = useMemo(() => ({ setHeader: setPageHeader }), [])
   const [bgDataUrl, setBgDataUrl] = useState<string | null>(null)
   const [restartPrompt, setRestartPrompt] = useState<RestartPrompt | null>(null)
 
@@ -186,7 +192,7 @@ export function AppShell({ children }: AppShellProps) {
   }, [pickMode, showToast])
 
   return (
-    <PageHeaderContext.Provider value={{ setHeader: setPageHeader }}>
+    <PageHeaderContext.Provider value={headerContextValue}>
       <div className={`flex h-screen w-screen relative overflow-hidden bg-bg-primary ${pickMode ? 'pick-mode' : ''}`}>
         {/* Background image layer */}
         {customization.backgroundImage.enabled && customization.backgroundImage.path && bgDataUrl && (

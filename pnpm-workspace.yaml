@@ -3,9 +3,9 @@ packages:
   - 'packages/*'
 nodeLinker: hoisted
 allowBuilds:
-  electron: set this to true or false
-  esbuild: set this to true or false
-  koffi: set this to true or false
+  electron: false
+  esbuild: false
+  koffi: false
 onlyBuiltDependencies:
   - electron
   - esbuild

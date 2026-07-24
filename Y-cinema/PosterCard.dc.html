@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div onClick="{{ it.open }}" style="cursor:pointer;scroll-snap-align:start;width:100%" style-hover="transform:translateY(-4px)">
+  <div style="aspect-ratio:2/3;border-radius:10px;overflow:hidden;position:relative;background:{{ it.bg }};border:1px solid rgba(255,255,255,0.06);box-shadow:0 2px 8px rgba(0,0,0,0.4);transition:box-shadow .25s ease-out,border-color .25s ease-out" style-hover="box-shadow:0 18px 44px rgba(0,0,0,0.65), 0 4px 12px rgba(0,0,0,0.5);border-color:rgba(255,255,255,0.14)">
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0.12) 0%,transparent 30%,transparent 55%,rgba(0,0,0,0.55) 100%)"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <span style="font-family:ui-monospace,monospace;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,0.55)">{{ it.typeLabel }}</span>
+        <sc-if value="{{ it.hasR }}" hint-placeholder-val="{{ true }}">
+          <span style="display:flex;align-items:center;gap:3px;background:rgba(0,0,0,0.55);border-radius:5px;padding:2px 6px;font-size:11px;font-weight:600;color:#F59E0B">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 3l2.7 5.9 6.3.7-4.7 4.3 1.3 6.1-5.6-3.2-5.6 3.2 1.3-6.1L3 9.6l6.3-.7z"></path></svg>{{ it.ratingStr }}</span>
+        </sc-if>
+      </div>
+      <div>
+        <div style="font-size:15px;font-weight:800;line-height:1.15;letter-spacing:-0.01em;color:#fff;text-transform:uppercase;text-wrap:balance">{{ it.t }}</div>
+        <div style="margin-top:6px;height:2px;width:26px;background:rgba(255,255,255,0.35);border-radius:1px"></div>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:#A1A1AA">
+    <sc-if value="{{ it.hasR }}" hint-placeholder-val="{{ true }}">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 3l2.7 5.9 6.3.7-4.7 4.3 1.3 6.1-5.6-3.2-5.6 3.2 1.3-6.1L3 9.6l6.3-.7z"></path></svg>
+      <span style="color:#E4E4E7;font-weight:600">{{ it.ratingStr }}</span>
+      <span style="color:#71717A">·</span>
+    </sc-if>
+    <span>{{ it.y }}</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:200,&quot;height&quot;:340},&quot;it&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;{t:string,y:number,bg:string,ratingStr:string,hasR:boolean,typeLabel:string,open:()=&gt;void}&quot;}}"></script>
+</body>
+</html>

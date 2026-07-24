@@ -158,6 +158,21 @@ interface Window {
       manifest_files: { depot_id: string; manifest_id: string }[]
       depot_keys: { depot_id: string; key: string }[]
     }) => Promise<ImportGameFolderResult>
+    downloadDepot: (options: {
+      appId: number
+      depotId: number
+      manifestId: string | number
+      installDir: string
+      cellId?: number
+    }) => Promise<{
+      success: boolean
+      appId: string
+      installDir: string
+      bytesDownloaded: number
+      bytesTotal: number
+      durationMs: number
+      errorMessage?: string
+    }>
     storeGetLocalGameData: (appId: string) => Promise<{
       success: boolean
       error?: string
@@ -196,5 +211,48 @@ interface Window {
     onUpdateDownloaded: (callback: (info: { version?: string }) => void) => () => void
     onUpdateError: (callback: (info: { message: string }) => void) => () => void
     retrySignatureCheck: () => Promise<{ success: boolean; status?: string; error?: string }>
+    // H1.4 — SteamCMD bridges. installDir es opcional: si se omite, el main
+    // process computa `${userData}/Library/${appId}`. Esto evita conflictos
+    // con la sanitización de paths del IPC handler que rechaza rutas fuera
+    // del libraryRoot.
+    startSteamCmdInstall: (options: { appId: string; installDir?: string; betaBranch?: string; validate?: boolean }) => Promise<{
+      success: boolean
+      appId?: string
+      pid?: number | null
+      queued?: boolean
+      error?: string
+      errorKey?: string
+    }>
+    cancelSteamCmdInstall: (appId: string) => Promise<{ success: boolean; appId: string; error?: string }>
+    isSteamCmdAvailable: () => Promise<boolean>
+    listSteamCmdJobs: () => Promise<SteamCmdProgress[]>
+    onSteamCmdProgress: (callback: (progress: SteamCmdProgress) => void) => () => void
+    // H1.5 — kick-off del fetcher cuando el binario no está en cache.
+    fetchSteamCmd: (options?: { force?: boolean }) => Promise<{
+      success: boolean
+      binPath?: string
+      shortSha?: string
+      byteSize?: number
+      elapsedMs?: number
+      source?: 'cache' | 'fresh' | 'forced' | 'error'
+      error?: string
+      errorKey?: string
+    }>
   }
+}
+
+interface SteamCmdProgress {
+  appId: string
+  state: 'preparing' | 'downloading' | 'verifying' | 'committing' | 'allocating' | 'stalled' | 'done' | 'failed'
+  bytesDownloaded: number
+  bytesTotal: number
+  percent: number
+  speedBytesPerSec: number
+  etaSeconds: number
+  pid?: number
+  startedAt?: number
+  finishedAt?: number
+  errorMessage?: string
+  errorKey?: string
+  stderrTail?: string[]
 }

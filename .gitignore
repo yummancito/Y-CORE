@@ -123,3 +123,15 @@ scripts/dev/
 
 # Signing tools (external binaries)
 $dir/
+
+# H1.x — Native clean-room Steam emulator (compilable artifact, regenerable).
+# Source in native/ycore_steam/ está committeado. Solo el output de CMake es
+# pesado y variable; cada developer lo compila localmente con
+# scripts/build-ycore-steam.bat.
+native/ycore_steam/build/
+
+# H1.8.c — CLI compiled output (lo genera `pnpm build:cli`). El shim
+# bin/ycore.js (5 líneas) sí está commiteado para que `pnpm i && npx ycore`
+# funcione sin pasar por build. bin/compiled/ pesa varios MB y solo cambia
+# cuando cambian tipos; lo regenera cada developer localmente.
+bin/compiled/

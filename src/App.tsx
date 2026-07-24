@@ -5,8 +5,10 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import { ToastContainer } from './components/ui/Toast'
 import { UpdateNotification } from './components/ui/UpdateNotification'
 import { SteamErrorModal } from './components/ui/SteamErrorModal'
+import { SignaturePendingModal } from './components/ui/SignaturePendingModal'
 import { CommandPalette } from './components/CommandPalette'
 import { TourOverlay } from './components/ui/TourOverlay'
+import { InstallProgressDockMount } from './components/install-progress-dock'
 import { useCommandPaletteStore } from './stores/useCommandPaletteStore'
 import { useSteamErrorStore } from './stores/useSteamErrorStore'
 
@@ -19,6 +21,7 @@ const GameDetailPage = lazy(() => import('./pages/GameDetailPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const OnlineFixPage = lazy(() => import('./pages/OnlineFixPage'))
 const DrmRemoverPage = lazy(() => import('./pages/DrmRemoverPage'))
+const DownloadsPage = lazy(() => import('./pages/DownloadsPage'))
 
 function PageLoader() {
   return (
@@ -41,6 +44,7 @@ function AppRoutes() {
           <Route path="/logs" element={<LogsPage />} />
           <Route path="/online-fix" element={<OnlineFixPage />} />
           <Route path="/drm-remover" element={<DrmRemoverPage />} />
+          <Route path="/downloads" element={<DownloadsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Suspense>
@@ -86,8 +90,10 @@ export default function App() {
       <ToastContainer />
       <UpdateNotification />
       <SteamErrorModal />
+      <SignaturePendingModal />
       <CommandPalette />
       <TourOverlay />
+      <InstallProgressDockMount />
     </>
   )
 }

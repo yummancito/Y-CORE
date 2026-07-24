@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'y-cinema-api/**'
+  pull_request:
+    paths:
+      - 'y-cinema-api/**'
+
+defaults:
+  run:
+    working-directory: y-cinema-api
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      meilisearch:
+        image: getmeili/meilisearch:v1.10
+        env:
+          MEILI_MASTER_KEY: masterKeyDev
+          MEILI_ENV: development
+        ports:
+          - 7700:7700
+
+    # DATABASE_URL/SUPABASE_* apuntan a un proyecto Supabase de test, no a
+    # un contenedor local (Postgres ya no se levanta en CI — ver Fase B de
+    # la migración a Supabase en docs/ROADMAP.md). Sin el secret
+    # SUPABASE_TEST_DATABASE_URL configurado en el repo, migrate/seed/test
+    # se saltan explícitamente en vez de fallar el pipeline — lint/
+    # typecheck/build no dependen de DB y corren siempre.
+    env:
+      NODE_ENV: test
+      DATABASE_URL: ${{ secrets.SUPABASE_TEST_DATABASE_URL }}
+      REDIS_URL: redis://localhost:6379
+      MEILISEARCH_HOST: http://localhost:7700
+      MEILISEARCH_API_KEY: masterKeyDev
+      SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL || 'https://ci-placeholder.supabase.co' }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY || 'ci-placeholder' }}
+      SUPABASE_JWT_SECRET: ${{ secrets.SUPABASE_TEST_JWT_SECRET || 'ci-only-placeholder-not-for-production' }}
+      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
+      FANART_API_KEY: ${{ secrets.FANART_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: y-cinema-api/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Apply migrations
+        if: ${{ secrets.SUPABASE_TEST_DATABASE_URL != '' }}
+        run: npx prisma migrate deploy
+
+      - name: Seed
+        if: ${{ secrets.SUPABASE_TEST_DATABASE_URL != '' }}
+        run: npm run prisma:seed
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

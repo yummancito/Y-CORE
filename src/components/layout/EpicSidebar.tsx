@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { RefreshCw, ShieldCheck, ShieldAlert, MessageCircle } from 'lucide-react'
+import { CloudDownload } from 'lucide-react'
 import {
   Library20Regular,
   AddCircle20Regular,
@@ -10,6 +11,7 @@ import {
   DocumentText20Regular,
   Wifi120Regular,
   ShieldDismiss20Regular,
+  ArrowDownload20Regular,
 } from '@fluentui/react-icons'
 import { useLibraryStore } from '../../stores/useLibraryStore'
 import { useSteamStore } from '../../stores/useSteamStore'
@@ -18,7 +20,7 @@ import { useToastStore } from '../../stores/useToastStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useDownloadQueueStore } from '../../stores/useDownloadQueueStore'
 import { useSupportChatStore } from '../../stores/useSupportChatStore'
-import { t } from '../../lib/i18n'
+import { t, tf } from '../../lib/i18n'
 import { isGameFullyDownloaded, getDownloadProgress, getCoverUrl, getCoverFallbackUrls } from '../../domain/utils'
 import { CoverImage } from '../../components/ui/CoverImage'
 
@@ -45,6 +47,51 @@ function NavItem({ to, icon: Icon, label, tourId }: NavItemProps) {
     >
       <Icon className="w-6 h-6 flex-shrink-0" />
       <span className="font-medium">{label}</span>
+    </NavLink>
+  )
+}
+
+function DownloadsNavItem() {
+  const queueLength = useDownloadQueueStore((s) => s.queue.length)
+  const current = useDownloadQueueStore((s) => s.current)
+  const totalActive = current ? 1 : 0
+  const totalPending = queueLength + totalActive
+  return (
+    <NavLink
+      to="/downloads"
+      title={t('downloads.title')}
+      data-tour="downloads"
+      className={({ isActive }) =>
+        `flex items-center gap-3 h-11 px-3.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+          isActive
+            ? 'bg-white/[0.08] text-text-bright shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+            : 'text-text-secondary hover:text-text-bright hover:bg-white/[0.04]'
+        }`
+      }
+    >
+      <ArrowDownload20Regular className="w-6 h-6 flex-shrink-0" />
+      <span className="font-medium flex-1">{t('nav.downloads')}</span>
+      {totalPending > 0 && (
+        <span
+          className={`flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+            totalActive > 0
+              ? 'bg-accent text-white animate-pulse'
+              : 'bg-accent/80 text-white'
+          }`}
+          title={
+            totalActive > 0
+              ? tf('downloads.badgeActiveTooltip', { active: totalActive, queued: queueLength })
+              : tf('downloads.badgeQueuedTooltip', { queued: queueLength })
+          }
+          aria-label={
+            totalActive > 0
+              ? tf('downloads.badgeActiveTooltip', { active: totalActive, queued: queueLength })
+              : tf('downloads.badgeQueuedTooltip', { queued: queueLength })
+          }
+        >
+          {totalPending}
+        </span>
+      )}
     </NavLink>
   )
 }
@@ -138,6 +185,7 @@ export function EpicSidebar() {
   const NAV_ITEM_MAP: Record<string, { to: string; icon: React.ComponentType<{ className?: string }>; label: string; conditional?: boolean }> = {
     library: { to: '/', icon: Library20Regular, label: t('library.title') },
     store: { to: '/store', icon: BuildingShop20Regular, label: t('store.title') },
+    downloads: { to: '/downloads', icon: ArrowDownload20Regular, label: t('nav.downloads') },
     onlinefix: { to: '/online-fix', icon: Wifi120Regular, label: t('nav.onlinefix') },
     drmremover: { to: '/drm-remover', icon: ShieldDismiss20Regular, label: t('nav.drmRemover') },
     addgame: { to: '/add-game', icon: AddCircle20Regular, label: t('nav.addGame'), conditional: showAddGame },
@@ -171,6 +219,9 @@ export function EpicSidebar() {
             if (!config) return null
             if (item.id === 'store') {
               return <StoreNavItem key={item.id} />
+            }
+            if (item.id === 'downloads') {
+              return <DownloadsNavItem key={item.id} />
             }
             return <NavItem key={item.id} to={config.to} icon={config.icon} label={config.label} tourId={item.id} />
           })}

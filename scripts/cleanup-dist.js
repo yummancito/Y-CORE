@@ -1,7 +1,19 @@
 const fs = require('fs-extra')
 const path = require('path')
 
-const outputDir = 'C:\\ybuild'
+// Resolver outputDir desde package.json `build.directories.output` para que
+// se mantenga en sync con la config real de electron-builder. Antes
+// estaba hardcoded a `C:\ybuild` que no existía en otras máquinas.
+const rootDir = path.resolve(__dirname, '..')
+let outputDir
+try {
+  const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'))
+  const rel = pkg.build?.directories?.output ?? 'release'
+  outputDir = path.resolve(rootDir, rel)
+} catch (err) {
+  console.error('[cleanup-dist] WARN: no pude leer package.json, usando fallback `release`:', err?.message)
+  outputDir = path.resolve(rootDir, 'release')
+}
 
 if (!fs.existsSync(outputDir)) {
   console.error('[cleanup-dist] ERROR: output dir not found:', outputDir)

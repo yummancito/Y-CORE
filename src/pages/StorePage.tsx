@@ -5,6 +5,7 @@ import {
   LayoutGrid, Star,
 } from 'lucide-react'
 import { t } from '../lib/i18n'
+import { parseError } from '../lib/parse-error'
 import { useToastStore } from '../stores/useToastStore'
 import { useLibraryStore } from '../stores/useLibraryStore'
 import { useDownloadQueueStore } from '../stores/useDownloadQueueStore'
@@ -24,7 +25,8 @@ import { DonationModal } from '../components/ui/DonationModal'
 type Tab = 'browse'
 
 // Module-level cache that persists across component unmount/remount (navigation)
-let _gamesCache: { games: MergedGame[]; timestamp: number; showAdult: boolean } | null = null
+type SortKey = 'name' | 'downloads' | 'rating' | 'recent'
+let _gamesCache: { games: MergedGame[]; timestamp: number; showAdult: boolean; sort: SortKey } | null = null
 const GAMES_CACHE_TTL = 5 * 60 * 1000
 
 function getPrimaryCategoryForGame(game: MergedGame): CategoryId | null {
@@ -96,6 +98,7 @@ export default function StorePage() {
   const [hasMore, setHasMore] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [hideInstalled, setHideInstalled] = useState(true)
+  const [sort, setSort] = useState<SortKey>('name')
   const [heroIndex, setHeroIndex] = useState(0)
   const [heroPaused, setHeroPaused] = useState(false)
   const heroTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -162,56 +165,63 @@ export default function StorePage() {
 
   const loadInitialGames = useCallback(async () => {
     const cache = _gamesCache
-    if (cache && Date.now() - cache.timestamp < GAMES_CACHE_TTL && cache.showAdult === showAdult) {
+    if (cache && Date.now() - cache.timestamp < GAMES_CACHE_TTL && cache.showAdult === showAdult && cache.sort === sort) {
       setAllGames(cache.games)
       setBrowseLoading(false)
       return
     }
     setBrowseLoading(true)
     try {
-      const resp = await listGames({ limit: 60, offset: 0 })
+      const resp = await listGames({ sort, limit: 60, offset: 0 })
       const games = resp.games ? filterGames(resp.games.map(gameSummaryToMerged)) : []
       loadOffsetRef.current = resp.games?.length ?? 0
       setHasMore((resp.games?.length ?? 0) > 0)
       setAllGames(games)
       if (games.length > 0) {
-        _gamesCache = { games, timestamp: Date.now(), showAdult }
+        _gamesCache = { games, timestamp: Date.now(), showAdult, sort }
       }
     } catch (err: any) {
-      showToast('error', `${t('store.failedLoad')}: ${err.message}`)
+      showToast('error', `${t('store.failedLoad')}: ${parseError(err)}`)
     } finally {
       setBrowseLoading(false)
     }
-  }, [filterGames, showAdult, showToast])
+  }, [filterGames, showAdult, sort, showToast])
 
   const loadMoreGames = useCallback(async () => {
     if (loadingMoreRef.current || !hasMore) return
     loadingMoreRef.current = true
     setLoadingMore(true)
     try {
-      const resp = await listGames({ limit: 60, offset: loadOffsetRef.current })
+      const resp = await listGames({ sort, limit: 60, offset: loadOffsetRef.current })
       const newGames = resp.games ? filterGames(resp.games.map(gameSummaryToMerged)) : []
       loadOffsetRef.current += resp.games?.length ?? 0
       setHasMore((resp.games?.length ?? 0) > 0)
       if (newGames.length > 0) {
         setAllGames(prev => {
           const merged = dedupeByAppId([...prev, ...newGames])
-          _gamesCache = { games: merged, timestamp: Date.now(), showAdult }
+          _gamesCache = { games: merged, timestamp: Date.now(), showAdult, sort }
           return merged
         })
       }
     } catch (err: any) {
-      showToast('error', `${t('store.failedLoad')}: ${err.message}`)
+      showToast('error', `${t('store.failedLoad')}: ${parseError(err)}`)
     } finally {
       loadingMoreRef.current = false
       setLoadingMore(false)
     }
-  }, [hasMore, filterGames, showToast])
+  }, [hasMore, filterGames, sort, showToast])
+
+  // Reset pagination + clear cache when the user changes Sort (otherwise old
+  // cached rows from a previous sort would still display).
+  useEffect(() => {
+    loadOffsetRef.current = 0
+    if (_gamesCache && _gamesCache.sort !== sort) _gamesCache = null
+  }, [sort])
 
   useEffect(() => {
     loadInitialGames().catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showAdult])
+  }, [showAdult, sort])
 
   // Infinite scroll via IntersectionObserver + scroll fallback
   // loadingMore in deps ensures observer reconnects after sentinel remounts
@@ -297,7 +307,7 @@ export default function StorePage() {
       setSearchResults(sorted)
     } catch (err: any) {
       if (abortController.signal.aborted) return
-      showToast('error', `${t('store.searchFailed')}: ${err.message}`)
+      showToast('error', `${t('store.searchFailed')}: ${parseError(err)}`)
     } finally {
       if (!abortController.signal.aborted) setSearching(false)
     }
@@ -518,6 +528,19 @@ export default function StorePage() {
       {tab === 'browse' && !showSearch && (
         <div className="space-y-3">
           <div className="flex items-center gap-2 flex-wrap w-fit p-1.5 rounded-2xl bg-white/[0.04] border border-white/[0.08]">
+            <label className="flex items-center gap-2 px-3 h-11 rounded-xl text-xs text-text-dim">
+              <span className="font-medium whitespace-nowrap">{t('store.sort.label')}</span>
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+                className="bg-white/[0.06] border border-white/[0.08] rounded-lg px-2 py-1 text-xs text-text-bright focus:outline-none focus:border-accent/50 cursor-pointer"
+              >
+                <option value="name" className="bg-bg-primary">{t('store.sort.name')}</option>
+                <option value="downloads" className="bg-bg-primary">{t('store.sort.downloads')}</option>
+                <option value="rating" className="bg-bg-primary">{t('store.sort.rating')}</option>
+                <option value="recent" className="bg-bg-primary">{t('store.sort.recent')}</option>
+              </select>
+            </label>
             {[{ id: 'all', label: t('store.category.all'), icon: LayoutGrid }, ...CATEGORIES.filter(c => c.id !== 'nsfw' || showAdult)].map((cat) => {
               const Icon = cat.icon
               const active = browseFilter === cat.id

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  ArrowLeft, ChevronLeft, ChevronRight, Download, X,
+  ArrowLeft, ChevronLeft, ChevronRight, Download, Play, X,
   Heart, Loader2, AlertCircle,
 } from 'lucide-react'
 import { t } from '../lib/i18n'
@@ -14,6 +14,9 @@ import { getLauncherInfo } from '../lib/onlinefix-compatibility'
 import { type MergedGame } from '../components/store/GameCard'
 import { ConfirmModal } from '../components/ui/ConfirmModal'
 import { usePageHeader } from '../components/layout/AppShell'
+import { MethodBadge } from '../components/method-badge'
+import { useSettingsStore } from '../stores/useSettingsStore'
+import { useSteamCmdJobsStore } from '../stores/useSteamCmdJobsStore'
 
 export default function GameDetailPage() {
   const { appId } = useParams<{ appId: string }>()
@@ -62,6 +65,8 @@ export default function GameDetailPage() {
   const isInstalled = appId ? installedGames.some((g) => g.appId === appId) : false
   const isInstalling = appId ? currentInstall?.appId === appId : false
   const isQueued = appId ? queuedAppIds.some((q) => q.appId === appId) : false
+  const installMethod = useSettingsStore((s) => s.installMethod)
+  const activeSteamJob = useSteamCmdJobsStore((s) => s.active)
   const heroUrl = appId ? getSteamCdnUrl(appId, 'hero') : ''
   const portraitUrl = appId ? getSteamCdnUrl(appId, 'portrait') : ''
   const headerUrl = appId ? getSteamCdnUrl(appId, 'header') : ''
@@ -136,6 +141,11 @@ export default function GameDetailPage() {
     }
     enqueueGame({ appId, name: details.name })
   }, [appId, details, enqueueGame])
+
+  const handlePlay = useCallback(() => {
+    if (!appId) return
+    window.steamtools.launchGame(appId)
+  }, [appId])
 
   if (loading) {
     return (
@@ -288,31 +298,50 @@ export default function GameDetailPage() {
               </span>
             </div>
             <div className="flex gap-3.5 flex-wrap items-center">
-              <button
-                onClick={handleInstall}
-                disabled={isInstalling || isQueued || isInstalled}
-                className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-base font-bold text-white border-none transition-all hover:brightness-110 hover:-translate-y-px disabled:hover:brightness-100 disabled:hover:translate-y-0 disabled:cursor-default"
-                style={{
-                  background: isInstalling || isQueued
-                    ? 'rgba(255,255,255,0.12)'
-                    : 'linear-gradient(135deg,#3BB2F7,#2A8FD1)',
-                  boxShadow: isInstalling || isQueued ? 'none' : '0 8px 24px rgba(59,178,247,0.35)',
-                  cursor: isInstalling || isQueued || isInstalled ? 'default' : 'pointer',
-                }}
-              >
-                {isInstalling ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Download className="w-5 h-5" />
-                )}
-                {isInstalling
-                  ? t('store.installing')
-                  : isQueued
-                    ? t('store.queued')
-                    : isInstalled
-                      ? t('library.play')
+              {/* Method badge near the Install button */}
+              <MethodBadge
+                method={installMethod}
+                liveState={activeSteamJob && activeSteamJob.appId === appId ? activeSteamJob.state : undefined}
+                onClick={() => navigate('/downloads')}
+                size="md"
+              />
+              {isInstalled ? (
+                <button
+                  onClick={handlePlay}
+                  className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-base font-bold text-white border-none transition-all hover:brightness-110 hover:-translate-y-px"
+                  style={{
+                    background: 'linear-gradient(135deg,#3BB2F7,#2A8FD1)',
+                    boxShadow: '0 8px 24px rgba(59,178,247,0.35)',
+                  }}
+                >
+                  <Play className="w-5 h-5" />
+                  {t('library.play')}
+                </button>
+              ) : (
+                <button
+                  onClick={handleInstall}
+                  disabled={isInstalling || isQueued}
+                  className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-base font-bold text-white border-none transition-all hover:brightness-110 hover:-translate-y-px disabled:hover:brightness-100 disabled:hover:translate-y-0 disabled:cursor-default"
+                  style={{
+                    background: isInstalling || isQueued
+                      ? 'rgba(255,255,255,0.12)'
+                      : 'linear-gradient(135deg,#3BB2F7,#2A8FD1)',
+                    boxShadow: isInstalling || isQueued ? 'none' : '0 8px 24px rgba(59,178,247,0.35)',
+                    cursor: isInstalling || isQueued ? 'default' : 'pointer',
+                  }}
+                >
+                  {isInstalling ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Download className="w-5 h-5" />
+                  )}
+                  {isInstalling
+                    ? t('store.installing')
+                    : isQueued
+                      ? t('store.queued')
                       : t('store.install')}
-              </button>
+                </button>
+              )}
               <button
                 onClick={() => setFavorited(!favorited)}
                 className="w-[52px] h-[52px] flex items-center justify-center rounded-xl cursor-pointer transition-colors"

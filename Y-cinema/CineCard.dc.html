@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div onMouseEnter="{{ enter }}" onMouseLeave="{{ leave }}" onClick="{{ it.open }}" style="position:relative;cursor:pointer;z-index:{{ z }};width:100%">
+  <div style="aspect-ratio:16/9;border-radius:14px;overflow:hidden;position:relative;background:{{ it.art }};border:1px solid {{ bd }};box-shadow:{{ sh }};transform:scale({{ sc }});transition:transform .28s cubic-bezier(.2,.7,.3,1),box-shadow .28s ease-out,border-color .28s ease-out">
+    <div style="position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,0.07) 0%,transparent 28%)"></div>
+    <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(5,5,6,0.88) 0%,rgba(5,5,6,0.25) 42%,transparent 65%)"></div>
+    <div style="position:absolute;top:10px;left:12px;display:flex;gap:6px;align-items:center">
+      <span style="font-size:9px;font-weight:700;letter-spacing:1.8px;color:rgba(255,255,255,0.55)">{{ it.typeLabel }}</span>
+    </div>
+    <sc-if value="{{ it.hasR }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:4px;background:rgba(5,5,6,0.55);backdrop-filter:blur(6px);border-radius:6px;padding:3px 7px;font-size:11px;font-weight:700;color:#F59E0B">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 3l2.7 5.9 6.3.7-4.7 4.3 1.3 6.1-5.6-3.2-5.6 3.2 1.3-6.1L3 9.6l6.3-.7z"></path></svg>{{ it.ratingStr }}</div>
+    </sc-if>
+    <div style="position:absolute;left:14px;right:14px;bottom:12px">
+      <div style="font-family:'Bricolage Grotesque',Inter,sans-serif;font-size:17px;font-weight:800;letter-spacing:-0.01em;line-height:1.1;color:#fff;text-wrap:balance">{{ it.t }}</div>
+      <div style="font-size:11.5px;color:#A1A1AA;margin-top:4px">{{ it.y }} · {{ it.genres }}</div>
+      <div style="opacity:{{ infoOp }};transform:{{ infoT }};transition:opacity .25s ease-out,transform .25s ease-out;overflow:hidden;max-height:{{ infoH }}">
+        <div style="font-size:11.5px;line-height:1.5;color:rgba(255,255,255,0.75);margin-top:8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ it.o }}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          <button onClick="{{ playStop }}" style="display:flex;align-items:center;gap:6px;height:28px;padding:0 13px;background:#fff;color:#09090B;border:none;border-radius:14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="#09090B"><path d="M8 5v14l11-7z"></path></svg>Play</button>
+          <span style="font-size:11px;color:#71717A">{{ it.metaShort }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:320,&quot;height&quot;:200},&quot;it&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;{t:string,y:number,art:string,o:string,genres:string,ratingStr:string,hasR:boolean,typeLabel:string,metaShort:string,open:()=&gt;void,play:()=&gt;void}&quot;}}">
+class Component extends DCLogic {
+  state = {h: false};
+  renderVals() {
+    const h = this.state.h, it = this.props.it || {};
+    return {
+      enter: () => this.setState({h: true}), leave: () => this.setState({h: false}),
+      sc: h ? 1.055 : 1, z: h ? 6 : 1,
+      bd: h ? 'rgba(255,255,255,0.24)' : 'rgba(255,255,255,0.07)',
+      sh: h ? '0 26px 64px rgba(0,0,0,0.75), 0 6px 18px rgba(0,0,0,0.5)' : '0 4px 14px rgba(0,0,0,0.45)',
+      infoOp: h ? 1 : 0, infoT: h ? 'translateY(0)' : 'translateY(8px)', infoH: h ? '120px' : '0px',
+      playStop: e => { e.stopPropagation(); if (it.play) it.play(); },
+    };
+  }
+}
+</script>
+</body>
+</html>

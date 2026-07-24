@@ -1,0 +1,536 @@
+// Schema completo del dominio Y-Cinema API.
+// Ver docs/DATABASE.md para el razonamiento de cada tabla y docs/ADR.md
+// para las decisiones de arquitectura.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// USUARIOS Y AUTENTICACIÓN
+// ═══════════════════════════════════════════════════════════════
+
+enum UserRole {
+  USER
+  ADMIN
+  BETA_TESTER
+}
+
+// id NO tiene @default: el valor siempre llega como el mismo UUID que
+// Supabase asigna en auth.users.id (ver prisma/supabase/auth-hook.sql,
+// que crea la fila espejo vía trigger al registrarse un usuario). La
+// identidad y el hash de contraseña los gestiona Supabase Auth — esta
+// tabla es solo el perfil de aplicación (rol, y las relaciones locales).
+model User {
+  id        String   @id
+  email     String   @unique
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  favorites       Favorite[]
+  history         History[]
+  watchlist       Watchlist[]
+  apiKeys         ApiKey[]
+  auditLogs       AuditLog[]
+
+  @@map("users")
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  name       String
+  keyHash    String    @unique @map("key_hash")
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("api_keys")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PROVEEDORES Y REFERENCIAS EXTERNAS
+// ═══════════════════════════════════════════════════════════════
+
+model Provider {
+  id        String   @id @default(uuid())
+  slug      String   @unique // tmdb, anilist, tvmaze, jikan, fanart, omdb, kitsu
+  name      String
+  enabled   Boolean  @default(true)
+  weight    Int      @default(0) // prioridad al fusionar duplicados
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  mediaLinks    MediaProviderRef[]
+  jobs          Job[]
+
+  @@map("providers")
+}
+
+// Vincula un Media interno con su id en un proveedor externo dado.
+// Es la tabla que permite deduplicar: "este Media ya existe con
+// provider=tmdb,externalId=603".
+model MediaProviderRef {
+  id         String   @id @default(uuid())
+  mediaId    String   @map("media_id")
+  providerId String   @map("provider_id")
+  externalId String   @map("external_id")
+  raw        Json? // payload crudo del proveedor, para debugging/reprocesar
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  media    Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  provider Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, externalId])
+  @@index([mediaId])
+  @@map("media_provider_refs")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IDIOMAS Y TRADUCCIONES
+// ═══════════════════════════════════════════════════════════════
+
+model Language {
+  id   String @id @default(uuid())
+  code String @unique // ISO 639-1: es, en, ja, ...
+  name String
+
+  translations Translation[]
+
+  @@map("languages")
+}
+
+enum TranslatableField {
+  TITLE
+  OVERVIEW
+  TAGLINE
+}
+
+// Guarda TODAS las traducciones encontradas por proveedor/idioma —
+// nunca se sobrescribe una traducción de mejor calidad con una peor
+// (ver ADR sección 2.4 y Fase 6 del roadmap).
+model Translation {
+  id         String            @id @default(uuid())
+  mediaId    String            @map("media_id")
+  languageId String            @map("language_id")
+  field      TranslatableField
+  value      String            @db.Text
+  providerId String?           @map("provider_id")
+  quality    Int               @default(0) // heurística simple: largo, presencia, etc.
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @updatedAt @map("updated_at")
+
+  media    Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  language Language @relation(fields: [languageId], references: [id])
+
+  @@unique([mediaId, languageId, field, providerId])
+  @@index([mediaId, field])
+  @@map("translations")
+}
+
+// Registrado por el TranslationService cuando ningún proveedor tiene el
+// idioma preferido para un campo — consumido por el job de traducciones.
+model TranslationGap {
+  id        String            @id @default(uuid())
+  mediaId   String            @map("media_id")
+  field     TranslatableField
+  wantedLng String            @map("wanted_language_code")
+  createdAt DateTime          @default(now()) @map("created_at")
+  resolvedAt DateTime?        @map("resolved_at")
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@index([mediaId])
+  @@index([resolvedAt])
+  @@map("translation_gaps")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODELO CENTRAL: MEDIA
+// ═══════════════════════════════════════════════════════════════
+
+enum MediaType {
+  MOVIE
+  SERIES
+  ANIME
+}
+
+enum MediaStatus {
+  RELEASED
+  IN_PRODUCTION
+  UPCOMING
+  CANCELED
+}
+
+model Media {
+  id              String      @id @default(uuid())
+  type            MediaType
+  title           String // título resuelto según prioridad de idioma (cache desnormalizado)
+  originalTitle   String?     @map("original_title")
+  overview        String?     @db.Text
+  tagline         String?
+  status          MediaStatus @default(RELEASED)
+  releaseDate     DateTime?   @map("release_date")
+  runtimeMinutes  Int?        @map("runtime_minutes")
+  originalLangCode String?    @map("original_lang_code")
+  popularity      Float       @default(0)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  providerRefs    MediaProviderRef[]
+  translations    Translation[]
+  translationGaps TranslationGap[]
+  images          Image[]
+  ratings         Rating[]
+  seasons         Season[]
+  genres          MediaGenre[]
+  people          MediaPerson[]
+  studios         MediaStudio[]
+  collections     MediaCollection[]
+  favorites       Favorite[]
+  history         History[]
+  watchlist       Watchlist[]
+  recommendationsFrom Recommendation[] @relation("RecommendationFrom")
+  recommendationsTo   Recommendation[] @relation("RecommendationTo")
+
+  @@index([type])
+  @@index([title])
+  @@index([popularity])
+  @@map("media")
+}
+
+model Season {
+  id           String   @id @default(uuid())
+  mediaId      String   @map("media_id")
+  seasonNumber Int      @map("season_number")
+  title        String?
+  overview     String?  @db.Text
+  airDate      DateTime? @map("air_date")
+
+  media    Media     @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  episodes Episode[]
+
+  @@unique([mediaId, seasonNumber])
+  @@map("seasons")
+}
+
+model Episode {
+  id             String    @id @default(uuid())
+  seasonId       String    @map("season_id")
+  episodeNumber  Int       @map("episode_number")
+  title          String?
+  overview       String?   @db.Text
+  airDate        DateTime? @map("air_date")
+  runtimeMinutes Int?      @map("runtime_minutes")
+
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  images Image[]
+
+  @@unique([seasonId, episodeNumber])
+  @@map("episodes")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GÉNEROS, PERSONAS, ESTUDIOS, COLECCIONES
+// ═══════════════════════════════════════════════════════════════
+
+model Genre {
+  id   String @id @default(uuid())
+  slug String @unique
+  name String
+
+  media MediaGenre[]
+
+  @@index([name])
+  @@map("genres")
+}
+
+model MediaGenre {
+  mediaId String @map("media_id")
+  genreId String @map("genre_id")
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, genreId])
+  @@map("media_genres")
+}
+
+enum PersonRole {
+  ACTOR
+  DIRECTOR
+  WRITER
+  PRODUCER
+  VOICE_ACTOR
+}
+
+model Person {
+  id         String  @id @default(uuid())
+  name       String
+  profileUrl String? @map("profile_url")
+
+  media MediaPerson[]
+
+  @@index([name])
+  @@map("people")
+}
+
+model MediaPerson {
+  mediaId     String     @map("media_id")
+  personId    String     @map("person_id")
+  role        PersonRole
+  characterName String?  @map("character_name")
+  billingOrder Int?      @map("billing_order")
+
+  media  Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, personId, role])
+  @@index([personId])
+  @@map("media_people")
+}
+
+model Studio {
+  id      String  @id @default(uuid())
+  name    String
+  logoUrl String? @map("logo_url")
+
+  media MediaStudio[]
+
+  @@index([name])
+  @@map("studios")
+}
+
+model MediaStudio {
+  mediaId  String @map("media_id")
+  studioId String @map("studio_id")
+
+  media  Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  studio Studio @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, studioId])
+  @@map("media_studios")
+}
+
+model Collection {
+  id   String  @id @default(uuid())
+  name String
+  overview String? @db.Text
+
+  media MediaCollection[]
+
+  @@map("collections")
+}
+
+model MediaCollection {
+  mediaId      String @map("media_id")
+  collectionId String @map("collection_id")
+  sortOrder    Int?   @map("sort_order")
+
+  media      Media      @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, collectionId])
+  @@map("media_collections")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IMÁGENES Y RATINGS
+// ═══════════════════════════════════════════════════════════════
+
+enum ImageType {
+  POSTER
+  BACKDROP
+  LOGO
+  BANNER
+  THUMBNAIL
+  CHARACTER_ART
+  STILL // fotograma de un episodio
+}
+
+model Image {
+  id         String    @id @default(uuid())
+  mediaId    String?   @map("media_id")
+  episodeId  String?   @map("episode_id")
+  type       ImageType
+  url        String
+  width      Int?
+  height     Int?
+  languageCode String? @map("language_code")
+  providerId String?   @map("provider_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  media   Media?   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([mediaId, type])
+  @@index([episodeId])
+  @@map("images")
+}
+
+model Rating {
+  id         String   @id @default(uuid())
+  mediaId    String   @map("media_id")
+  source     String // tmdb, imdb, rotten_tomatoes, metacritic
+  value      Float
+  voteCount  Int?     @map("vote_count")
+  scale      Float    @default(10) // p.ej. RT usa 100, TMDB usa 10
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([mediaId, source])
+  @@map("ratings")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INTERACCIÓN DE USUARIO
+// ═══════════════════════════════════════════════════════════════
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  mediaId   String   @map("media_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mediaId])
+  @@index([userId, createdAt])
+  @@map("favorites")
+}
+
+model History {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  mediaId    String   @map("media_id")
+  episodeId  String?  @map("episode_id")
+  progressPct Float   @default(0) @map("progress_pct")
+  watchedAt  DateTime @default(now()) @map("watched_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@index([userId, watchedAt])
+  @@map("history")
+}
+
+model Watchlist {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  mediaId   String   @map("media_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mediaId])
+  @@index([userId, createdAt])
+  @@map("watchlist")
+}
+
+model Recommendation {
+  id            String @id @default(uuid())
+  fromMediaId   String @map("from_media_id")
+  toMediaId     String @map("to_media_id")
+  score         Float  @default(0)
+
+  fromMedia Media @relation("RecommendationFrom", fields: [fromMediaId], references: [id], onDelete: Cascade)
+  toMedia   Media @relation("RecommendationTo", fields: [toMediaId], references: [id], onDelete: Cascade)
+
+  @@unique([fromMediaId, toMediaId])
+  @@index([fromMediaId])
+  @@map("recommendations")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// JOBS, LOGS, CONFIGURACIÓN
+// ═══════════════════════════════════════════════════════════════
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// Registro persistente de ejecuciones de BullMQ (Fase 9) — BullMQ guarda su
+// propio estado en Redis, esta tabla es el historial auditable a largo plazo.
+model Job {
+  id         String    @id @default(uuid())
+  queueName  String    @map("queue_name")
+  type       String
+  providerId String?   @map("provider_id")
+  status     JobStatus @default(PENDING)
+  payload    Json?
+  error      String?   @db.Text
+  startedAt  DateTime? @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  provider Provider? @relation(fields: [providerId], references: [id])
+
+  @@index([queueName, status])
+  @@map("jobs")
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+model Log {
+  id        String   @id @default(uuid())
+  level     LogLevel
+  message   String
+  meta      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([level, createdAt])
+  @@map("logs")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  MERGE
+  LOGIN
+  LOGOUT
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  userId     String?     @map("user_id")
+  action     AuditAction
+  entityType String      @map("entity_type")
+  entityId   String?     @map("entity_id")
+  metadata   Json?
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}

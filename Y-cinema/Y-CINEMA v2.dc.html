@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#050506;overflow:hidden}
+*{box-sizing:border-box}
+a{color:#3BB2F7;text-decoration:none}a:hover{color:#6C63FF}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#232329;border-radius:5px;border:2px solid #050506}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-button{display:none;width:0;height:0}
+@keyframes kb{from{transform:scale(1.02)}to{transform:scale(1.1)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+input,select,button{font-family:Inter,sans-serif}
+</style>
+<script src="./image-slot.js"></script>
+</helmet>
+<div data-screen-label="App" style="position:relative;height:100vh;background:#050506;color:#FFFFFF;font-family:Inter,sans-serif;font-size:14px;overflow:hidden;user-select:none">
+  <div style="position:absolute;inset:0;background:{{ ambient }};transition:background 1.2s ease-out;pointer-events:none"></div>
+  <div style="position:absolute;inset:-70px;background:{{ ambientImg }};filter:blur(72px) saturate(1.3);opacity:0.3;pointer-events:none"></div>
+
+  <!-- Floating nav -->
+  <div style="position:absolute;top:0;left:0;right:0;z-index:50;display:{{ navDisplay }};align-items:center;padding:18px 32px;gap:20px;background:linear-gradient(180deg,rgba(5,5,6,0.75),transparent);pointer-events:none">
+    <div onClick="{{ goHome }}" style="display:flex;align-items:center;gap:10px;cursor:pointer;pointer-events:auto">
+      <div style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#6C63FF,#3BB2F7);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px rgba(108,99,255,0.45)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg>
+      </div>
+      <span style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800;letter-spacing:2px">Y·CINEMA</span>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:4px;background:rgba(15,15,18,0.62);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.09);border-radius:22px;padding:5px;box-shadow:0 8px 30px rgba(0,0,0,0.45);pointer-events:auto">
+      <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="5">
+        <div onClick="{{ n.click }}" style="height:34px;display:flex;align-items:center;padding:0 17px;border-radius:17px;font-size:13px;cursor:pointer;color:{{ n.color }};background:{{ n.bg }};font-weight:{{ n.fw }};box-shadow:{{ n.sh }};transition:color .2s ease-out,background .2s ease-out" style-hover="color:#fff">{{ n.l }}</div>
+      </sc-for>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:10px;pointer-events:auto">
+      <div onClick="{{ openSearch }}" style="display:flex;align-items:center;gap:9px;height:38px;padding:0 15px;background:rgba(15,15,18,0.62);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.09);border-radius:19px;cursor:pointer;color:#A1A1AA;transition:color .2s ease-out,border-color .2s ease-out" style-hover="color:#fff;border-color:rgba(255,255,255,0.2)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 21l-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z"></path></svg>
+        <span style="font-size:12.5px">Search</span>
+        <span style="font-size:9.5px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:5px;padding:2px 6px;white-space:nowrap;flex:none">⌘K</span>
+      </div>
+      <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#3BB2F7,#1d6fb0);border:1px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;cursor:pointer">AK</div>
+    </div>
+  </div>
+
+  <!-- Scroll container -->
+  <div ref="{{ mainRef }}" style="position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;z-index:1">
+
+    <!-- HOME -->
+    <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+      <div data-screen-label="Home">
+        <div style="position:relative;height:76vh;min-height:560px;overflow:hidden">
+          <sc-for list="{{ heroes }}" as="h" hint-placeholder-count="1">
+            <div style="position:absolute;inset:0;opacity:{{ h.op }};pointer-events:{{ h.pe }};z-index:{{ h.z }};transition:opacity .9s ease-out">
+              <div style="position:absolute;inset:0;background:{{ h.heroArt }};animation:kb 16s ease-out forwards"></div>
+              <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(5,5,6,0.92) 12%,rgba(5,5,6,0.6) 38%,rgba(5,5,6,0.12) 65%,rgba(5,5,6,0) 100%);pointer-events:none"></div>
+              <div style="position:absolute;inset:0;background:linear-gradient(0deg,#050506 3%,rgba(5,5,6,0.6) 20%,rgba(5,5,6,0) 48%);pointer-events:none"></div>
+              <div style="position:absolute;inset:0;background:radial-gradient(70% 60% at 70% 30%,transparent 40%,rgba(3,3,5,0.4) 100%);pointer-events:none"></div>
+              <div style="position:absolute;left:56px;bottom:158px;width:min(680px,80vw);animation:fadeUp .6s ease-out both">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+                  <span style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:2px;color:#fff;background:linear-gradient(90deg,rgba(108,99,255,0.35),rgba(59,178,247,0.25));border:1px solid rgba(108,99,255,0.45);border-radius:5px;padding:4px 10px">FEATURED</span>
+                  <span style="font-size:10px;font-weight:700;letter-spacing:2px;color:#A1A1AA">{{ h.typeLabel }}</span>
+                </div>
+                <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:64px;font-weight:800;letter-spacing:-0.03em;line-height:0.98;text-wrap:balance;text-shadow:0 6px 50px rgba(0,0,0,0.7);background:linear-gradient(180deg,#fff 55%,rgba(255,255,255,0.72));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent">{{ h.t }}</div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:16px;flex-wrap:wrap">
+                  <span style="display:flex;align-items:center;gap:5px;background:#F5C518;color:#0a0a0c;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:800;white-space:nowrap">IMDb {{ h.ratingStr }}</span>
+                  <sc-if value="{{ h.hasRot }}" hint-placeholder-val="{{ true }}">
+                    <span style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{ h.rotColor }};flex:none"></span>{{ h.rot }}%</span>
+                  </sc-if>
+                  <sc-for list="{{ h.badges }}" as="b" hint-placeholder-count="3">
+                    <span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#A1A1AA;border:1px solid rgba(255,255,255,0.16);border-radius:4px;padding:3px 7px;white-space:nowrap">{{ b }}</span>
+                  </sc-for>
+                  <span style="font-size:12.5px;color:#A1A1AA;margin-left:4px;white-space:nowrap">{{ h.meta }}</span>
+                </div>
+                <div style="display:flex;gap:6px;margin-top:12px">
+                  <sc-for list="{{ h.genreChips }}" as="gc" hint-placeholder-count="2">
+                    <span style="font-size:11px;color:#D4D4D8;border:1px solid rgba(255,255,255,0.14);border-radius:11px;padding:3px 10px;white-space:nowrap;flex:none">{{ gc }}</span>
+                  </sc-for>
+                </div>
+                <div style="margin-top:12px;font-size:14px;line-height:1.6;color:rgba(255,255,255,0.72);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:560px;text-wrap:pretty">{{ h.o }}</div>
+                <sc-if value="{{ h.hasStars }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin-top:10px;font-size:12.5px;color:#71717A"><span style="color:#A1A1AA;font-weight:600">Starring</span> {{ h.starring }}</div>
+                </sc-if>
+                <div style="display:flex;align-items:center;gap:12px;margin-top:22px">
+                  <button onClick="{{ h.play }}" style="display:flex;align-items:center;gap:9px;height:46px;padding:0 26px;background:#fff;color:#09090B;border:none;border-radius:23px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:0 8px 30px rgba(255,255,255,0.18);transition:transform .2s ease-out" style-hover="transform:scale(1.03)">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="#09090B"><path d="M8 5v14l11-7z"></path></svg>{{ h.resumeLabel }}</button>
+                  <button onClick="{{ h.trailer }}" style="display:flex;align-items:center;gap:8px;height:46px;padding:0 22px;background:rgba(255,255,255,0.09);backdrop-filter:blur(10px);color:#fff;border:1px solid rgba(255,255,255,0.16);border-radius:23px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .2s ease-out" style-hover="background:rgba(255,255,255,0.16)">Trailer</button>
+                  <button onClick="{{ h.open }}" style="display:flex;align-items:center;gap:8px;height:46px;padding:0 22px;background:rgba(255,255,255,0.09);backdrop-filter:blur(10px);color:#fff;border:1px solid rgba(255,255,255,0.16);border-radius:23px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .2s ease-out" style-hover="background:rgba(255,255,255,0.16)">More Info</button>
+                  <button onClick="{{ h.fav }}" title="My List" style="display:flex;align-items:center;justify-content:center;width:46px;height:46px;background:rgba(255,255,255,0.09);backdrop-filter:blur(10px);color:{{ h.favColor }};border:1px solid rgba(255,255,255,0.16);border-radius:50%;cursor:pointer;transition:background .2s ease-out" style-hover="background:rgba(255,255,255,0.16)">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="{{ h.favFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21C7 16.5 3 13 3 8.8 3 6 5.2 4 7.8 4c1.7 0 3.2.9 4.2 2.3C13 4.9 14.5 4 16.2 4 18.8 4 21 6 21 8.8c0 4.2-4 7.7-9 12.2z"></path></svg>
+                  </button>
+                </div>
+                <sc-if value="{{ h.hasProg }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:10px;margin-top:16px;max-width:320px">
+                    <div style="flex:1;height:4px;background:rgba(255,255,255,0.14);border-radius:2px"><div style="height:100%;width:{{ h.progPct }}%;background:linear-gradient(90deg,#6C63FF,#3BB2F7);border-radius:2px"></div></div>
+                    <span style="font-size:11px;color:#A1A1AA;white-space:nowrap">{{ h.progPct }}% watched</span>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+          <div style="position:absolute;left:56px;right:56px;bottom:20px;z-index:10;display:flex;gap:12px;overflow-x:auto;padding:6px 2px">
+            <sc-for list="{{ heroThumbs }}" as="ht" hint-placeholder-count="5">
+              <div onClick="{{ ht.click }}" style="width:{{ ht.w }};flex:0 0 auto;height:96px;border-radius:13px;overflow:hidden;position:relative;background:{{ ht.art }};border:1.5px solid {{ ht.ring }};box-shadow:{{ ht.sh }};cursor:pointer;transition:width .35s cubic-bezier(.2,.7,.3,1),border-color .3s ease-out,box-shadow .3s ease-out">
+                <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(3,3,5,0.88),rgba(3,3,5,0.15) 55%,transparent);opacity:{{ ht.scrimOp }};transition:opacity .3s ease-out"></div>
+                <div style="position:absolute;left:13px;right:11px;bottom:10px">
+                  <div style="font-size:8.5px;font-weight:700;letter-spacing:1.6px;color:rgba(255,255,255,0.55)">{{ ht.typeLabel }}</div>
+                  <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:12.5px;font-weight:700;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ht.t }}</div>
+                </div>
+                <div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,#6C63FF,#3BB2F7);opacity:{{ ht.barOp }};transition:opacity .3s ease-out"></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="padding:0 56px 72px;display:flex;flex-direction:column;gap:48px;position:relative;z-index:2;margin-top:-24px">
+          <sc-if value="{{ hasContinue }}" hint-placeholder-val="{{ true }}">
+            <div>
+              <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.01em;margin-bottom:16px">Continue Watching</div>
+              <div style="display:flex;gap:18px;overflow-x:auto;padding:6px 6px 16px;margin:-6px -6px 0">
+                <sc-for list="{{ continueItems }}" as="ci" hint-placeholder-count="4">
+                  <div onClick="{{ ci.watch }}" style="width:320px;flex:0 0 320px;cursor:pointer;transition:transform .25s ease-out" style-hover="transform:translateY(-4px)">
+                    <div style="aspect-ratio:16/9;border-radius:14px;background:{{ ci.art }};border:1px solid rgba(255,255,255,0.08);position:relative;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,0.5)">
+                      <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(5,5,6,0.85),rgba(5,5,6,0.15) 50%,transparent)"></div>
+                      <div style="position:absolute;left:14px;bottom:26px;right:14px">
+                        <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:17px;font-weight:800;letter-spacing:-0.01em">{{ ci.t }}</div>
+                        <div style="font-size:11.5px;color:#A1A1AA;margin-top:3px">{{ ci.sub }}</div>
+                      </div>
+                      <div style="position:absolute;top:12px;right:12px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,0.4)">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="#09090B" style="margin-left:2px"><path d="M8 5v14l11-7z"></path></svg>
+                      </div>
+                      <div style="position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,0.12)"><div style="height:100%;width:{{ ci.pct }}%;background:linear-gradient(90deg,#6C63FF,#3BB2F7)"></div></div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.01em;margin-bottom:16px">Trending Now</div>
+            <div style="display:flex;gap:34px;overflow-x:auto;padding:6px 6px 16px;margin:-6px -6px 0">
+              <sc-for list="{{ trendingItems }}" as="tr" hint-placeholder-count="6">
+                <div onClick="{{ tr.open }}" style="display:flex;align-items:flex-end;flex:0 0 auto;cursor:pointer;transition:transform .25s ease-out" style-hover="transform:translateY(-5px)">
+                  <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:124px;font-weight:800;line-height:0.72;color:transparent;-webkit-text-stroke:2px rgba(255,255,255,0.22);margin-right:-22px;position:relative;z-index:1;font-variant-numeric:tabular-nums">{{ tr.rank }}</div>
+                  <div style="width:148px;aspect-ratio:2/3;border-radius:12px;background:{{ tr.bg }};border:1px solid rgba(255,255,255,0.08);position:relative;z-index:2;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.55)">
+                    <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,0.55),transparent 45%)"></div>
+                    <div style="position:absolute;left:11px;right:11px;bottom:11px;font-size:12.5px;font-weight:800;text-transform:uppercase;line-height:1.15;font-family:'Bricolage Grotesque',sans-serif">{{ tr.t }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+              <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.01em">New Releases</div>
+              <div onClick="{{ viewUpcoming }}" style="font-size:12.5px;font-weight:600;color:#3BB2F7;cursor:pointer" style-hover="color:#6C63FF">View All →</div>
+            </div>
+            <div style="display:grid;grid-template-columns:1.55fr 1fr 1fr;grid-template-rows:auto auto;gap:18px">
+              <div onClick="{{ newFeatured.open }}" style="grid-row:span 2;position:relative;border-radius:18px;overflow:hidden;background:{{ newFeatured.heroArt }};border:1px solid rgba(255,255,255,0.09);cursor:pointer;min-height:420px;box-shadow:0 10px 34px rgba(0,0,0,0.55);transition:border-color .25s ease-out" style-hover="border-color:rgba(255,255,255,0.22)">
+                <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(5,5,6,0.92) 8%,rgba(5,5,6,0.2) 50%,transparent)"></div>
+                <div style="position:absolute;left:26px;right:26px;bottom:24px">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:2px;color:#3BB2F7">COMING {{ newFeatured.y }}</span>
+                  <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:34px;font-weight:800;letter-spacing:-0.02em;line-height:1.02;margin-top:8px">{{ newFeatured.t }}</div>
+                  <div style="font-size:13px;line-height:1.55;color:rgba(255,255,255,0.7);margin-top:10px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:480px">{{ newFeatured.o }}</div>
+                </div>
+              </div>
+              <sc-for list="{{ newSmall }}" as="c" hint-placeholder-count="4">
+                <dc-import name="CineCard" it="{{ c }}" hint-size="100%,200px"></dc-import>
+              </sc-for>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.01em;margin-bottom:16px">Recommended For You</div>
+            <div style="display:flex;gap:18px;overflow-x:auto;padding:6px 6px 16px;margin:-6px -6px 0">
+              <sc-for list="{{ recommended }}" as="c" hint-placeholder-count="5">
+                <dc-import name="CineCard" it="{{ c }}" style="width:308px;flex:0 0 308px" hint-size="308px,190px"></dc-import>
+              </sc-for>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.01em;margin-bottom:16px">Recently Added</div>
+            <div style="display:flex;gap:16px;overflow-x:auto;padding:6px 6px 16px;margin:-6px -6px 0">
+              <sc-for list="{{ recentAdded }}" as="ra" hint-placeholder-count="8">
+                <div onClick="{{ ra.open }}" style="width:142px;flex:0 0 142px;cursor:pointer;transition:transform .25s ease-out" style-hover="transform:translateY(-4px)">
+                  <div style="aspect-ratio:2/3;border-radius:11px;background:{{ ra.bg }};border:1px solid rgba(255,255,255,0.07);position:relative;overflow:hidden">
+                    <span style="position:absolute;top:9px;left:9px;font-size:9px;font-weight:800;letter-spacing:1.2px;color:#050506;background:#3BB2F7;border-radius:4px;padding:2px 6px">NEW</span>
+                    <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,0.55),transparent 45%)"></div>
+                    <div style="position:absolute;left:10px;right:10px;bottom:10px;font-size:12px;font-weight:800;text-transform:uppercase;line-height:1.15;font-family:'Bricolage Grotesque',sans-serif">{{ ra.t }}</div>
+                  </div>
+                  <div style="font-size:11px;color:#71717A;margin-top:7px">{{ ra.y }} · {{ ra.genre1 }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- BROWSE -->
+    <sc-if value="{{ isBrowse }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Browse" style="padding:110px 56px 72px;animation:fadeIn .3s ease-out">
+        <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:42px;font-weight:800;letter-spacing:-0.02em">{{ browseTitle }}</div>
+        <div style="font-size:13px;color:#71717A;margin-top:8px">{{ browseCount }} titles</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;margin-top:30px">
+          <sc-for list="{{ browseItems }}" as="c" hint-placeholder-count="9">
+            <dc-import name="CineCard" it="{{ c }}" hint-size="300px,190px"></dc-import>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- DETAIL -->
+    <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Detail" style="animation:fadeIn .3s ease-out">
+        <div style="position:relative;height:86vh;min-height:600px;overflow:hidden">
+          <div style="position:absolute;inset:0;background:{{ d.heroArt }}"></div>
+          <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(5,5,6,0.94) 16%,rgba(5,5,6,0.62) 42%,rgba(5,5,6,0.12) 68%,rgba(5,5,6,0) 100%);pointer-events:none"></div>
+          <div style="position:absolute;inset:0;background:linear-gradient(0deg,#050506 4%,rgba(5,5,6,0.55) 22%,rgba(5,5,6,0) 48%);pointer-events:none"></div>
+          <div style="position:absolute;inset:0;background:radial-gradient(70% 60% at 70% 30%,transparent 40%,rgba(3,3,5,0.35) 100%);pointer-events:none"></div>
+          <button onClick="{{ goBack }}" style="position:absolute;top:84px;left:56px;z-index:5;display:flex;align-items:center;gap:8px;height:38px;padding:0 17px;background:rgba(15,15,18,0.6);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.12);border-radius:19px;color:#A1A1AA;font-size:13px;font-weight:500;cursor:pointer;transition:color .2s ease-out" style-hover="color:#fff">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg>Back</button>
+          <div style="position:absolute;left:56px;bottom:64px;width:660px;z-index:4;animation:fadeUp .5s ease-out both">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+              <span style="font-size:10px;font-weight:700;letter-spacing:2px;color:#fff;background:linear-gradient(90deg,rgba(108,99,255,0.35),rgba(59,178,247,0.25));border:1px solid rgba(108,99,255,0.45);border-radius:5px;padding:4px 10px">{{ d.typeLabel }}</span>
+              <sc-if value="{{ d.hasR }}" hint-placeholder-val="{{ true }}">
+                <span style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#F59E0B"><svg width="12" height="12" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 3l2.7 5.9 6.3.7-4.7 4.3 1.3 6.1-5.6-3.2-5.6 3.2 1.3-6.1L3 9.6l6.3-.7z"></path></svg>{{ d.ratingStr }}</span>
+              </sc-if>
+            </div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:58px;font-weight:800;letter-spacing:-0.03em;line-height:0.98;text-wrap:balance;text-shadow:0 4px 40px rgba(0,0,0,0.6)">{{ d.t }}</div>
+            <sc-if value="{{ d.hasTag }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:15px;color:#8b8b94;font-style:italic;margin-top:10px">{{ d.tg }}</div>
+            </sc-if>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap">
+              <span style="display:flex;align-items:center;gap:5px;background:#F5C518;color:#0a0a0c;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:800;white-space:nowrap">IMDb {{ d.ratingStr }}</span>
+              <sc-if value="{{ d.hasRot }}" hint-placeholder-val="{{ true }}">
+                <span style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:5px;padding:3px 9px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:{{ d.rotColor }};flex:none"></span>{{ d.rot }}%</span>
+              </sc-if>
+              <sc-for list="{{ d.badges }}" as="b" hint-placeholder-count="3">
+                <span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#A1A1AA;border:1px solid rgba(255,255,255,0.16);border-radius:4px;padding:3px 7px;white-space:nowrap">{{ b }}</span>
+              </sc-for>
+              <span style="font-size:12.5px;color:#A1A1AA;white-space:nowrap">{{ d.meta }}</span>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:12px">
+              <sc-for list="{{ d.genreChips }}" as="gc" hint-placeholder-count="2">
+                <span style="font-size:11px;color:#D4D4D8;border:1px solid rgba(255,255,255,0.14);border-radius:11px;padding:3px 10px;white-space:nowrap;flex:none">{{ gc }}</span>
+              </sc-for>
+            </div>
+            <div style="margin-top:16px;font-size:14px;line-height:1.65;color:rgba(255,255,255,0.72);max-width:600px;text-wrap:pretty">{{ d.o }}</div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:26px">
+              <button onClick="{{ d.play }}" style="display:flex;align-items:center;gap:9px;height:46px;padding:0 26px;background:#fff;color:#09090B;border:none;border-radius:23px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 8px 30px rgba(255,255,255,0.18);transition:transform .2s ease-out" style-hover="transform:scale(1.03)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="#09090B"><path d="M8 5v14l11-7z"></path></svg>{{ d.playLabel }}</button>
+              <button onClick="{{ openTrailer }}" style="display:flex;align-items:center;gap:8px;height:46px;padding:0 22px;background:rgba(255,255,255,0.09);backdrop-filter:blur(10px);color:#fff;border:1px solid rgba(255,255,255,0.16);border-radius:23px;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s ease-out" style-hover="background:rgba(255,255,255,0.16)">Trailer</button>
+              <button onClick="{{ d.fav }}" style="display:flex;align-items:center;gap:8px;height:46px;padding:0 20px;background:rgba(255,255,255,0.09);backdrop-filter:blur(10px);color:{{ d.favColor }};border:1px solid rgba(255,255,255,0.16);border-radius:23px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;flex:none;transition:background .2s ease-out" style-hover="background:rgba(255,255,255,0.16)">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="{{ d.favFill }}" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21C7 16.5 3 13 3 8.8 3 6 5.2 4 7.8 4c1.7 0 3.2.9 4.2 2.3C13 4.9 14.5 4 16.2 4 18.8 4 21 6 21 8.8c0 4.2-4 7.7-9 12.2z"></path></svg>{{ d.favLabel }}</button>
+            </div>
+          </div>
+        </div>
+        <div style="padding:8px 56px 72px;display:flex;flex-direction:column;gap:44px">
+          <sc-if value="{{ d.isSeries }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="display:flex;align-items:center;gap:18px;margin-bottom:18px">
+                <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700">Episodes</div>
+                <div style="display:flex;gap:6px">
+                  <sc-for list="{{ seasons }}" as="sn" hint-placeholder-count="2">
+                    <button onClick="{{ sn.pick }}" style="height:32px;padding:0 16px;border-radius:16px;font-size:12.5px;font-weight:600;cursor:pointer;background:{{ sn.bg }};color:{{ sn.color }};border:1px solid {{ sn.bd }};transition:all .2s ease-out">S{{ sn.n }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;gap:16px;overflow-x:auto;padding:6px 6px 16px;margin:-6px -6px 0">
+                <sc-for list="{{ episodes }}" as="ep" hint-placeholder-count="6">
+                  <div onClick="{{ ep.play }}" style="width:270px;flex:0 0 270px;cursor:pointer;transition:transform .25s ease-out" style-hover="transform:translateY(-4px)">
+                    <div style="aspect-ratio:16/9;border-radius:12px;background:{{ ep.bg }};position:relative;overflow:hidden;border:1px solid rgba(255,255,255,0.07)">
+                      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><div style="width:38px;height:38px;border-radius:50%;background:rgba(5,5,6,0.6);border:1px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="#fff" style="margin-left:2px"><path d="M8 5v14l11-7z"></path></svg></div></div>
+                      <span style="position:absolute;top:10px;left:10px;font-size:10px;font-weight:700;color:#D4D4D8;background:rgba(5,5,6,0.6);border-radius:5px;padding:3px 8px">E{{ ep.n }}</span>
+                      <sc-if value="{{ ep.hasProg }}" hint-placeholder-val="{{ false }}">
+                        <div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(0,0,0,0.5)"><div style="height:100%;width:{{ ep.prog }}%;background:linear-gradient(90deg,#6C63FF,#3BB2F7)"></div></div>
+                      </sc-if>
+                    </div>
+                    <div style="font-size:13px;font-weight:600;margin-top:9px">{{ ep.n }}. {{ ep.title }}</div>
+                    <div style="font-size:11.5px;color:#71717A;margin-top:2px">{{ ep.dur }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ hasCast }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;margin-bottom:18px">Cast</div>
+              <div style="display:flex;gap:24px;overflow-x:auto;padding-bottom:10px">
+                <sc-for list="{{ cast }}" as="cm" hint-placeholder-count="5">
+                  <div style="width:100px;flex:0 0 100px;text-align:center">
+                    <div style="width:86px;height:86px;margin:0 auto;border-radius:50%;background:{{ cm.bg }};border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:rgba(255,255,255,0.85);font-family:'Bricolage Grotesque',sans-serif">{{ cm.ini }}</div>
+                    <div style="font-size:12.5px;font-weight:600;margin-top:10px;line-height:1.25">{{ cm.name }}</div>
+                    <div style="font-size:11.5px;color:#71717A;margin-top:3px;line-height:1.25">{{ cm.ch }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+          <div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;margin-bottom:16px">Trailers &amp; Extras</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1020px">
+              <sc-for list="{{ trailers }}" as="tr" hint-placeholder-count="3">
+                <div onClick="{{ tr.open }}" style="cursor:pointer;transition:transform .25s ease-out" style-hover="transform:translateY(-4px)">
+                  <div style="aspect-ratio:16/9;border-radius:12px;background:{{ tr.bg }};border:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:center">
+                    <div style="width:44px;height:44px;border-radius:50%;background:rgba(5,5,6,0.6);border:1px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff" style="margin-left:2px"><path d="M8 5v14l11-7z"></path></svg>
+                    </div>
+                  </div>
+                  <div style="font-size:13px;font-weight:600;margin-top:9px">{{ tr.label }}</div>
+                  <div style="font-size:11.5px;color:#71717A;margin-top:2px">{{ tr.dur }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;margin-bottom:16px">More Like This</div>
+            <div style="display:flex;gap:18px;overflow-x:auto;padding:6px 6px 16px;margin:-6px -6px 0">
+              <sc-for list="{{ recs }}" as="c" hint-placeholder-count="5">
+                <dc-import name="CineCard" it="{{ c }}" style="width:308px;flex:0 0 308px" hint-size="308px,190px"></dc-import>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- WATCH -->
+    <sc-if value="{{ isWatch }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Watch" style="background:#000;min-height:100vh;animation:fadeIn .3s ease-out">
+        <div style="display:flex">
+          <div style="flex:1;min-width:0">
+            <div ref="{{ playerRef }}" style="position:relative;aspect-ratio:16/9;width:100%;max-width:{{ playerMaxW }};margin:0 auto;background:#000;overflow:hidden">
+              <div style="position:absolute;inset:0;background:{{ w.heroArt }};opacity:{{ playerBgOp }};transition:opacity .5s ease-out"></div>
+              <div style="position:absolute;inset:0;background:radial-gradient(90% 90% at 50% 40%,transparent 40%,rgba(0,0,0,0.7) 100%)"></div>
+              <button onClick="{{ goBack }}" style="position:absolute;top:20px;left:20px;z-index:6;display:flex;align-items:center;gap:8px;height:36px;padding:0 16px;background:rgba(15,15,18,0.6);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.12);border-radius:18px;color:#A1A1AA;font-size:13px;cursor:pointer;transition:color .2s ease-out" style-hover="color:#fff">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"></path></svg>Back</button>
+              <div onClick="{{ togglePlay }}" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;cursor:pointer">
+                <sc-if value="{{ notPlaying }}" hint-placeholder-val="{{ true }}">
+                  <div style="width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.94);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 46px rgba(0,0,0,0.6);transition:transform .2s ease-out" style-hover="transform:scale(1.06)">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="#09090B" style="margin-left:4px"><path d="M8 5v14l11-7z"></path></svg>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="position:absolute;left:16px;right:16px;bottom:14px;z-index:5;background:rgba(12,12,15,0.68);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:10px 16px 12px;box-shadow:0 12px 40px rgba(0,0,0,0.5)">
+                <div onClick="{{ seekClick }}" style="height:14px;display:flex;align-items:center;cursor:pointer;margin-bottom:6px">
+                  <div style="height:4px;width:100%;background:rgba(255,255,255,0.16);border-radius:2px;position:relative">
+                    <div style="height:100%;width:{{ wProg }}%;background:linear-gradient(90deg,#6C63FF,#3BB2F7);border-radius:2px;position:relative">
+                      <div style="position:absolute;right:-6px;top:-4px;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.5)"></div>
+                    </div>
+                  </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px">
+                  <button onClick="{{ togglePlay }}" style="width:36px;height:36px;background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:8px" style-hover="background:rgba(255,255,255,0.1)">
+                    <sc-if value="{{ notPlaying }}" hint-placeholder-val="{{ true }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"></path></svg></sc-if>
+                    <sc-if value="{{ playing }}" hint-placeholder-val="{{ false }}"><svg width="17" height="17" viewBox="0 0 24 24" fill="#fff"><path d="M7 5h4v14H7zM13 5h4v14h-4z"></path></svg></sc-if>
+                  </button>
+                  <button onClick="{{ seekBack }}" title="Back 10s" style="width:36px;height:36px;background:none;border:none;color:#D4D4D8;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:8px" style-hover="background:rgba(255,255,255,0.1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"></path></svg></button>
+                  <button onClick="{{ seekFwd }}" title="Forward 10s" style="width:36px;height:36px;background:none;border:none;color:#D4D4D8;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:8px" style-hover="background:rgba(255,255,255,0.1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v5h-5"></path></svg></button>
+                  <div style="display:flex;align-items:center;gap:8px;margin-left:4px">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D4D4D8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4zM16.5 9.5a4 4 0 0 1 0 5"></path></svg>
+                    <input type="range" min="0" max="100" value="{{ volume }}" onChange="{{ setVolume }}" style="width:76px;accent-color:#6C63FF;height:3px;cursor:pointer">
+                  </div>
+                  <span style="font-size:12px;color:#A1A1AA;margin-left:10px;font-variant-numeric:tabular-nums">{{ timeStr }}</span>
+                  <div style="flex:1"></div>
+                  <span style="font-size:12.5px;font-weight:600;color:#D4D4D8;margin-right:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:300px">{{ wTitleBar }}</span>
+                  <div style="position:relative">
+                    <button onClick="{{ toggleMenu }}" title="Settings" style="width:36px;height:36px;background:{{ menuBtnBg }};border:none;color:#D4D4D8;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:8px" style-hover="background:rgba(255,255,255,0.1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16M9 4v4M15 10v4M9 16v4"></path></svg></button>
+                    <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+                      <div style="position:absolute;bottom:46px;right:0;width:230px;background:rgba(18,18,22,0.94);backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:8px;box-shadow:0 20px 50px rgba(0,0,0,0.6);animation:fadeUp .2s ease-out both">
+                        <sc-for list="{{ menuGroups }}" as="mg" hint-placeholder-count="3">
+                          <div style="padding:6px 10px 4px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#71717A">{{ mg.label }}</div>
+                          <sc-for list="{{ mg.options }}" as="op" hint-placeholder-count="3">
+                            <div onClick="{{ op.pick }}" style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;font-size:13px;cursor:pointer;color:{{ op.color }}" style-hover="background:rgba(255,255,255,0.07)">{{ op.v }}
+                              <sc-if value="{{ op.sel }}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6C63FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"></path></svg></sc-if>
+                            </div>
+                          </sc-for>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                  <button onClick="{{ toggleTheater }}" title="Theater mode (T)" style="width:36px;height:36px;background:none;border:none;color:{{ theaterColor }};cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:8px" style-hover="background:rgba(255,255,255,0.1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="12" rx="2"></rect></svg></button>
+                  <button onClick="{{ goFullscreen }}" title="Fullscreen (F)" style="width:36px;height:36px;background:none;border:none;color:#D4D4D8;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:8px" style-hover="background:rgba(255,255,255,0.1)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 15v5h-5M20 9V4h-5M4 15v5h5"></path></svg></button>
+                </div>
+              </div>
+            </div>
+            <sc-if value="{{ notTheater }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:30px 44px 56px;max-width:920px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+                  <span style="font-size:10px;font-weight:700;letter-spacing:2px;color:#3BB2F7">{{ w.typeLabel }}</span>
+                  <span style="font-size:10px;font-weight:700;letter-spacing:1px;color:#22C55E;border:1px solid rgba(34,197,94,0.3);border-radius:4px;padding:3px 8px;background:rgba(34,197,94,0.07)">{{ quality }}</span>
+                </div>
+                <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:30px;font-weight:800;letter-spacing:-0.02em">{{ w.t }}</div>
+                <sc-if value="{{ wEpLabel }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:14px;color:#8f88ff;font-weight:600;margin-top:6px">{{ wEpLabel }}</div>
+                </sc-if>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:#A1A1AA">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 3l2.7 5.9 6.3.7-4.7 4.3 1.3 6.1-5.6-3.2-5.6 3.2 1.3-6.1L3 9.6l6.3-.7z"></path></svg>
+                  <span style="color:#fff;font-weight:600">{{ w.ratingStr }}</span><span>·</span><span>{{ w.meta }}</span><span>·</span><span>{{ w.genres }}</span>
+                </div>
+                <div style="margin-top:14px;font-size:13.5px;line-height:1.65;color:#A1A1AA;text-wrap:pretty">{{ w.o }}</div>
+                <div onClick="{{ backToDetail }}" style="margin-top:16px;font-size:13px;font-weight:600;color:#3BB2F7;cursor:pointer;display:inline-flex;align-items:center;gap:4px" style-hover="color:#6C63FF">View full details
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg></div>
+              </div>
+            </sc-if>
+          </div>
+          <sc-if value="{{ showEpRail }}" hint-placeholder-val="{{ false }}">
+            <div style="width:340px;flex:0 0 340px;border-left:1px solid rgba(255,255,255,0.07);background:rgba(10,10,12,0.7);backdrop-filter:blur(10px);height:100vh;overflow-y:auto;padding:20px 14px">
+              <div style="font-size:14px;font-weight:700;padding:0 6px 14px;font-family:'Bricolage Grotesque',sans-serif">Episodes · Season {{ season }}</div>
+              <sc-for list="{{ episodes }}" as="ep" hint-placeholder-count="8">
+                <div onClick="{{ ep.watch }}" style="display:flex;gap:12px;padding:10px;border-radius:12px;cursor:pointer;background:{{ ep.railBg }};margin-bottom:4px;transition:background .2s ease-out" style-hover="background:rgba(255,255,255,0.06)">
+                  <div style="width:104px;flex:0 0 104px;aspect-ratio:16/9;border-radius:7px;background:{{ ep.bg }};position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="rgba(255,255,255,0.7)"><path d="M8 5v14l11-7z"></path></svg>
+                    <sc-if value="{{ ep.hasProg }}" hint-placeholder-val="{{ false }}">
+                      <div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(0,0,0,0.5)"><div style="height:100%;width:{{ ep.prog }}%;background:linear-gradient(90deg,#6C63FF,#3BB2F7)"></div></div>
+                    </sc-if>
+                  </div>
+                  <div style="min-width:0">
+                    <div style="font-size:12.5px;font-weight:600;color:{{ ep.titleColor }};line-height:1.3">{{ ep.n }}. {{ ep.title }}</div>
+                    <div style="font-size:11.5px;color:#71717A;margin-top:4px">{{ ep.dur }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- LIBRARY -->
+    <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ false }}">
+      <div data-screen-label="Library" style="padding:110px 56px 72px;animation:fadeIn .3s ease-out">
+        <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:42px;font-weight:800;letter-spacing:-0.02em">My Library</div>
+        <sc-if value="{{ hasContinue }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;margin-top:38px;margin-bottom:16px">Continue Watching</div>
+          <div style="display:flex;gap:18px;overflow-x:auto;padding:6px 6px 16px;margin:-6px -6px 0">
+            <sc-for list="{{ continueItems }}" as="ci" hint-placeholder-count="4">
+              <div onClick="{{ ci.watch }}" style="width:300px;flex:0 0 300px;cursor:pointer;transition:transform .25s ease-out" style-hover="transform:translateY(-4px)">
+                <div style="aspect-ratio:16/9;border-radius:14px;background:{{ ci.art }};border:1px solid rgba(255,255,255,0.08);position:relative;overflow:hidden">
+                  <div style="position:absolute;inset:0;background:linear-gradient(0deg,rgba(5,5,6,0.85),rgba(5,5,6,0.15) 50%,transparent)"></div>
+                  <div style="position:absolute;left:14px;bottom:24px;right:14px">
+                    <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:16px;font-weight:800">{{ ci.t }}</div>
+                    <div style="font-size:11.5px;color:#A1A1AA;margin-top:3px">{{ ci.sub }}</div>
+                  </div>
+                  <div style="position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,0.12)"><div style="height:100%;width:{{ ci.pct }}%;background:linear-gradient(90deg,#6C63FF,#3BB2F7)"></div></div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:38px;flex-wrap:wrap">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;margin-right:8px">My List</div>
+          <sc-for list="{{ favChips }}" as="fc" hint-placeholder-count="4">
+            <button onClick="{{ fc.pick }}" style="height:31px;padding:0 15px;border-radius:16px;font-size:12px;font-weight:600;cursor:pointer;background:{{ fc.bg }};color:{{ fc.color }};border:1px solid {{ fc.bd }};transition:all .2s ease-out">{{ fc.l }}</button>
+          </sc-for>
+          <div style="flex:1"></div>
+          <input value="{{ favQuery }}" onChange="{{ setFavQuery }}" placeholder="Filter…" style="height:32px;width:190px;background:rgba(20,20,24,0.8);border:1px solid rgba(255,255,255,0.1);border-radius:16px;color:#fff;font-size:12.5px;padding:0 14px;outline:none">
+          <select value="{{ favSort }}" onChange="{{ setFavSort }}" style="height:32px;background:rgba(20,20,24,0.8);border:1px solid rgba(255,255,255,0.1);border-radius:16px;color:#A1A1AA;font-size:12.5px;padding:0 10px;outline:none;cursor:pointer">
+            <option value="rating">Rating</option><option value="title">Title</option><option value="year">Year</option>
+          </select>
+        </div>
+        <sc-if value="{{ hasFavs }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;margin-top:22px">
+            <sc-for list="{{ favItems }}" as="c" hint-placeholder-count="6">
+              <dc-import name="CineCard" it="{{ c }}" hint-size="300px,190px"></dc-import>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ noFavs }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;align-items:center;padding:80px 0;color:#71717A">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#3F3F46" stroke-width="1.5" stroke-linecap="round"><path d="M12 21C7 16.5 3 13 3 8.8 3 6 5.2 4 7.8 4c1.7 0 3.2.9 4.2 2.3C13 4.9 14.5 4 16.2 4 18.8 4 21 6 21 8.8c0 4.2-4 7.7-9 12.2z"></path></svg>
+            <div style="font-size:15px;font-weight:600;color:#A1A1AA;margin-top:16px">Nothing saved yet</div>
+            <div style="font-size:13px;margin-top:6px">Add titles to your list from any detail page.</div>
+          </div>
+        </sc-if>
+        <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:22px;font-weight:700;margin-top:44px;margin-bottom:16px">Recently Watched</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px">
+          <sc-for list="{{ recentItems }}" as="c" hint-placeholder-count="4">
+            <dc-import name="CineCard" it="{{ c }}" hint-size="300px,190px"></dc-import>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- SEARCH OVERLAY -->
+  <sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Search" onClick="{{ closeSearch }}" style="position:absolute;inset:0;z-index:100;background:rgba(5,5,6,0.78);backdrop-filter:blur(16px);animation:fadeIn .18s ease-out both">
+      <div onClick="{{ stop }}" style="width:660px;max-width:90vw;margin:88px auto 0;background:rgba(18,18,22,0.92);border:1px solid rgba(255,255,255,0.12);border-radius:20px;box-shadow:0 40px 100px rgba(0,0,0,0.7);overflow:hidden;animation:fadeUp .22s ease-out both">
+        <div style="display:flex;align-items:center;gap:13px;padding:18px 20px;border-bottom:1px solid rgba(255,255,255,0.07)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#71717A" stroke-width="2" stroke-linecap="round"><path d="M21 21l-4.3-4.3M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15z"></path></svg>
+          <input autoFocus value="{{ query }}" onChange="{{ onSearch }}" placeholder="Search movies, series, anime…" style="flex:1;background:none;border:none;outline:none;color:#fff;font-size:17px">
+          <span onClick="{{ closeSearch }}" style="font-size:10px;color:#71717A;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:5px;padding:3px 7px;cursor:pointer">ESC</span>
+        </div>
+        <div style="max-height:480px;overflow-y:auto;padding:10px">
+          <sc-if value="{{ showRecent }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:6px 10px 8px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#71717A">RECENT SEARCHES</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 10px 12px">
+              <sc-for list="{{ recentChips }}" as="rc" hint-placeholder-count="3">
+                <button onClick="{{ rc.pick }}" style="height:29px;padding:0 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:15px;color:#A1A1AA;font-size:12.5px;cursor:pointer;transition:color .2s ease-out" style-hover="color:#fff">{{ rc.q }}</button>
+              </sc-for>
+            </div>
+            <div style="padding:6px 10px 8px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#71717A">TRENDING</div>
+            <sc-for list="{{ trendingResults }}" as="sr" hint-placeholder-count="4">
+              <div onClick="{{ sr.pick }}" style="display:flex;align-items:center;gap:13px;padding:8px 10px;border-radius:11px;cursor:pointer" style-hover="background:rgba(255,255,255,0.06)">
+                <div style="width:64px;height:38px;border-radius:6px;background:{{ sr.art }};flex:0 0 64px"></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13.5px;font-weight:600">{{ sr.t }}</div>
+                  <div style="font-size:11.5px;color:#71717A;margin-top:2px">{{ sr.y }} · {{ sr.genres }}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:#F59E0B;font-weight:600">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 3l2.7 5.9 6.3.7-4.7 4.3 1.3 6.1-5.6-3.2-5.6 3.2 1.3-6.1L3 9.6l6.3-.7z"></path></svg>{{ sr.ratingStr }}</div>
+              </div>
+            </sc-for>
+          </sc-if>
+          <sc-for list="{{ searchGroups }}" as="grp" hint-placeholder-count="0">
+            <div style="padding:8px 10px 6px;font-size:10px;font-weight:700;letter-spacing:1.5px;color:#71717A">{{ grp.label }}</div>
+            <sc-for list="{{ grp.items }}" as="sr" hint-placeholder-count="2">
+              <div onClick="{{ sr.pick }}" style="display:flex;align-items:center;gap:13px;padding:8px 10px;border-radius:11px;cursor:pointer" style-hover="background:rgba(255,255,255,0.06)">
+                <div style="width:64px;height:38px;border-radius:6px;background:{{ sr.art }};flex:0 0 64px"></div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13.5px;font-weight:600">{{ sr.t }}</div>
+                  <div style="font-size:11.5px;color:#71717A;margin-top:2px">{{ sr.y }} · {{ sr.genres }}</div>
+                </div>
+                <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:#F59E0B;font-weight:600">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#F59E0B"><path d="M12 3l2.7 5.9 6.3.7-4.7 4.3 1.3 6.1-5.6-3.2-5.6 3.2 1.3-6.1L3 9.6l6.3-.7z"></path></svg>{{ sr.ratingStr }}</div>
+              </div>
+            </sc-for>
+          </sc-for>
+          <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:44px 0;text-align:center;color:#71717A;font-size:13.5px">No results for &ldquo;{{ query }}&rdquo;</div>
+          </sc-if>
+        </div>
+        <div style="display:flex;gap:16px;padding:11px 20px;border-top:1px solid rgba(255,255,255,0.07);font-size:11px;color:#52525B">
+          <span>↑↓ Navigate</span><span>↵ Open</span><span>Esc Close</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- TRAILER MODAL -->
+  <sc-if value="{{ trailerOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeTrailer }}" style="position:absolute;inset:0;z-index:110;background:rgba(0,0,0,0.82);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;animation:fadeIn .18s ease-out both">
+      <div onClick="{{ stop }}" style="width:880px;max-width:88vw;animation:fadeUp .22s ease-out both">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div style="font-size:15px;font-weight:700;font-family:'Bricolage Grotesque',sans-serif">{{ trailerTitle }}</div>
+          <button onClick="{{ closeTrailer }}" style="width:32px;height:32px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:16px;color:#A1A1AA;cursor:pointer;display:flex;align-items:center;justify-content:center" style-hover="color:#fff"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+        </div>
+        <div style="aspect-ratio:16/9;border-radius:18px;background:{{ trailerBg }};border:1px solid rgba(255,255,255,0.1);box-shadow:0 40px 100px rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden">
+          <div style="position:absolute;inset:0;background:radial-gradient(80% 80% at 50% 45%,transparent 30%,rgba(0,0,0,0.55) 100%)"></div>
+          <div style="width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,0.94);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 46px rgba(0,0,0,0.5);cursor:pointer;z-index:2;transition:transform .2s ease-out" style-hover="transform:scale(1.06)">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#09090B" style="margin-left:3px"><path d="M8 5v14l11-7z"></path></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;autoRotate&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero&quot;},&quot;heroInterval&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:6,&quot;min&quot;:3,&quot;max&quot;:12,&quot;step&quot;:1,&quot;unit&quot;:&quot;s&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Hero&quot;}}">
+const M = (id,t,y,r,rt,g,o,h,tg) => ({id,t,ty:'movie',y,r,rt,g,o,h,tg});
+const S = (id,t,y,r,s,g,o,h,tg) => ({id,t,ty:'series',y,r,s,g,o,h,tg});
+const A = (id,t,y,r,s,g,o,h,tg,rt) => ({id,t,ty:'anime',y,r,s,rt,g,o,h,tg});
+const CATALOG = [
+  M('dune2','Dune: Part Two',2024,8.5,166,['Sci-Fi','Adventure'],'Paul Atreides unites with the Fremen and seeks revenge against the conspirators who destroyed his family, facing a choice between love and the fate of the universe.',35,'Long live the fighters.'),
+  M('opp','Oppenheimer',2023,8.3,180,['Drama','History'],'The story of J. Robert Oppenheimer and his role in the development of the atomic bomb — and the reckoning that followed.',25,'The world forever changes.'),
+  M('inter','Interstellar',2014,8.7,169,['Sci-Fi','Drama'],'With Earth becoming uninhabitable, a team of explorers travels through a wormhole in search of a new home for humanity.',230),
+  M('batman','The Batman',2022,7.8,176,['Crime','Thriller'],'In his second year fighting crime, Batman uncovers corruption in Gotham while pursuing the Riddler, a serial killer targeting the elite.',350,'Unmask the truth.'),
+  M('br2049','Blade Runner 2049',2017,8.0,164,['Sci-Fi','Mystery'],'A young blade runner unearths a long-buried secret that leads him to track down former blade runner Rick Deckard.',60),
+  M('whiplash','Whiplash',2014,8.5,106,['Drama','Music'],'A promising young drummer enrolls at a cut-throat conservatory where an instructor will stop at nothing to realize a student\u2019s potential.',45),
+  M('parasite','Parasite',2019,8.5,132,['Thriller','Drama'],'Greed and class discrimination threaten the newly formed symbiotic relationship between the wealthy Park family and the destitute Kims.',150),
+  M('madmax','Mad Max: Fury Road',2015,8.1,120,['Action','Adventure'],'In a post-apocalyptic wasteland, Max joins Furiosa to flee a tyrant who controls the land\u2019s water supply.',30),
+  M('arrival','Arrival',2016,7.9,116,['Sci-Fi','Drama'],'A linguist works with the military to communicate with alien lifeforms after twelve mysterious spacecraft appear around the world.',200),
+  M('gbh','The Grand Budapest Hotel',2014,8.1,100,['Comedy','Drama'],'A legendary concierge and his protégé become entangled in the theft of a priceless painting between the wars.',330),
+  M('lalaland','La La Land',2016,8.0,128,['Romance','Music'],'An aspiring actress and a jazz pianist pursue their dreams in Los Angeles as their relationship is tested by success.',260),
+  M('nocountry','No Country for Old Men',2007,8.2,122,['Crime','Thriller'],'A hunter stumbles upon a drug deal gone wrong and two million dollars in cash — and a relentless killer follows.',80),
+  S('severance','Severance',2022,8.7,2,['Drama','Mystery','Sci-Fi'],'Mark leads a team whose memories have been surgically divided between their work and personal lives — until a mysterious colleague appears outside the office.',190,'The work is mysterious and important.'),
+  S('bear','The Bear',2022,8.6,3,['Drama','Comedy'],'A young fine-dining chef returns to Chicago to run his family\u2019s sandwich shop after a heartbreaking death.',240),
+  S('succession','Succession',2018,8.9,4,['Drama'],'The Roy family controls one of the biggest media conglomerates in the world — and a battle for its future.',210),
+  S('lastofus','The Last of Us',2023,8.7,2,['Drama','Action'],'Twenty years after civilization collapsed, a hardened survivor is hired to smuggle a 14-year-old girl out of a quarantine zone.',120,'Endure and survive.'),
+  S('breakingbad','Breaking Bad',2008,9.5,5,['Crime','Drama'],'A chemistry teacher diagnosed with cancer turns to manufacturing methamphetamine to secure his family\u2019s future.',90),
+  S('dark','Dark',2017,8.7,3,['Sci-Fi','Mystery'],'A missing child sets four families on a hunt for answers, unearthing a small town\u2019s sinister ties across generations.',250),
+  S('chernobyl','Chernobyl',2019,9.3,1,['Drama','History'],'A dramatization of the 1986 nuclear disaster — the sacrifices made to save Europe from unimaginable catastrophe.',100),
+  S('truedet','True Detective',2014,8.9,4,['Crime','Mystery'],'Seasonal anthology in which police investigations unearth personal and professional secrets of those involved.',40),
+  A('aot','Attack on Titan',2013,9.1,4,['Action','Dark Fantasy'],'Humanity fights for survival behind enormous walls that keep out the Titans — until the day the walls are breached.',15,'Dedicate your hearts.'),
+  A('frieren','Frieren: Beyond Journey\u2019s End',2023,9.2,1,['Fantasy','Adventure'],'An elf mage who outlived her heroic companions embarks on a new journey to understand humanity — and what their time together truly meant.',160,'The journey after the journey.'),
+  A('jjk','Jujutsu Kaisen',2020,8.6,2,['Action','Supernatural'],'A boy swallows a cursed talisman and enrolls in a school of sorcerers to help exorcise the curse from himself.',280),
+  A('vinland','Vinland Saga',2019,8.8,2,['Action','History'],'Thorfinn pursues revenge against his father\u2019s killer amid the brutal politics of Viking-era Europe.',205),
+  A('bebop','Cowboy Bebop',1998,8.9,1,['Sci-Fi','Noir'],'A ragtag crew of bounty hunters chases criminals across the solar system aboard the spaceship Bebop.',265),
+  A('fma','Fullmetal Alchemist: Brotherhood',2009,9.1,1,['Adventure','Fantasy'],'Two brothers search for the Philosopher\u2019s Stone to restore their bodies after a forbidden alchemical ritual goes wrong.',50),
+  A('demonslayer','Demon Slayer: Kimetsu no Yaiba',2019,8.7,4,['Action','Fantasy'],'After his family is slaughtered, Tanjiro becomes a demon slayer to avenge them and cure his sister.',340),
+  A('spirited','Spirited Away',2001,8.6,0,['Fantasy','Adventure'],'A ten-year-old girl wanders into a world of spirits and must work in a bathhouse to free herself and her parents.',300,null,125),
+  M('dune3','Dune: Part Three',2026,null,null,['Sci-Fi','Adventure'],'The saga concludes as Paul Atreides confronts the consequences of the holy war waged in his name.',35),
+  M('avengers','Avengers: Doomsday',2026,null,null,['Action','Sci-Fi'],'Earth\u2019s mightiest heroes reassemble against a threat unlike any they have faced before.',255),
+  M('batman2','The Batman Part II',2027,null,null,['Crime','Thriller'],'The next chapter of the Gotham saga.',350),
+  M('spiderman','Spider-Man: Brand New Day',2026,null,null,['Action','Adventure'],'Peter Parker starts over with no one remembering who he is.',10),
+];
+const HERO_IDS = ['dune2','severance','frieren','opp','lastofus'];
+const CASTS = {
+  dune2:['Timothée Chalamet|Paul Atreides','Zendaya|Chani','Rebecca Ferguson|Lady Jessica','Austin Butler|Feyd-Rautha','Javier Bardem|Stilgar','Florence Pugh|Princess Irulan'],
+  severance:['Adam Scott|Mark Scout','Britt Lower|Helly R.','Zach Cherry|Dylan G.','John Turturro|Irving B.','Patricia Arquette|Harmony Cobel','Tramell Tillman|Seth Milchick'],
+  frieren:['Atsumi Tanezaki|Frieren','Kana Ichinose|Fern','Chiaki Kobayashi|Stark','Nobuhiko Okamoto|Himmel'],
+  opp:['Cillian Murphy|J. Robert Oppenheimer','Emily Blunt|Kitty Oppenheimer','Matt Damon|Leslie Groves','Robert Downey Jr.|Lewis Strauss','Florence Pugh|Jean Tatlock'],
+  lastofus:['Pedro Pascal|Joel Miller','Bella Ramsey|Ellie','Gabriel Luna|Tommy','Isabela Merced|Dina'],
+  breakingbad:['Bryan Cranston|Walter White','Aaron Paul|Jesse Pinkman','Anna Gunn|Skyler White','Bob Odenkirk|Saul Goodman'],
+  bear:['Jeremy Allen White|Carmy Berzatto','Ayo Edebiri|Sydney Adamu','Ebon Moss-Bachrach|Richie Jerimovich'],
+  aot:['Yuki Kaji|Eren Yeager','Yui Ishikawa|Mikasa Ackerman','Marina Inoue|Armin Arlert'],
+  inter:['Matthew McConaughey|Cooper','Anne Hathaway|Dr. Brand','Jessica Chastain|Murph'],
+  batman:['Robert Pattinson|Bruce Wayne','Zoë Kravitz|Selina Kyle','Paul Dano|The Riddler'],
+};
+const EP_TITLES = ['The Arrival','Undercurrents','Fault Lines','The Long Night','Crossroads','Inheritance','Point of No Return','Reckoning'];
+const ROT = {dune2:92,opp:93,inter:73,batman:85,br2049:88,whiplash:94,parasite:99,madmax:97,arrival:94,gbh:92,lalaland:91,nocountry:93,severance:97,bear:92,succession:97,lastofus:96,breakingbad:96,dark:95,chernobyl:95,truedet:78,aot:96,frieren:100,jjk:98,vinland:100,bebop:100,fma:100,demonslayer:98,spirited:96};
+const byId = id => CATALOG.find(x => x.id === id);
+
+class Component extends DCLogic {
+  state = {page:'home', pageArg:null, heroIdx:0, searchOpen:false, query:'', favorites:[], progress:{}, recent:['severance','dune'], playing:false, season:1, epIdx:0, trailerOpen:null, menuOpen:false, quality:'1080p', subs:'English', audio:'English 5.1', volume:80, theater:false, favSort:'rating', favFilter:'all', favQuery:''};
+  mainRef = React.createRef();
+  playerRef = React.createRef();
+
+  componentDidMount() {
+    try {
+      const favs = JSON.parse(localStorage.getItem('yc:favs') || 'null');
+      let prog = JSON.parse(localStorage.getItem('yc:progress') || 'null');
+      const recent = JSON.parse(localStorage.getItem('yc:recent') || 'null');
+      if (!prog) prog = {'inter':{p:62,t:4},'bear:s1e3':{p:45,t:3},'aot:s4e1':{p:78,t:2},'br2049':{p:23,t:1}};
+      this.setState({favorites: favs || ['severance','frieren','breakingbad'], progress: prog, recent: recent || ['severance','dune']});
+    } catch(e) {}
+    this._heroT = 0;
+    this.timer = setInterval(() => {
+      const s = this.state;
+      if ((this.props.autoRotate ?? true) && s.page === 'home' && !s.searchOpen && !s.trailerOpen) {
+        this._heroT++;
+        if (this._heroT >= (this.props.heroInterval ?? 6)) { this._heroT = 0; this.setState(st => ({heroIdx: (st.heroIdx + 1) % HERO_IDS.length})); }
+      }
+      if (s.page === 'watch' && s.playing) {
+        const k = this.progKey(), p = {...s.progress};
+        p[k] = {p: Math.min(100, (p[k]?.p || 0) + 0.4), t: Date.now()};
+        this.saveProg(p);
+      }
+    }, 1000);
+    this.keyH = e => {
+      const tag = (e.target.tagName || '').toUpperCase();
+      if (e.key === 'Escape') { this.setState({searchOpen:false, trailerOpen:null, menuOpen:false}); return; }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); this.setState({searchOpen:true, query:''}); return; }
+      if (this.state.searchOpen || tag === 'INPUT' || tag === 'SELECT') return;
+      if (e.key === '/') { e.preventDefault(); this.setState({searchOpen:true, query:''}); return; }
+      if (this.state.page === 'watch') {
+        if (e.key === ' ') { e.preventDefault(); this.setState(s => ({playing: !s.playing})); }
+        if (e.key === 'ArrowRight') this.seek(2);
+        if (e.key === 'ArrowLeft') this.seek(-2);
+        if (e.key.toLowerCase() === 't') this.setState(s => ({theater: !s.theater}));
+        if (e.key.toLowerCase() === 'f') this.fullscreen();
+      }
+    };
+    window.addEventListener('keydown', this.keyH);
+  }
+  componentWillUnmount() { clearInterval(this.timer); window.removeEventListener('keydown', this.keyH); }
+
+  go(page, arg) {
+    this.setState({page, pageArg: arg ?? null, playing: false, menuOpen: false, searchOpen: false, trailerOpen: null, season: 1, epIdx: 0});
+    if (this.mainRef.current) this.mainRef.current.scrollTop = 0;
+  }
+  progKey() {
+    const it = byId(this.state.pageArg); if (!it) return '';
+    return it.s ? `${it.id}:s${this.state.season}e${this.state.epIdx + 1}` : it.id;
+  }
+  saveProg(p) { this.setState({progress: p}); try { localStorage.setItem('yc:progress', JSON.stringify(p)); } catch(e) {} }
+  saveFavs(f) { this.setState({favorites: f}); try { localStorage.setItem('yc:favs', JSON.stringify(f)); } catch(e) {} }
+  seek(d) {
+    const k = this.progKey(), p = {...this.state.progress};
+    p[k] = {p: Math.max(0, Math.min(100, (p[k]?.p || 0) + d)), t: Date.now()};
+    this.saveProg(p);
+  }
+  fullscreen() { const el = this.playerRef.current; if (el && el.requestFullscreen) el.requestFullscreen().catch(() => {}); }
+  toggleFav(id) {
+    const f = this.state.favorites.includes(id) ? this.state.favorites.filter(x => x !== id) : [...this.state.favorites, id];
+    this.saveFavs(f);
+  }
+  deco(item) {
+    if (!item) return null;
+    const h = item.h, fav = this.state.favorites.includes(item.id);
+    return {...item,
+      open: () => this.go('detail', item.id),
+      play: () => this.go('watch', item.id),
+      fav: () => this.toggleFav(item.id),
+      favColor: fav ? '#8f88ff' : '#fff', favFill: fav ? '#8f88ff' : 'none',
+      favLabel: fav ? 'In My List' : 'My List',
+      bg: `url('art/${item.id}-po.jpg') center/cover no-repeat, oklch(0.17 0.05 ${h})`,
+      art: `url('art/${item.id}-bd.jpg') center/cover no-repeat, oklch(0.15 0.05 ${h})`,
+      heroArt: `url('art/${item.id}-bd.jpg') center 32%/cover no-repeat, oklch(0.12 0.04 ${h})`,
+      genres: item.g.join(' · '), genreChips: item.g,
+      genre1: item.g[0],
+      ratingStr: item.r ? item.r.toFixed(1) : '', hasR: !!item.r,
+      hasTag: !!item.tg, isSeries: !!item.s,
+      typeLabel: {movie:'FILM', series:'SERIES', anime:'ANIME'}[item.ty],
+      meta: [item.y, item.s ? `${item.s} Season${item.s > 1 ? 's' : ''}` : (item.rt ? `${Math.floor(item.rt/60)}h ${item.rt%60}m` : 'Coming Soon')].join(' · '),
+      metaShort: item.s ? `${item.s} Season${item.s > 1 ? 's' : ''}` : (item.rt ? `${Math.floor(item.rt/60)}h ${item.rt%60}m` : String(item.y)),
+      playLabel: item.s ? `Play S${this.state.season}E1` : 'Play',
+      rot: ROT[item.id] || 0, hasRot: !!ROT[item.id],
+      rotColor: (ROT[item.id] || 0) >= 60 ? '#22C55E' : '#F59E0B',
+      badges: item.y >= 2015 ? ['4K','DOLBY VISION','5.1'] : ['HD','5.1'],
+      starring: (CASTS[item.id] || []).slice(0,3).map(c => c.split('|')[0]).join(', '),
+      hasStars: !!CASTS[item.id],
+      trailer: () => this.setState({trailerOpen: `${item.t} — Official Trailer`}),
+      progPct: Math.round(this.state.progress[item.id]?.p || 0),
+      hasProg: (this.state.progress[item.id]?.p || 0) > 2 && (this.state.progress[item.id]?.p || 0) < 95,
+      resumeLabel: (this.state.progress[item.id]?.p || 0) > 2 && (this.state.progress[item.id]?.p || 0) < 95 ? 'Resume' : (item.s ? `Play S${this.state.season}E1` : 'Play'),
+    };
+  }
+  rowItems(k) {
+    const c = CATALOG.filter(x => x.r);
+    switch(k) {
+      case 'trending': return [byId('frieren'),byId('dune2'),byId('severance'),byId('lastofus'),byId('bear'),byId('jjk'),byId('opp'),byId('demonslayer'),byId('batman'),byId('truedet')];
+      case 'movies': return c.filter(x => x.ty === 'movie');
+      case 'anime': return c.filter(x => x.ty === 'anime');
+      case 'series': return c.filter(x => x.ty === 'series');
+      case 'upcoming': return CATALOG.filter(x => !x.r);
+      case 'recommended': return [byId('br2049'),byId('dark'),byId('vinland'),byId('arrival'),byId('chernobyl'),byId('fma'),byId('parasite'),byId('bebop')];
+      case 'recent': return [byId('frieren'),byId('lastofus'),byId('jjk'),byId('bear'),byId('demonslayer'),byId('truedet'),byId('spirited'),byId('madmax'),byId('gbh')];
+      default: return c;
+    }
+  }
+  episodesFor(item) {
+    if (!item || !item.s) return [];
+    return EP_TITLES.map((t, i) => {
+      const key = `${item.id}:s${this.state.season}e${i+1}`;
+      const pr = this.state.progress[key]?.p || 0;
+      const active = this.state.page === 'watch' && this.state.epIdx === i;
+      return {n: i+1, title: t, dur: `${42 + ((i*7 + item.h) % 19)} min`,
+        bg: `linear-gradient(0deg, rgba(5,5,6,0.4), rgba(5,5,6,0.1)), url('art/${item.id}-bd.jpg') ${(i*13)%70+12}% 35%/230% auto no-repeat`,
+        hasProg: pr > 1, prog: Math.round(pr),
+        railBg: active ? 'rgba(108,99,255,0.16)' : 'transparent',
+        titleColor: active ? '#fff' : '#A1A1AA',
+        play: () => { this.go('watch', item.id); this.setState({epIdx: i, playing: true, season: this.state.season}); },
+        watch: () => this.setState({epIdx: i, playing: true}),
+      };
+    });
+  }
+  searchMatches() {
+    const q = this.state.query.trim().toLowerCase();
+    if (!q) return [];
+    return CATALOG.filter(x => x.t.toLowerCase().includes(q) || x.g.some(g => g.toLowerCase().includes(q)));
+  }
+  sResult(x) {
+    const d = this.deco(x);
+    return {...d, pick: () => {
+      const q = this.state.query.trim();
+      if (q) { const r = [q, ...this.state.recent.filter(v => v !== q)].slice(0,6); this.setState({recent: r}); try { localStorage.setItem('yc:recent', JSON.stringify(r)); } catch(e) {} }
+      this.go('detail', x.id);
+    }};
+  }
+  renderVals() {
+    const s = this.state;
+    const d0 = byId(s.pageArg) || CATALOG[0];
+    const d = this.deco(d0);
+    const w = d;
+    const heroItem = s.page === 'detail' || s.page === 'watch' ? d0 : byId(HERO_IDS[s.heroIdx]);
+    const a = heroItem ? heroItem.h : 260;
+    const ambient = `radial-gradient(55% 45% at 78% 0%, oklch(0.22 0.07 ${a}) 0%, transparent 62%), radial-gradient(45% 40% at 8% 25%, oklch(0.16 0.05 ${(a+70)%360}) 0%, transparent 58%), #050506`;
+    const ambientImg = heroItem ? `url('art/${heroItem.id}-bd.jpg') center/cover no-repeat` : 'none';
+    const heroes = HERO_IDS.map((id, i) => {
+      const dd = this.deco(byId(id));
+      const active = i === s.heroIdx;
+      return {...dd, op: active ? 1 : 0, pe: active ? 'auto' : 'none', z: active ? 2 : 1};
+    });
+    const heroThumbs = HERO_IDS.map((id, i) => {
+      const it = byId(id), active = i === s.heroIdx;
+      const dd = this.deco(it);
+      return {t: it.t, art: dd.art, typeLabel: dd.typeLabel, click: () => { this._heroT = 0; this.setState({heroIdx: i}); },
+        w: active ? '248px' : '158px',
+        ring: active ? 'rgba(108,99,255,0.9)' : 'rgba(255,255,255,0.1)',
+        sh: active ? '0 12px 34px rgba(108,99,255,0.3), 0 6px 18px rgba(0,0,0,0.5)' : '0 4px 14px rgba(0,0,0,0.4)',
+        barOp: active ? 1 : 0, scrimOp: active ? 1 : 0.45};
+    });
+    const browseTitles = {movies:'Movies', series:'Series', anime:'Anime', upcoming:'Upcoming Releases'};
+    const browseItems = this.rowItems(s.pageArg || 'movies').map(x => this.deco(x));
+    const navDefs = [['Home','home',null],['Movies','browse','movies'],['Series','browse','series'],['Anime','browse','anime'],['Library','library',null]];
+    const navItems = navDefs.map(([l, p, arg]) => {
+      const act = s.page === p && (p !== 'browse' || s.pageArg === arg);
+      return {l, click: () => this.go(p, arg),
+        color: act ? '#fff' : '#A1A1AA', bg: act ? 'rgba(255,255,255,0.1)' : 'transparent',
+        fw: act ? 600 : 500, sh: act ? 'inset 0 0 0 1px rgba(255,255,255,0.12)' : 'none'};
+    });
+    const matches = this.searchMatches();
+    const groups = [['MOVIES','movie'],['SERIES','series'],['ANIME','anime']]
+      .map(([label, ty]) => ({label, items: matches.filter(x => x.ty === ty).map(x => this.sResult(x))}))
+      .filter(g => g.items.length);
+    const cast = (CASTS[d0.id] || []).map(c => {
+      const [name, ch] = c.split('|');
+      const hh = (name.charCodeAt(0) * 31 + name.length * 47) % 360;
+      return {name, ch, ini: name.split(' ').map(x => x[0]).slice(0,2).join(''),
+        bg: `linear-gradient(140deg, oklch(0.42 0.07 ${hh}), oklch(0.24 0.05 ${(hh+50)%360}))`};
+    });
+    const trailers = ['Official Trailer','Teaser','Behind the Scenes'].map((label, i) => ({
+      label, dur: `${1 + (i%2)}:${String(14 + i*23).padStart(2,'0')}`,
+      bg: `linear-gradient(0deg, rgba(5,5,6,0.45), rgba(5,5,6,0.12)), url('art/${d0.id}-bd.jpg') ${18 + i*30}% 45%/185% auto no-repeat`,
+      open: () => this.setState({trailerOpen: `${d0.t} — ${label}`}),
+    }));
+    const wKey = this.progKey();
+    const wProg = s.progress[wKey]?.p || 0;
+    const rt = d0.rt || 52;
+    const fmt = mins => { const t = Math.round(mins*60), hh = Math.floor(t/3600), mm = Math.floor((t%3600)/60), ss = t%60; return (hh?hh+':':'')+String(mm).padStart(hh?2:1,'0')+':'+String(ss).padStart(2,'0'); };
+    const menuGroups = [
+      ['QUALITY','quality',['2160p 4K','1080p','720p']],
+      ['SUBTITLES','subs',['Off','English','Spanish','Japanese']],
+      ['AUDIO','audio',['English 5.1','English Stereo','Japanese']],
+    ].map(([label, key, opts]) => ({label, options: opts.map(v => ({v, sel: s[key] === v, color: s[key] === v ? '#fff' : '#A1A1AA', pick: () => this.setState({[key]: v})}))}));
+    let favList = CATALOG.filter(x => s.favorites.includes(x.id));
+    if (s.favFilter !== 'all') favList = favList.filter(x => x.ty === s.favFilter);
+    if (s.favQuery.trim()) favList = favList.filter(x => x.t.toLowerCase().includes(s.favQuery.trim().toLowerCase()));
+    favList = [...favList].sort((a2,b) => s.favSort === 'title' ? a2.t.localeCompare(b.t) : s.favSort === 'year' ? b.y - a2.y : (b.r||0) - (a2.r||0));
+    const favChips = [['All','all'],['Movies','movie'],['Series','series'],['Anime','anime']].map(([l, v]) => {
+      const act = s.favFilter === v;
+      return {l, pick: () => this.setState({favFilter: v}), bg: act ? 'rgba(108,99,255,0.18)' : 'rgba(20,20,24,0.8)', color: act ? '#fff' : '#A1A1AA', bd: act ? 'rgba(108,99,255,0.55)' : 'rgba(255,255,255,0.09)'};
+    });
+    const histEntries = Object.entries(s.progress).map(([k, v]) => {
+      const [id, ep] = k.split(':');
+      const item = byId(id);
+      if (!item) return null;
+      return {item, ep, pct: Math.round(v.p), t: v.t || 0};
+    }).filter(Boolean).sort((x, y2) => y2.t - x.t);
+    const continueItems = histEntries.filter(e => e.pct < 95).slice(0, 8).map(e => {
+      const dd = this.deco(e.item);
+      const mins = Math.round((e.item.rt || 52) * (100 - e.pct) / 100);
+      return {...dd, pct: e.pct, sub: (e.ep ? e.ep.toUpperCase().replace('S','Season ').replace('E',' · Ep ') + ' · ' : '') + `${mins} min left`,
+        watch: () => { this.go('watch', e.item.id); if (e.ep) { const m = e.ep.match(/s(\d+)e(\d+)/); if (m) this.setState({season: +m[1], epIdx: +m[2]-1}); } }};
+    });
+    const seen = new Set();
+    const recentItems = histEntries.filter(e => { if (seen.has(e.item.id)) return false; seen.add(e.item.id); return true; }).map(e => this.deco(e.item));
+    const upcoming = this.rowItems('upcoming');
+    return {
+      mainRef: this.mainRef, playerRef: this.playerRef, ambient, ambientImg,
+      isHome: s.page === 'home', isBrowse: s.page === 'browse', isDetail: s.page === 'detail',
+      isWatch: s.page === 'watch', isLibrary: s.page === 'library',
+      navItems, heroes, heroThumbs,
+      goHome: () => this.go('home'),
+      goBack: () => this.go(s.page === 'watch' ? 'detail' : 'home', s.page === 'watch' ? s.pageArg : null),
+      backToDetail: () => this.go('detail', s.pageArg),
+      hasContinue: continueItems.length > 0, continueItems,
+      trendingItems: this.rowItems('trending').map((x, i) => ({...this.deco(x), rank: i + 1})),
+      newFeatured: this.deco(upcoming[0]),
+      newSmall: upcoming.slice(1, 5).map(x => this.deco(x)),
+      viewUpcoming: () => this.go('browse', 'upcoming'),
+      recommended: this.rowItems('recommended').map(x => this.deco(x)),
+      recentAdded: this.rowItems('recent').map(x => this.deco(x)),
+      browseTitle: browseTitles[s.pageArg] || 'Browse', browseCount: browseItems.length, browseItems,
+      d, w,
+      seasons: Array.from({length: d0.s || 0}, (_, i) => {
+        const act = s.season === i + 1;
+        return {n: i+1, pick: () => this.setState({season: i+1, epIdx: 0}), bg: act ? 'rgba(108,99,255,0.18)' : 'rgba(20,20,24,0.8)', color: act ? '#fff' : '#A1A1AA', bd: act ? 'rgba(108,99,255,0.55)' : 'rgba(255,255,255,0.09)'};
+      }),
+      episodes: this.episodesFor(d0),
+      hasCast: cast.length > 0, cast, trailers,
+      recs: CATALOG.filter(x => x.id !== d0.id && x.r && (x.ty === d0.ty || x.g.some(g => d0.g.includes(g)))).slice(0, 10).map(x => this.deco(x)),
+      openTrailer: () => this.setState({trailerOpen: `${d0.t} — Official Trailer`}),
+      trailerOpen: !!s.trailerOpen, trailerTitle: s.trailerOpen || '',
+      trailerBg: d ? d.heroArt : '#111', closeTrailer: () => this.setState({trailerOpen: null}),
+      playing: s.playing, notPlaying: !s.playing,
+      togglePlay: () => this.setState(st => ({playing: !st.playing, menuOpen: false})),
+      wProg, timeStr: `${fmt(rt * wProg / 100)} / ${fmt(rt)}`,
+      wTitleBar: d0.s ? `${d0.t} · S${s.season}E${s.epIdx+1}` : d0.t,
+      wEpLabel: d0.s ? `Season ${s.season}, Episode ${s.epIdx+1} — ${EP_TITLES[s.epIdx]}` : '',
+      seekClick: e => { const r = e.currentTarget.getBoundingClientRect(); const pct = Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100)); const p = {...s.progress}; p[wKey] = {p: pct, t: Date.now()}; this.saveProg(p); },
+      seekBack: () => this.seek(-4), seekFwd: () => this.seek(4),
+      volume: s.volume, setVolume: e => this.setState({volume: +e.target.value}),
+      menuOpen: s.menuOpen, toggleMenu: () => this.setState(st => ({menuOpen: !st.menuOpen})),
+      menuBtnBg: s.menuOpen ? 'rgba(255,255,255,0.1)' : 'none', menuGroups,
+      quality: s.quality,
+      theaterColor: s.theater ? '#8f88ff' : '#D4D4D8', notTheater: !s.theater,
+      toggleTheater: () => this.setState(st => ({theater: !st.theater})),
+      playerMaxW: s.theater ? 'calc(100vh * 1.7778)' : '1102px',
+      navDisplay: s.page === 'watch' ? 'none' : 'flex',
+      playerBgOp: s.playing ? 1 : 0.55,
+      goFullscreen: () => this.fullscreen(),
+      showEpRail: !!d0.s && !s.theater, season: s.season,
+      searchOpen: s.searchOpen, openSearch: () => this.setState({searchOpen: true, query: ''}),
+      closeSearch: () => this.setState({searchOpen: false}),
+      stop: e => e.stopPropagation(),
+      query: s.query, onSearch: e => this.setState({query: e.target.value}),
+      showRecent: !s.query.trim(),
+      recentChips: s.recent.map(q => ({q, pick: () => this.setState({query: q})})),
+      trendingResults: this.rowItems('trending').slice(0, 4).map(x => this.sResult(x)),
+      searchGroups: s.query.trim() ? groups : [],
+      noResults: !!s.query.trim() && matches.length === 0,
+      favChips, favItems: favList.map(x => this.deco(x)),
+      hasFavs: favList.length > 0, noFavs: favList.length === 0,
+      favSort: s.favSort, setFavSort: e => this.setState({favSort: e.target.value}),
+      favQuery: s.favQuery, setFavQuery: e => this.setState({favQuery: e.target.value}),
+      recentItems,
+    };
+  }
+}
+</script>
+</body>
+</html>

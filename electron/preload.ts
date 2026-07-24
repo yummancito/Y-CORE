@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { SteamCmdInstallOptions, SteamCmdProgress } from './modules/steamcmd-manager'
 
 contextBridge.exposeInMainWorld('steamtools', {
   // App lifecycle
@@ -96,6 +97,15 @@ contextBridge.exposeInMainWorld('steamtools', {
   storeGetLocalAppIds: () =>
     ipcRenderer.invoke('store:getLocalAppIds'),
 
+  // Download depot without Steam (steampipe)
+  downloadDepot: (options: {
+    appId: number
+    depotId: number
+    manifestId: string | number
+    installDir: string
+    cellId?: number
+  }) => ipcRenderer.invoke('steampipe:downloadDepot', options),
+
   // Steam app type checker (client-side, uses user's IP)
   checkAppTypes: (appIds: string[]) =>
     ipcRenderer.invoke('steam:checkAppTypes', appIds),
@@ -136,6 +146,9 @@ contextBridge.exposeInMainWorld('steamtools', {
 
   // Auto-updater
   installUpdate: () => ipcRenderer.invoke('app:installUpdate'),
+
+  // Native DLL diagnostics — expuesto desde electron/modules/ycore-native.ts
+  getNativeDiagnostics: () => ipcRenderer.invoke('app:getNativeDiagnostics'),
   manualDownloadUpdate: (url: string) => ipcRenderer.invoke('app:manualDownloadUpdate', url),
   runManualInstaller: (installerPath: string) => ipcRenderer.invoke('app:runManualInstaller', installerPath),
   onUpdateAvailable: (callback: (info: { version?: string }) => void) => {
@@ -157,6 +170,22 @@ contextBridge.exposeInMainWorld('steamtools', {
     const handler = (_event: any, info: { message: string }) => callback(info)
     ipcRenderer.on('update-error', handler)
     return () => ipcRenderer.removeListener('update-error', handler)
+  },
+
+  // SteamCMD (fork-based downloader) — bridges hacia electron/modules/steamcmd-manager.ts.
+  startSteamCmdInstall: (opts: SteamCmdInstallOptions) =>
+    ipcRenderer.invoke('steamcmd:start', opts),
+  cancelSteamCmdInstall: (appId: string) =>
+    ipcRenderer.invoke('steamcmd:cancel', appId),
+  isSteamCmdAvailable: () => ipcRenderer.invoke('steamcmd:isAvailable'),
+  // H1.7.3 — dispara descarga de SteamCMD desde el renderer cuando el caché
+  // está vacío. Surface toast mientras descarga; retorna success al final.
+  fetchSteamCmd: () => ipcRenderer.invoke('steamcmd:fetch'),
+  listSteamCmdJobs: () => ipcRenderer.invoke('steamcmd:list'),
+  onSteamCmdProgress: (callback: (payload: SteamCmdProgress) => void) => {
+    const handler = (_event: any, payload: SteamCmdProgress) => callback(payload)
+    ipcRenderer.on('steamcmd:progress', handler)
+    return () => ipcRenderer.removeListener('steamcmd:progress', handler)
   },
 
   // Signature validation

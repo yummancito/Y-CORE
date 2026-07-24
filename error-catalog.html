@@ -1,0 +1,4456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Y-CORE — Catálogo de Errores</title>
+<style>
+  /* ==========================================================
+     Design tokens (match Y-CORE palette)
+     ========================================================== */
+  :root {
+    --bg: #0a0a0f;
+    --bg-elevated: #13131a;
+    --bg-card: #1a1a24;
+    --bg-card-hover: #21212c;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text-bright: #ffffff;
+    --text-primary: #e6e6ef;
+    --text-secondary: #a8a8b8;
+    --text-dim: #6b6b7c;
+    --accent: #6366f1;
+    --accent-bright: #818cf8;
+    --accent-dark: #4f46e5;
+    --status-error: #ef4444;
+    --status-error-bg: rgba(239, 68, 68, 0.12);
+    --status-warning: #f59e0b;
+    --status-warning-bg: rgba(245, 158, 11, 0.12);
+    --status-info: #3b82f6;
+    --status-info-bg: rgba(59, 130, 246, 0.12);
+    --status-critical: #ec4899;
+    --status-critical-bg: rgba(236, 72, 153, 0.12);
+    --status-success: #10b981;
+    --status-success-bg: rgba(16, 185, 129, 0.12);
+    --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+    --shadow-glow: 0 0 24px rgba(99, 102, 241, 0.18);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  code, pre, .mono {
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 12px;
+  }
+
+  /* ==========================================================
+     Layout
+     ========================================================== */
+  .app {
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: linear-gradient(180deg, rgba(10, 10, 15, 0.95) 0%, rgba(10, 10, 15, 0.85) 100%);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 28px;
+  }
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .brand-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-glow);
+    font-weight: 800;
+    font-size: 18px;
+    color: white;
+  }
+  .brand-text { line-height: 1.2; }
+  .brand-name { font-weight: 700; color: var(--text-bright); font-size: 16px; letter-spacing: -0.01em; }
+  .brand-subtitle { color: var(--text-dim); font-size: 11px; }
+
+  .search-wrap {
+    flex: 1;
+    max-width: 480px;
+    position: relative;
+  }
+  .search-input {
+    width: 100%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 10px 14px 10px 38px;
+    border-radius: 10px;
+    font-size: 13px;
+    transition: all 0.2s ease;
+  }
+  .search-input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+  }
+  .search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+  .icon-btn:hover {
+    background: var(--bg-card);
+    border-color: var(--accent);
+    color: var(--text-bright);
+  }
+
+  /* Stats bar */
+  .stats {
+    padding: 16px 28px 0;
+    max-width: 1600px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+  }
+  .stat-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.15s ease;
+  }
+  .stat-card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+  .stat-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    box-shadow: 0 0 8px currentColor;
+  }
+  .stat-value {
+    color: var(--text-bright);
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .stat-label { color: var(--text-dim); font-size: 11px; }
+
+  /* Filters */
+  .filters {
+    padding: 16px 28px;
+    max-width: 1600px;
+    margin: 0 auto;
+    width: 100%;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-label { color: var(--text-dim); font-size: 11px; margin-right: 4px; }
+  .filter-pill {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .filter-pill:hover { border-color: var(--border-strong); color: var(--text-bright); }
+  .filter-pill.active {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: var(--accent);
+    color: var(--accent-bright);
+  }
+  .filter-pill .pill-count {
+    background: rgba(255, 255, 255, 0.06);
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .filter-pill.active .pill-count {
+    background: rgba(99, 102, 241, 0.3);
+    color: var(--text-bright);
+  }
+
+  /* Main container */
+  .main {
+    padding: 8px 28px 60px;
+    max-width: 1600px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .results-info {
+    color: var(--text-dim);
+    font-size: 12px;
+    padding: 8px 0 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .results-info strong { color: var(--text-primary); }
+
+  /* ==========================================================
+     Error cards
+     ========================================================== */
+  .error-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .error-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.18s ease;
+    cursor: pointer;
+  }
+  .error-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-card);
+  }
+  .error-card.expanded {
+    background: var(--bg-card-hover);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3), var(--shadow-card);
+  }
+
+  .error-head {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+  .error-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px 8px;
+    border-radius: 6px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    border: 1px solid var(--border);
+  }
+  .error-info { min-width: 0; }
+  .error-title {
+    font-weight: 600;
+    color: var(--text-bright);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .error-message {
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-top: 2px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
+  }
+
+  /* Screen-reader only utility */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Critical cards get a left accent */
+  .error-card.sev-critical { border-left: 3px solid var(--status-critical); }
+  .error-card.sev-error { border-left: 3px solid var(--status-error); }
+  .error-card.sev-warning { border-left: 3px solid var(--status-warning); }
+  .error-card.sev-info { border-left: 3px solid var(--status-info); }
+
+  .error-card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .error-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .badge {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .badge-critical {
+    background: var(--status-critical-bg);
+    color: var(--status-critical);
+    border-color: rgba(236, 72, 153, 0.3);
+  }
+  .badge-error {
+    background: var(--status-error-bg);
+    color: var(--status-error);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+  .badge-warning {
+    background: var(--status-warning-bg);
+    color: var(--status-warning);
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+  .badge-info {
+    background: var(--status-info-bg);
+    color: var(--status-info);
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  .badge-cat {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+
+  /* Expanded body */
+  .error-body {
+    border-top: 1px solid var(--border);
+    padding: 16px;
+    display: none;
+    background: rgba(0, 0, 0, 0.25);
+  }
+  .error-card.expanded .error-body { display: block; }
+  .body-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .body-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .body-section.full { grid-column: 1 / -1; }
+  .body-label {
+    color: var(--text-dim);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+  .body-value {
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .body-value.mono {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+  .body-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .action-chip {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--accent-bright);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .trigger-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .trigger-item {
+    color: var(--text-secondary);
+    font-size: 12px;
+    padding-left: 14px;
+    position: relative;
+  }
+  .trigger-item::before {
+    content: '▸';
+    position: absolute;
+    left: 0;
+    color: var(--accent-bright);
+  }
+  .copy-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .copy-btn:hover {
+    background: rgba(99, 102, 241, 0.18);
+    border-color: var(--accent);
+    color: var(--text-bright);
+  }
+  .copy-btn.copied {
+    background: rgba(16, 185, 129, 0.18);
+    border-color: var(--status-success);
+    color: var(--status-success);
+  }
+
+  /* Empty state */
+  .empty {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--text-dim);
+  }
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.3;
+  }
+
+  /* Footer */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 20px 28px;
+    color: var(--text-dim);
+    font-size: 11px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.3);
+  }
+  .footer strong { color: var(--text-secondary); }
+
+  /* ==========================================================
+     Responsive
+     ========================================================== */
+  @media (max-width: 880px) {
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .body-grid { grid-template-columns: 1fr; }
+    .search-wrap { max-width: none; }
+    .header-inner { flex-wrap: wrap; }
+    .brand-subtitle { display: none; }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); }
+
+  /* Subtle entry animation */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .error-card { animation: fadeUp 0.25s ease both; }
+
+/* ============================================================
+   PROMINENT MESSAGE STYLE — make error message the headline
+   ============================================================ */
+.error-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 14px;
+  padding: 14px 18px;
+}
+.error-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.error-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.error-message {
+  color: var(--text-bright);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.45;
+  margin: 0;
+  display: block;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+.error-card {
+  border-top: 2px solid transparent;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+.error-card:hover {
+  border-top-color: var(--accent);
+  transform: translateY(-2px);
+}
+.error-card.sev-critical .error-message { color: #fcd9e7; font-weight: 600; }
+.error-card.sev-error .error-message { color: #fef3f4; font-weight: 600; }
+.error-card.sev-warning .error-message { color: var(--text-bright); }
+.error-card.sev-info .error-message { color: var(--text-bright); }
+
+/* ============================================================
+   PROMINENT MESSAGE STYLE — make error message the headline
+   ============================================================ */
+.error-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 14px;
+  padding: 14px 18px;
+}
+.error-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.error-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.error-message {
+  color: var(--text-bright);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.45;
+  margin: 0;
+  display: block;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+.error-card {
+  border-top: 2px solid transparent;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+.error-card:hover {
+  border-top-color: var(--accent);
+  transform: translateY(-2px);
+}
+.error-card.sev-critical .error-message { color: #fcd9e7; font-weight: 600; }
+.error-card.sev-error .error-message { color: #fef3f4; font-weight: 600; }
+.error-card.sev-warning .error-message { color: var(--text-bright); }
+.error-card.sev-info .error-message { color: var(--text-bright); }
+
+/* ============================================================
+   PROMINENT MESSAGE STYLE — make error message the headline
+   ============================================================ */
+.error-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 14px;
+  padding: 14px 18px;
+}
+.error-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.error-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.error-message {
+  color: var(--text-bright);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.45;
+  margin: 0;
+  display: block;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+.error-card {
+  border-top: 2px solid transparent;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+.error-card:hover {
+  border-top-color: var(--accent);
+  transform: translateY(-2px);
+}
+.error-card.sev-critical .error-message { color: #fcd9e7; font-weight: 600; }
+.error-card.sev-error .error-message { color: #fef3f4; font-weight: 600; }
+.error-card.sev-warning .error-message { color: var(--text-bright); }
+.error-card.sev-info .error-message { color: var(--text-bright); }
+
+/* ============================================================
+   PROMINENT MESSAGE STYLE — make error message the headline
+   ============================================================ */
+.error-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 14px;
+  padding: 14px 18px;
+}
+.error-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.error-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.error-message {
+  color: var(--text-bright);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.45;
+  margin: 0;
+  display: block;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+.error-card {
+  border-top: 2px solid transparent;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+.error-card:hover {
+  border-top-color: var(--accent);
+  transform: translateY(-2px);
+}
+.error-card.sev-critical .error-message { color: #fcd9e7; font-weight: 600; }
+.error-card.sev-error .error-message { color: #fef3f4; font-weight: 600; }
+.error-card.sev-warning .error-message { color: var(--text-bright); }
+.error-card.sev-info .error-message { color: var(--text-bright); }
+
+/* ============================================================
+   PROMINENT MESSAGE STYLE — make error message the headline
+   ============================================================ */
+.error-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 14px;
+  padding: 14px 18px;
+}
+.error-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.error-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.error-message {
+  color: var(--text-bright);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.45;
+  margin: 0;
+  display: block;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+.error-card {
+  border-top: 2px solid transparent;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+.error-card:hover {
+  border-top-color: var(--accent);
+  transform: translateY(-2px);
+}
+.error-card.sev-critical .error-message { color: #fcd9e7; font-weight: 600; }
+.error-card.sev-error .error-message { color: #fef3f4; font-weight: 600; }
+.error-card.sev-warning .error-message { color: var(--text-bright); }
+.error-card.sev-info .error-message { color: var(--text-bright); }
+
+/* ============================================================
+   PROMINENT MESSAGE STYLE — make error message the headline
+   ============================================================ */
+.error-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: 14px;
+  padding: 14px 18px;
+}
+.error-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.error-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-dim);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.error-message {
+  color: var(--text-bright);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.45;
+  margin: 0;
+  display: block;
+  word-break: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+.error-card {
+  border-top: 2px solid transparent;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+.error-card:hover {
+  border-top-color: var(--accent);
+  transform: translateY(-2px);
+}
+.error-card.sev-critical .error-message { color: #fcd9e7; font-weight: 600; }
+.error-card.sev-error .error-message { color: #fef3f4; font-weight: 600; }
+.error-card.sev-warning .error-message { color: var(--text-bright); }
+.error-card.sev-info .error-message { color: var(--text-bright); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ HEADER ============ -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon">Y</div>
+        <div class="brand-text">
+          <div class="brand-name">Y-CORE — Catálogo de Errores</div>
+          <div class="brand-subtitle">Todos los errores posibles de la aplicación</div>
+        </div>
+      </div>
+
+      <div class="search-wrap">
+        <label for="search" class="sr-only">Buscar errores por código, mensaje o archivo</label>
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="search" class="search-input" type="text" placeholder="Buscar por código, mensaje, archivo..." autocomplete="off" aria-label="Buscar errores por código, mensaje o archivo" />
+      </div>
+
+      <div class="header-actions">
+        <button class="icon-btn" id="expandAll" title="Expandir todo">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+        </button>
+        <button class="icon-btn" id="collapseAll" title="Plegar todo">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 9 5-5 5 5"/><path d="m7 15 5 5 5-5"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ STATS ============ -->
+  <section class="stats">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-dot" style="background: var(--text-bright); color: var(--text-bright);"></div>
+        <div><div class="stat-value" id="stat-total">0</div><div class="stat-label">Total errores</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-dot" style="background: var(--status-critical); color: var(--status-critical);"></div>
+        <div><div class="stat-value" id="stat-critical">0</div><div class="stat-label">Críticos</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-dot" style="background: var(--status-error); color: var(--status-error);"></div>
+        <div><div class="stat-value" id="stat-error">0</div><div class="stat-label">Errores</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-dot" style="background: var(--status-warning); color: var(--status-warning);"></div>
+        <div><div class="stat-value" id="stat-warning">0</div><div class="stat-label">Advertencias</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-dot" style="background: var(--status-info); color: var(--status-info);"></div>
+        <div><div class="stat-value" id="stat-info">0</div><div class="stat-label">Info</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FILTERS ============ -->
+  <section class="filters" id="filters">
+    <span class="filter-label">Categoría:</span>
+    <!-- filter pills get injected here -->
+  </section>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="results-info">
+      <div>Mostrando <strong id="visible-count">0</strong> de <strong id="total-count">0</strong> errores</div>
+      <div id="active-filters-info"></div>
+    </div>
+
+    <div class="error-grid" id="grid"></div>
+
+    <div id="empty-state" class="empty" style="display:none;">
+      <div class="empty-icon">🔍</div>
+      <div>Ningún error coincide con los filtros.</div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <strong>Y-CORE</strong> · Catálogo generado a partir del código fuente · <span id="ts"></span>
+  </footer>
+</div>
+
+<script>const ALL_ERRORS = [
+  {
+    "id": "BOOT-USERDATA-CREATE-FAIL",
+    "severity": "critical",
+    "category": "Boot",
+    "title": "fs.mkdirSync(userDataPath) lanza",
+    "message": "No pudimos crear la carpeta donde Y-core guarda tus datos. Libera espacio o revisa los permisos de la carpeta.",
+    "technical": "writable check ausente, mkdir puede fallar",
+    "source": "electron/main.ts",
+    "actions": [],
+    "triggers": [
+      "Disco lleno, permisos, readonly file system"
+    ]
+  },
+  {
+    "id": "CRASH-CHILD-GONE",
+    "severity": "critical",
+    "category": "Crash (main)",
+    "title": "Proceso hijo murió",
+    "message": "Un proceso interno dejó de responder. Lo registramos en los logs y la app seguirá funcionando.",
+    "technical": "app.on(\"child-process-gone\") → details.type details.reason",
+    "source": "electron/main.ts",
+    "actions": [
+      "none"
+    ],
+    "triggers": [
+      "GPU helper crash",
+      "Network service crash",
+      "Utility process killed"
+    ]
+  },
+  {
+    "id": "CRASH-RENDERER-GONE",
+    "severity": "critical",
+    "category": "Crash (main)",
+    "title": "Proceso renderer murió",
+    "message": "La ventana principal se cerró de forma inesperada. Vamos a reiniciar Y-core para que vuelvas a usarla.",
+    "technical": "app.on(\"render-process-gone\") → details.reason",
+    "source": "electron/main.ts",
+    "actions": [
+      "restart"
+    ],
+    "triggers": [
+      "OOM en renderer",
+      "Bug en React",
+      "GPU process killed"
+    ]
+  },
+  {
+    "id": "CRASH-UNHANDLED-REJECTION",
+    "severity": "critical",
+    "category": "Crash (main)",
+    "title": "Promise rechazada no manejada",
+    "message": "Una operación interna falló silenciosamente. La app sigue funcionando, pero el resultado puede no estar completo.",
+    "technical": "process.on(\"unhandledRejection\") → reason.message + reason.stack",
+    "source": "electron/main.ts (líneas ~68-71)",
+    "actions": [
+      "none"
+    ],
+    "triggers": [
+      "Promise.then() sin .catch()",
+      "await sin try/catch en main"
+    ]
+  },
+  {
+    "id": "NAT-INTERNAL",
+    "code": 7,
+    "severity": "critical",
+    "category": "Nativo (DLL)",
+    "title": "Error interno del DLL",
+    "message": "El motor interno de Y-core tuvo un problema. Puedes reintentar o enviarnos un reporte para revisarlo.",
+    "technical": "YCoreStatus.INTERNAL (7) — excepción FFI capturada",
+    "source": "electron/modules/ycore-native.ts",
+    "actions": [
+      "retry",
+      "report",
+      "close"
+    ],
+    "triggers": [
+      "Excepción de C++ no esperada",
+      "Estado corrupto del DLL"
+    ]
+  },
+  {
+    "id": "NAT-UNAVAILABLE",
+    "severity": "critical",
+    "category": "Nativo (DLL)",
+    "title": "Componente nativo no disponible",
+    "message": "No pudimos cargar el motor interno de Y-core. La app sigue funcionando, pero algunas funciones avanzadas quedan desactivadas.",
+    "technical": "ycore.dll no encontrado / plataforma no soportada / fallo de carga",
+    "source": "electron/modules/ycore-native.ts",
+    "actions": [
+      "report",
+      "close"
+    ],
+    "triggers": [
+      "platform !== win32",
+      "DLL no existe en candidateDllPaths() (empaquetado o dev)",
+      "koffi.require() falla",
+      "koffi.load(dllPath) lanza excepción"
+    ]
+  },
+  {
+    "id": "FUT-ANTIVIRUS-QUARANTINE",
+    "severity": "critical",
+    "category": "Posible",
+    "title": "Antivirus cuarentenó DLL",
+    "message": "Tu antivirus puso en cuarentena un archivo DLL. Libéralo o Y-core no funcionará.",
+    "technical": "koffi.load throws Access Denied",
+    "source": "electron/modules/ycore-native.ts",
+    "actions": [],
+    "triggers": [
+      "Defender en modo alto",
+      "Avast bloquea ycore.dll"
+    ]
+  },
+  {
+    "id": "FUT-LOG-DISK-FULL",
+    "severity": "critical",
+    "category": "Posible",
+    "title": "Log no se puede escribir",
+    "message": "No pudimos escribir el registro porque el disco está lleno. La app seguirá funcionando.",
+    "technical": "fs.appendFileSync rota a /dev/null silencioso",
+    "source": "electron/logger.ts → writeToLog()",
+    "actions": [],
+    "triggers": [
+      "Disco lleno o readonly"
+    ]
+  },
+  {
+    "id": "STM-CRASH",
+    "severity": "critical",
+    "category": "Steam (log)",
+    "title": "Steam ha crasheado",
+    "message": "Steam se cerró de forma inesperada. Lo reiniciaremos por ti.",
+    "technical": "/Steam.exe has stopped working|crash/i",
+    "source": "electron/modules/steam-log-watcher.ts → ERROR_PATTERNS[2]",
+    "actions": [
+      "restart_steam"
+    ],
+    "triggers": [
+      "Hook DLL incompatible",
+      "Build de Steam no soportado",
+      "Bug en Steam"
+    ]
+  },
+  {
+    "id": "STM-FATAL",
+    "severity": "critical",
+    "category": "Steam (log)",
+    "title": "Error fatal de Steam",
+    "message": "Steam tuvo un error grave. Ciérralo y vuelve a abrirlo desde el menú Inicio.",
+    "technical": "/Fatal error|Failed to initialize/i",
+    "source": "electron/modules/steam-log-watcher.ts → ERROR_PATTERNS[4]",
+    "actions": [
+      "restart_steam"
+    ],
+    "triggers": [
+      "Archivos de Steam corruptos",
+      "Sistema sin memoria"
+    ]
+  },
+  {
+    "id": "AG-IMPORT-FAIL",
+    "severity": "error",
+    "category": "AddGame",
+    "title": "Import Lua falló",
+    "message": "No se pudo importar el archivo del juego. Verifica que Steam esté cerrado.",
+    "technical": "importLuaScript() returns success=false",
+    "source": "src/pages/AddGame.tsx",
+    "actions": [],
+    "triggers": [
+      "Steam no se pudo cerrar antes"
+    ]
+  },
+  {
+    "id": "AG-PARSE-FAIL",
+    "severity": "error",
+    "category": "AddGame",
+    "title": "No se pudo parsear Lua",
+    "message": "No se pudo leer el script del juego. El archivo puede estar dañado.",
+    "technical": "parseLuaScript().success=false",
+    "source": "src/pages/AddGame.tsx",
+    "actions": [],
+    "triggers": [
+      "Lua corrupto"
+    ]
+  },
+  {
+    "id": "API-ABORT-30S",
+    "severity": "error",
+    "category": "API",
+    "title": "Request excedió 30s",
+    "message": "La operación tardó demasiado (más de 30 segundos). Verifica tu conexión e inténtalo de nuevo.",
+    "technical": "controller.abort() en setTimeout 30000",
+    "source": "src/lib/y-core-api.ts → apiFetch()",
+    "actions": [],
+    "triggers": [
+      "Server colgado",
+      "Sin internet"
+    ]
+  },
+  {
+    "id": "API-HTTP-4XX",
+    "severity": "error",
+    "category": "API",
+    "title": "HTTP client error",
+    "message": "El servidor rechazó la petición. Si el problema continúa, contáctanos.",
+    "technical": "resp.ok === false && status 4xx",
+    "source": "src/lib/y-core-api.ts",
+    "actions": [],
+    "triggers": [
+      "401 no auth",
+      "404 not found",
+      "422 validation",
+      "429 rate limit"
+    ]
+  },
+  {
+    "id": "API-HTTP-5XX",
+    "severity": "error",
+    "category": "API",
+    "title": "HTTP server error",
+    "message": "Nuestro servidor tuvo un problema. Estamos trabajando en ello. Intenta en unos minutos.",
+    "technical": "resp.ok === false && status 5xx",
+    "source": "src/lib/y-core-api.ts",
+    "actions": [],
+    "triggers": [
+      "Render asleep → wake up",
+      "Deploy con bug",
+      "DB caída"
+    ]
+  },
+  {
+    "id": "API-JOB-TIMEOUT",
+    "severity": "error",
+    "category": "API",
+    "title": "Polling de job agotó 15min",
+    "message": "La importación tardó más de 15 minutos y fue cancelada. Vuelve a intentarlo.",
+    "technical": "attempts >= 300",
+    "source": "src/lib/y-core-api.ts → pollJobUntilDone()",
+    "actions": [
+      "retry"
+    ],
+    "triggers": [
+      "Import grande tarda más de lo normal"
+    ]
+  },
+  {
+    "id": "API-MANIFEST-FAIL",
+    "severity": "error",
+    "category": "API",
+    "title": "No se pudo descargar manifest",
+    "message": "No pudimos descargar el archivo de información del juego.",
+    "technical": "resp.ok === false en downloadManifest()",
+    "source": "src/lib/y-core-api.ts",
+    "actions": [],
+    "triggers": [
+      "Manifest 404 en API"
+    ]
+  },
+  {
+    "id": "LOGIN-SETUSER-IPC",
+    "severity": "error",
+    "category": "Auth (login)",
+    "title": "setUsername throws durante login",
+    "message": "No pudimos guardar tu nombre de usuario. Intenta iniciar sesión de nuevo.",
+    "technical": "await rejects en login()",
+    "source": "src/stores/useAuthStore.ts → login()",
+    "actions": [],
+    "triggers": [
+      "auth:setUsername IPC throws"
+    ]
+  },
+  {
+    "id": "LOGIN-SUCCESS-IPC",
+    "severity": "error",
+    "category": "Auth (login)",
+    "title": "loginSuccess IPC throws",
+    "message": "No se pudo confirmar el inicio de sesión. Vuelve a intentarlo.",
+    "technical": "await window.steamtools.loginSuccess rejects",
+    "source": "src/stores/useAuthStore.ts → login()",
+    "actions": [],
+    "triggers": [
+      "main handler throws"
+    ]
+  },
+  {
+    "id": "DRMP-REMOVE-FAIL",
+    "severity": "error",
+    "category": "DrmRemover (página)",
+    "title": "removeDrm returned failure",
+    "message": "No se pudo eliminar la protección del juego. El archivo puede estar en uso.",
+    "technical": "window.steamtools.removeDrm.success=false",
+    "source": "src/pages/DrmRemoverPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Steamless falla",
+      "exe locked"
+    ]
+  },
+  {
+    "id": "DRMP-REMOVE-IPC",
+    "severity": "error",
+    "category": "DrmRemover (página)",
+    "title": "removeDrm throws",
+    "message": "No se pudo comunicar con el sistema. Reinicia Y-core e inténtalo de nuevo.",
+    "technical": "await rejects en catch",
+    "source": "src/pages/DrmRemoverPage.tsx",
+    "actions": [],
+    "triggers": [
+      "IPC throws"
+    ]
+  },
+  {
+    "id": "GDP-FETCH-INTERNAL",
+    "severity": "error",
+    "category": "GameDetail (página)",
+    "title": "result.success=false sin mensaje",
+    "message": "No se pudieron cargar los detalles del juego. Vuelve a intentarlo en un momento.",
+    "technical": "result.success=false || !result.data path en steam-store-api.ts",
+    "source": "src/lib/steam-store-api.ts → fetchAppDetails()",
+    "actions": [],
+    "triggers": [
+      "Renderer proxy falla"
+    ]
+  },
+  {
+    "id": "GDP-FETCH-IPC",
+    "severity": "error",
+    "category": "GameDetail (página)",
+    "title": "fetchAppDetails IPC throws",
+    "message": "No pudimos comunicarnos con Steam para obtener los detalles del juego.",
+    "technical": "await throws",
+    "source": "src/pages/GameDetailPage.tsx",
+    "actions": [
+      "retry"
+    ],
+    "triggers": [
+      "window.steamtools.fetchAppDetails IPC throws"
+    ]
+  },
+  {
+    "id": "GDP-FETCH-NULL",
+    "severity": "error",
+    "category": "GameDetail (página)",
+    "title": "fetchAppDetails devolvió null",
+    "message": "No se pudieron cargar los detalles. Verifica tu conexión.",
+    "technical": "fetchAppDetails(appId) returns null",
+    "source": "src/pages/GameDetailPage.tsx → fetchDetails()",
+    "actions": [
+      "retry"
+    ],
+    "triggers": [
+      "API steam no responde",
+      "AppID inválido"
+    ]
+  },
+  {
+    "id": "IMP-FOLDER-ASYNCCATCH",
+    "severity": "error",
+    "category": "Import (página)",
+    "title": "Uncaught exception en doImport",
+    "message": "Algo inesperado pasó al importar. Revisa los logs para más detalles.",
+    "technical": "try/catch outside",
+    "source": "src/pages/ImportGame.tsx",
+    "actions": [],
+    "triggers": [
+      "Renderer crash durante import"
+    ]
+  },
+  {
+    "id": "IMP-FOLDER-IPC",
+    "severity": "error",
+    "category": "Import (página)",
+    "title": "importGameFolder IPC throws",
+    "message": "No pudimos importar la carpeta. El proceso fue interrumpido.",
+    "technical": "window.steamtools.importGameFolder throws",
+    "source": "src/pages/ImportGame.tsx → doImport()",
+    "actions": [],
+    "triggers": [
+      "Path inválido",
+      "permission denied antes de IPC"
+    ]
+  },
+  {
+    "id": "IMP-FOLDER-RESULT-FAIL",
+    "severity": "error",
+    "category": "Import (página)",
+    "title": "importGameFolder returned failure",
+    "message": "No se pudo importar el juego. Revisa los archivos e inténtalo de nuevo.",
+    "technical": "result.success=false",
+    "source": "src/pages/ImportGame.tsx",
+    "actions": [],
+    "triggers": [
+      "Manifest no encontrado",
+      "Lua no parseable"
+    ]
+  },
+  {
+    "id": "IMP-PATH-DETECT",
+    "severity": "error",
+    "category": "Import (página)",
+    "title": "No se pudo determinar parent folder",
+    "message": "No pudimos identificar la carpeta del juego. Asegúrate de arrastrar la carpeta completa.",
+    "technical": "filePath.substring(0, lastIndexOf) === \"\"",
+    "source": "src/pages/ImportGame.tsx",
+    "actions": [],
+    "triggers": [
+      "filePath sin separador /",
+      "File dropped extraño"
+    ]
+  },
+  {
+    "id": "IMP-RESTART-FAIL",
+    "severity": "error",
+    "category": "Import (página)",
+    "title": "Steam no se pudo reiniciar",
+    "message": "No se pudo reiniciar Steam después de la importación. Hazlo manualmente.",
+    "technical": "restartSteam() returns success=false",
+    "source": "src/pages/ImportGame.tsx → handleRestartSteam()",
+    "actions": [],
+    "triggers": [
+      "steam.exe missing"
+    ]
+  },
+  {
+    "id": "INST-ACF-FAIL",
+    "severity": "error",
+    "category": "Instalación",
+    "title": "No se creó appmanifest",
+    "message": "No pudimos crear el archivo de información del juego. Revisa los logs.",
+    "technical": "createAppManifestFromLua retorna success=false",
+    "source": "electron/modules/manifest-sync.ts",
+    "actions": [],
+    "triggers": [
+      "Lua inválida"
+    ]
+  },
+  {
+    "id": "INST-DEPOT-INJECT",
+    "severity": "error",
+    "category": "Instalación",
+    "title": "No se inyectaron depot keys",
+    "message": "No pudimos registrar las claves del juego en la configuración de Steam.",
+    "technical": "injectDepotKeysIntoConfigVdf retorna error",
+    "source": "electron/modules/manifest-sync.ts",
+    "actions": [],
+    "triggers": [
+      "config.vdf corrupto"
+    ]
+  },
+  {
+    "id": "INST-HOOK-FAIL",
+    "severity": "error",
+    "category": "Instalación",
+    "title": "Hook DLL no se pudo instalar",
+    "message": "El módulo necesario para que tu juego funcione no se pudo instalar.",
+    "technical": "installHookDll retorna success=false",
+    "source": "electron/modules/manifest-sync.ts → installGameCore()",
+    "actions": [],
+    "triggers": [
+      "Fallo DLL-inject durante install"
+    ]
+  },
+  {
+    "id": "ACF-NO-BASE",
+    "severity": "error",
+    "category": "IPC (ACF)",
+    "title": "No hay depots base de HL",
+    "message": "No encontramos los archivos base de Half-Life. Verifica que Steam esté completo.",
+    "technical": "baseDepots.length === 0",
+    "source": "electron/modules/acf.ts → createGoldSrcBaseAppManifest()",
+    "actions": [],
+    "triggers": [
+      "Lua sin base depots"
+    ]
+  },
+  {
+    "id": "ACF-NO-STEAMAPPS",
+    "severity": "error",
+    "category": "IPC (ACF)",
+    "title": "carpeta steamapps no existe",
+    "message": "No se encontró la carpeta donde Steam guarda los juegos. Verifica la instalación.",
+    "technical": "getSteamAppsPath() === null",
+    "source": "electron/modules/acf.ts",
+    "actions": [],
+    "triggers": [
+      "Steam no instalado"
+    ]
+  },
+  {
+    "id": "CFG-INVALID-VALUE",
+    "severity": "error",
+    "category": "IPC (Config)",
+    "title": "Valor de config inválido",
+    "message": "Uno de los ajustes que configuraste no es válido. Lo restableceremos a su valor por defecto.",
+    "technical": "validateConfigValue returns false",
+    "source": "electron/modules/config.ts",
+    "actions": [],
+    "triggers": [
+      "String >1024 chars",
+      "Array >100 entries",
+      "Reentrancia profunda"
+    ]
+  },
+  {
+    "id": "CFG-TOO-BIG",
+    "severity": "error",
+    "category": "IPC (Config)",
+    "title": "Config excede 256KB",
+    "message": "La configuración es demasiado grande (más de 256 KB). Borra algunas personalizaciones.",
+    "technical": "serialized.length > 256*1024",
+    "source": "electron/modules/config.ts",
+    "actions": [],
+    "triggers": [
+      "customization object gigante"
+    ]
+  },
+  {
+    "id": "DEP-MALFORMED",
+    "severity": "error",
+    "category": "IPC (Depot)",
+    "title": "Sección depots malformada",
+    "message": "La sección de archivos del juego está dañada. Vuelve a importar el juego.",
+    "technical": "braceCount !== 0",
+    "source": "electron/modules/depot-keys.ts",
+    "actions": [],
+    "triggers": [
+      "VDF con llaves desbalanceadas"
+    ]
+  },
+  {
+    "id": "DEP-NO-CONFIGVDF",
+    "severity": "error",
+    "category": "IPC (Depot)",
+    "title": "config.vdf no existe",
+    "message": "No se encontró el archivo de configuración de Steam. Reinstálalo o restáuralo.",
+    "technical": "fs.existsSync(vdfPath) === false",
+    "source": "electron/modules/depot-keys.ts",
+    "actions": [],
+    "triggers": [
+      "Steam corrupto"
+    ]
+  },
+  {
+    "id": "DEP-NO-STEAM-SEC",
+    "severity": "error",
+    "category": "IPC (Depot)",
+    "title": "Sección Steam ausente",
+    "message": "La configuración de Steam no tiene la sección que necesitamos. Está incompleta o dañada.",
+    "technical": "!/\"Steam\"\\s*\\n\\s*\\{/.test(content)",
+    "source": "electron/modules/depot-keys.ts",
+    "actions": [],
+    "triggers": [
+      "config.vdf corrupto"
+    ]
+  },
+  {
+    "id": "IMG-INVALID-APPID",
+    "severity": "error",
+    "category": "IPC (imágenes)",
+    "title": "Invalid AppID al buscar imagen",
+    "message": "El identificador del juego no es válido, así que no podemos buscar su imagen.",
+    "technical": "!isValidAppId(appId)",
+    "source": "electron/modules/store-images.ts → registerStoreImageHandlers",
+    "actions": [],
+    "triggers": [
+      "AppID contiene letras"
+    ]
+  },
+  {
+    "id": "IMG-SGDB-NET",
+    "severity": "error",
+    "category": "IPC (imágenes)",
+    "title": "SteamGridDb unreachable",
+    "message": "No pudimos conectar con SteamGridDB para buscar la carátula. Usaremos una imagen alternativa.",
+    "technical": "fetch throws (catch {})",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "sgdb online bloqueado por firewall"
+    ]
+  },
+  {
+    "id": "IMG-STEAM-API-HTML",
+    "severity": "error",
+    "category": "IPC (imágenes)",
+    "title": "store.steampowered.com devolvió HTML",
+    "message": "Steam no devolvió una imagen válida para este juego.",
+    "technical": "json.startsWith(\"<\")",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "Cloudflare challenge"
+    ]
+  },
+  {
+    "id": "IMG-STEAM-API-TIMEOUT",
+    "severity": "error",
+    "category": "IPC (imágenes)",
+    "title": "store.steampowered.com timeout 5s",
+    "message": "Steam tardó demasiado en responder. Verás una imagen alternativa.",
+    "technical": "https timeout handler",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "CDN lento"
+    ]
+  },
+  {
+    "id": "IMG-STORE-BROWSE-NET",
+    "severity": "error",
+    "category": "IPC (imágenes)",
+    "title": "api.steampowered.com unreachable",
+    "message": "No encontramos una imagen para este juego en el catálogo.",
+    "technical": "fetch() throws",
+    "source": "electron/modules/store-images.ts → getStoreBrowseImageUrl()",
+    "actions": [],
+    "triggers": [
+      "Sin internet, Steam API down"
+    ]
+  },
+  {
+    "id": "SIM-CLOSE",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:closeSteam returned failure",
+    "message": "No se pudo cerrar Steam. Ciérralo manualmente desde la bandeja del sistema.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "waitForSteamClosed timeout"
+    ]
+  },
+  {
+    "id": "SIM-DELETEGAME",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:deleteGame returned failure",
+    "message": "No se pudo eliminar el juego de tu biblioteca. Intenta de nuevo.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "permission, locked files"
+    ]
+  },
+  {
+    "id": "SIM-DELETELUA-IPC",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:deleteLuaScript returned failure",
+    "message": "No se pudo eliminar el script Lua seleccionado.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "Lua locked"
+    ]
+  },
+  {
+    "id": "SIM-DELETEMANIFEST-IPC",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:deleteManifestFile returned failure",
+    "message": "No se pudo eliminar el archivo manifesto seleccionado.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "file locked"
+    ]
+  },
+  {
+    "id": "SIM-IMPORTFOLDER",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:importGameFolder returned failure",
+    "message": "No se pudo importar la carpeta del juego a Steam.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "folder scan fails"
+    ]
+  },
+  {
+    "id": "SIM-IMPORTLUA-IPC",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:importLuaScript returned failure",
+    "message": "No se pudo importar el script Lua a la biblioteca.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "archivo no existe, parse error"
+    ]
+  },
+  {
+    "id": "SIM-IMPORTMANIFEST-IPC",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:importManifest returned failure",
+    "message": "No se pudo importar el archivo manifesto.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "depotcache write failed"
+    ]
+  },
+  {
+    "id": "SIM-LAUNCHGAME-IPC",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:launchGame returned failure",
+    "message": "No se pudo iniciar el juego. Verifica que Steam esté abierto.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "exe locked, Steam cerrado"
+    ]
+  },
+  {
+    "id": "SIM-LISTGAMES-IPC",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:listInstalledGames returned failure",
+    "message": "No pudimos leer la lista de juegos instalados en Steam.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts (no leído completamente)",
+    "actions": [],
+    "triggers": [
+      "Steam null",
+      "IO error"
+    ]
+  },
+  {
+    "id": "SIM-PARSELUA-IPC",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:parseLuaScript returned failure",
+    "message": "No se pudo leer el script Lua. Puede estar dañado.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "Lua corrupta"
+    ]
+  },
+  {
+    "id": "SIM-RESTART",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:restartSteam returned failure",
+    "message": "No se pudo reiniciar Steam. Hazlo manualmente desde el menú Inicio.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "exe missing, dll-inject falló"
+    ]
+  },
+  {
+    "id": "SIM-VERIFY",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:verifySteam returned failure",
+    "message": "No se pudo ejecutar la verificación del juego.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "dll-inject falló"
+    ]
+  },
+  {
+    "id": "SIM-VERIFYGAME",
+    "severity": "error",
+    "category": "IPC (steam)",
+    "title": "steam:verifyGame returned failure",
+    "message": "No se pudo verificar la integridad del juego.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "Steam no responde"
+    ]
+  },
+  {
+    "id": "STORE-IPC-NOGAMEDATA",
+    "severity": "error",
+    "category": "IPC (store)",
+    "title": "store:getLocalGameData returned failure",
+    "message": "No tenemos información de este juego. Intenta actualizar la biblioteca.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/store-ipc.ts (asumido, no leído)",
+    "actions": [],
+    "triggers": [
+      "appId no existe localmente"
+    ]
+  },
+  {
+    "id": "LIB-DELETE-FAIL",
+    "severity": "error",
+    "category": "Library (página)",
+    "title": "No se pudo desinstalar",
+    "message": "No se pudo eliminar el juego de tu biblioteca.",
+    "technical": "window.steamtools.deleteGame(appId, installDir).success=false",
+    "source": "src/pages/LibraryPage.tsx → handleDeleteGame()",
+    "actions": [],
+    "triggers": [
+      "Steam no responde al uninstall",
+      "Juego bloqueado por otro proceso",
+      "Permisos"
+    ]
+  },
+  {
+    "id": "LIB-DELETE-IPC",
+    "severity": "error",
+    "category": "Library (página)",
+    "title": "deleteGame IPC throws",
+    "message": "Error inesperado al eliminar el juego. La página puede estar bloqueada.",
+    "technical": "await rejects sin handler",
+    "source": "src/pages/LibraryPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Unhandled rejection en main"
+    ]
+  },
+  {
+    "id": "LIB-LAUNCH-FAIL",
+    "severity": "error",
+    "category": "Library (página)",
+    "title": "No se pudo lanzar el juego",
+    "message": "No se pudo iniciar el juego. Verifica que Steam esté abierto.",
+    "technical": "window.steamtools.launchGame(appId).success=false",
+    "source": "src/pages/LibraryPage.tsx → handleLaunchGame()",
+    "actions": [],
+    "triggers": [
+      "steam.exe lanza pero el game no responde",
+      "exe path inválido",
+      "DLLs faltantes"
+    ]
+  },
+  {
+    "id": "LIB-LAUNCH-IPC",
+    "severity": "error",
+    "category": "Library (página)",
+    "title": "launchGame IPC throws",
+    "message": "Error inesperado al iniciar el juego. Revisa los logs.",
+    "technical": "await rejects sin handler",
+    "source": "src/pages/LibraryPage.tsx",
+    "actions": [],
+    "triggers": [
+      "IPC handler no registrado",
+      "Preload expuesto pero main no responde"
+    ]
+  },
+  {
+    "id": "LIB-ONLINEFIX-DISABLE-FAIL",
+    "severity": "error",
+    "category": "Library (página)",
+    "title": "No se pudo desactivar Online Fix",
+    "message": "No se pudo desactivar Online Fix para este juego.",
+    "technical": "window.steamtools.disableOnlineFix(appId).success=false",
+    "source": "src/pages/LibraryPage.tsx",
+    "actions": [],
+    "triggers": [
+      "ACF locked por Steam"
+    ]
+  },
+  {
+    "id": "LIB-ONLINEFIX-ENABLE-FAIL",
+    "severity": "error",
+    "category": "Library (página)",
+    "title": "No se pudo activar Online Fix",
+    "message": "No se pudo activar Online Fix para este juego.",
+    "technical": "window.steamtools.enableOnlineFix(appId).success=false",
+    "source": "src/pages/LibraryPage.tsx",
+    "actions": [],
+    "triggers": [
+      "dfGoldberg DLL ausente",
+      "appmanifest no existe"
+    ]
+  },
+  {
+    "id": "LIB-ONLINEFIX-STATUS-IPC",
+    "severity": "error",
+    "category": "Library (página)",
+    "title": "checkOnlineFixStatus IPC throws",
+    "message": "No se pudo consultar el estado de Online Fix para este juego.",
+    "technical": "await rejects sin handler",
+    "source": "src/pages/LibraryPage.tsx → handleToggleOnlineFix()",
+    "actions": [],
+    "triggers": [
+      "IPC handler onlinefix:status no respondió"
+    ]
+  },
+  {
+    "id": "LIB-OPENLOC-FAIL",
+    "severity": "error",
+    "category": "Library (página)",
+    "title": "No se pudo abrir la carpeta del juego",
+    "message": "No se pudo abrir la carpeta donde está instalado el juego.",
+    "technical": "window.steamtools.openGameLocation(appId, installDir).success=false",
+    "source": "src/pages/LibraryPage.tsx → handleOpenLocation()",
+    "actions": [],
+    "triggers": [
+      "shell.openPath falla",
+      "installDir ya no existe"
+    ]
+  },
+  {
+    "id": "LIB-VERIFY-FAIL",
+    "severity": "error",
+    "category": "Library (página)",
+    "title": "Verificación no se pudo iniciar",
+    "message": "No se pudo iniciar la verificación del juego.",
+    "technical": "window.steamtools.verifyGame(appId).success=false",
+    "source": "src/pages/LibraryPage.tsx → handleVerifyGame()",
+    "actions": [],
+    "triggers": [
+      "Steam cerrado durante verificación"
+    ]
+  },
+  {
+    "id": "LIBSTORE-LIST-FAIL",
+    "severity": "error",
+    "category": "LibraryStore",
+    "title": "listInstalledGames returned failure",
+    "message": "No se pudo cargar la lista de juegos de tu biblioteca.",
+    "technical": "result.success=false",
+    "source": "src/stores/useLibraryStore.ts → loadGames()",
+    "actions": [
+      "retry"
+    ],
+    "triggers": [
+      "Steam path null",
+      "acf parse error bloqueando"
+    ]
+  },
+  {
+    "id": "LIBSTORE-LIST-IPC",
+    "severity": "error",
+    "category": "LibraryStore",
+    "title": "listInstalledGames throws",
+    "message": "Error inesperado al cargar la lista de juegos.",
+    "technical": "catch (err:any)",
+    "source": "src/stores/useLibraryStore.ts",
+    "actions": [
+      "retry"
+    ],
+    "triggers": [
+      "IPC throws"
+    ]
+  },
+  {
+    "id": "LUAS-DELETE-FAIL",
+    "severity": "error",
+    "category": "LuaScripts (página)",
+    "title": "Lua script no se pudo borrar",
+    "message": "No se pudo eliminar el script Lua seleccionado.",
+    "technical": "window.steamtools.deleteLuaScript.success=false",
+    "source": "src/pages/LuaScripts.tsx → handleDelete()",
+    "actions": [],
+    "triggers": [
+      "Lua locked, no encontrado",
+      "permission denied"
+    ]
+  },
+  {
+    "id": "LUAS-IMPORT-EMPTY",
+    "severity": "error",
+    "category": "LuaScripts (página)",
+    "title": "Path de import vacío",
+    "message": "Indica la ruta del archivo Lua que quieres importar.",
+    "technical": "!importPath.trim()",
+    "source": "src/pages/LuaScripts.tsx → handleImport()",
+    "actions": [],
+    "triggers": [
+      "user submits sin path"
+    ]
+  },
+  {
+    "id": "LUAS-IMPORT-FAIL",
+    "severity": "error",
+    "category": "LuaScripts (página)",
+    "title": "importLuaScript returned failure",
+    "message": "No se pudo importar el script Lua. Verifica que el archivo sea válido.",
+    "technical": "result.success=false",
+    "source": "src/pages/LuaScripts.tsx",
+    "actions": [],
+    "triggers": [
+      "Lua vacía o corrupta"
+    ]
+  },
+  {
+    "id": "LUAS-LIST-IPC",
+    "severity": "error",
+    "category": "LuaScripts (página)",
+    "title": "listLuaScripts throws",
+    "message": "No se pudo obtener la lista de scripts Lua. Reinicia Y-core.",
+    "technical": "await rejects sin handler",
+    "source": "src/pages/LuaScripts.tsx",
+    "actions": [],
+    "triggers": [
+      "IPC throws"
+    ]
+  },
+  {
+    "id": "MF-DELETE-FAIL",
+    "severity": "error",
+    "category": "Manifests (página)",
+    "title": "deleteManifestFile returned failure",
+    "message": "No se pudo eliminar el archivo manifesto seleccionado.",
+    "technical": "window.steamtools.deleteManifestFile.success=false",
+    "source": "src/pages/ManifestFiles.tsx → handleDelete()",
+    "actions": [],
+    "triggers": [
+      "file locked"
+    ]
+  },
+  {
+    "id": "MF-DROP-INVOKE-FAIL",
+    "severity": "error",
+    "category": "Manifests (página)",
+    "title": "importManifest throws durante drop",
+    "message": "No se pudo importar uno de los archivos soltados. Revisa los logs.",
+    "technical": "await rejects per-file",
+    "source": "src/pages/ManifestFiles.tsx",
+    "actions": [],
+    "triggers": [
+      "race con archivo en uso"
+    ]
+  },
+  {
+    "id": "MF-DROP-OUTER-IPC",
+    "severity": "error",
+    "category": "Manifests (página)",
+    "title": "Drop loop outer catch",
+    "message": "No se pudo importar los archivos que soltaste. Verifica que sean .manifest válidos.",
+    "technical": "try/catch outer en handleDrop",
+    "source": "src/pages/ManifestFiles.tsx",
+    "actions": [],
+    "triggers": [
+      "getPathForFile rejects"
+    ]
+  },
+  {
+    "id": "MF-GETPATH-FILE",
+    "severity": "error",
+    "category": "Manifests (página)",
+    "title": "getPathForFile rejects",
+    "message": "No se pudo leer la ruta del archivo soltado.",
+    "technical": "window.steamtools.getPathForFile throws",
+    "source": "src/pages/ManifestFiles.tsx",
+    "actions": [],
+    "triggers": [
+      "Electron 31+ con context isolation, path no resoluble"
+    ]
+  },
+  {
+    "id": "MF-IMPORT-EMPTY",
+    "severity": "error",
+    "category": "Manifests (página)",
+    "title": "Path de import vacío",
+    "message": "Indica la ruta del archivo manifesto que quieres importar.",
+    "technical": "!importPath.trim()",
+    "source": "src/pages/ManifestFiles.tsx → handleImport()",
+    "actions": [],
+    "triggers": [
+      "submit sin path"
+    ]
+  },
+  {
+    "id": "MF-IMPORT-FAIL",
+    "severity": "error",
+    "category": "Manifests (página)",
+    "title": "importManifest returned failure",
+    "message": "No se pudo importar el archivo manifesto.",
+    "technical": "window.steamtools.importManifest.success=false",
+    "source": "src/pages/ManifestFiles.tsx",
+    "actions": [],
+    "triggers": [
+      "file no es .manifest válido",
+      "depotcache write falló"
+    ]
+  },
+  {
+    "id": "NAT-STEAM-CFG-NOTFOUND",
+    "severity": "error",
+    "category": "Nativo (DLL)",
+    "title": "user ycore-config.json no existe",
+    "message": "No encontramos el archivo de configuración de Steam. Usaremos la ruta estándar hasta que lo corrijas.",
+    "technical": "fs.existsSync(configPath) === false",
+    "source": "electron/modules/steam-helpers.ts → getSteamPath()",
+    "actions": [],
+    "triggers": [
+      "Primera ejecución"
+    ]
+  },
+  {
+    "id": "NAT-STEAM-PATH-INVALID",
+    "severity": "error",
+    "category": "Nativo (DLL)",
+    "title": "Steam path inválido en YCoreNative",
+    "message": "La ruta donde está instalado Steam no es válida. Verifícala en Configuración → Steam.",
+    "technical": "steamPath empieza con .. o contiene secuencias peligrosas",
+    "source": "electron/modules/steam-helpers.ts → getSteamPath()",
+    "actions": [
+      "retry",
+      "report",
+      "close"
+    ],
+    "triggers": [
+      "User config: steamPath apunta afuera de steamapps"
+    ]
+  },
+  {
+    "id": "OFP-GEN-FAIL",
+    "severity": "error",
+    "category": "OnlineFixPage (página)",
+    "title": "generateOnlineFix returned failure",
+    "message": "No se pudo generar el Online Fix para este juego.",
+    "technical": "window.steamtools.generateOnlineFix.success=false",
+    "source": "src/pages/OnlineFixPage.tsx → handleGenerate()",
+    "actions": [],
+    "triggers": [
+      "game dir no existe",
+      "Goldberg DLL ausente",
+      "BepInEx failure"
+    ]
+  },
+  {
+    "id": "OFP-GEN-IPC",
+    "severity": "error",
+    "category": "OnlineFixPage (página)",
+    "title": "generateOnlineFix throws",
+    "message": "Comunicación interrumpida al generar el Online Fix.",
+    "technical": "await rejects",
+    "source": "src/pages/OnlineFixPage.tsx",
+    "actions": [],
+    "triggers": [
+      "IPC throws dentro de core path"
+    ]
+  },
+  {
+    "id": "OFP-REMOVE-FAIL",
+    "severity": "error",
+    "category": "OnlineFixPage (página)",
+    "title": "removeOnlineFix returned failure",
+    "message": "No se pudo eliminar el Online Fix de este juego.",
+    "technical": "window.steamtools.removeOnlineFix.success=false",
+    "source": "src/pages/OnlineFixPage.tsx → handleRemove()",
+    "actions": [],
+    "triggers": [
+      "game dir corrupto"
+    ]
+  },
+  {
+    "id": "OFP-REMOVE-IPC",
+    "severity": "error",
+    "category": "OnlineFixPage (página)",
+    "title": "removeOnlineFix throws",
+    "message": "Comunicación interrumpida al eliminar el Online Fix.",
+    "technical": "await rejects",
+    "source": "src/pages/OnlineFixPage.tsx",
+    "actions": [],
+    "triggers": [
+      "file locked por Steam processes"
+    ]
+  },
+  {
+    "id": "SET-IMAGECHANGE-FilReader",
+    "severity": "error",
+    "category": "Settings (página)",
+    "title": "FileReader onerror",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "reader.onerror not set (uncaught)",
+    "source": "src/pages/SettingsPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Disco corrupto durante readAsDataURL"
+    ]
+  },
+  {
+    "id": "SET-IMAGECHANGE-INVALID",
+    "severity": "error",
+    "category": "Settings (página)",
+    "title": "Archivo no es imagen",
+    "message": "No se pudo aplicar el cambio de imagen. Verifica que sea un archivo válido.",
+    "technical": "!file.type.startsWith(\"image/\")",
+    "source": "src/pages/SettingsPage.tsx → handleImageChange()",
+    "actions": [],
+    "triggers": [
+      "User sube .exe/.txt/etc como foto perfil"
+    ]
+  },
+  {
+    "id": "SET-LOG-ENABLE-IPC",
+    "severity": "error",
+    "category": "Settings (página)",
+    "title": "setLogConfig throws en enable toggle",
+    "message": "No se pudo activar o desactivar los registros.",
+    "technical": "await rejects",
+    "source": "src/pages/SettingsPage.tsx → handleLogEnabled()",
+    "actions": [],
+    "triggers": [
+      "main logs:setConfig throws"
+    ]
+  },
+  {
+    "id": "SET-LOG-LEVEL-IPC",
+    "severity": "error",
+    "category": "Settings (página)",
+    "title": "setLogConfig throws en level change",
+    "message": "No se pudo cambiar el nivel de detalle de los registros.",
+    "technical": "await rejects",
+    "source": "src/pages/SettingsPage.tsx → handleLogLevel()",
+    "actions": [],
+    "triggers": [
+      "main logs:setConfig throws"
+    ]
+  },
+  {
+    "id": "SET-PICK-FAIL",
+    "severity": "error",
+    "category": "Settings (página)",
+    "title": "openSteamFolderDialog returned failure",
+    "message": "No se pudo abrir el selector de carpetas. Hazlo manualmente.",
+    "technical": "result.success=false && result.error && !includes canceled",
+    "source": "src/pages/SettingsPage.tsx → pickSteamFolder()",
+    "actions": [],
+    "triggers": [
+      "User seleccionó path inválido",
+      "Permisos denegados en folder picker"
+    ]
+  },
+  {
+    "id": "SET-PICK-IPC",
+    "severity": "error",
+    "category": "Settings (página)",
+    "title": "openSteamFolderDialog throws",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "await rejects",
+    "source": "src/pages/SettingsPage.tsx",
+    "actions": [],
+    "triggers": [
+      "dialog.showOpenDialog throws"
+    ]
+  },
+  {
+    "id": "SET-REPORT-DISCORD-FAIL",
+    "severity": "error",
+    "category": "Settings (página)",
+    "title": "sendDiscordReport falló",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "result.success=false",
+    "source": "src/pages/SettingsPage.tsx → community report",
+    "actions": [],
+    "triggers": [
+      "Discord webhook down, timeout, rate limit"
+    ]
+  },
+  {
+    "id": "STM-LIBS-IPC",
+    "severity": "error",
+    "category": "Store (steam)",
+    "title": "getLibraryFolders throws",
+    "message": "Error inesperado al leer las bibliotecas de Steam. La lista de juegos quedará vacía.",
+    "technical": "await rejects",
+    "source": "src/stores/useSteamStore.ts",
+    "actions": [],
+    "triggers": [
+      "IPC throws"
+    ]
+  },
+  {
+    "id": "STM-PATH-IPC",
+    "severity": "error",
+    "category": "Store (steam)",
+    "title": "getSteamPath throws",
+    "message": "Error inesperado al buscar Steam. La ruta quedó sin definir.",
+    "technical": "await throws",
+    "source": "src/stores/useSteamStore.ts",
+    "actions": [],
+    "triggers": [
+      "IPC throws"
+    ]
+  },
+  {
+    "id": "STM-RESTART-FAIL",
+    "severity": "error",
+    "category": "Store (steam)",
+    "title": "restartSteam returned failure",
+    "message": "Steam terminó la operación pero se mostró un aviso al usuario.",
+    "technical": "window.steamtools.restartSteam.success=false",
+    "source": "src/stores/useSteamStore.ts",
+    "actions": [],
+    "triggers": [
+      "steam.exe missing"
+    ]
+  },
+  {
+    "id": "CHAT-API-FAIL",
+    "severity": "error",
+    "category": "Support Chat",
+    "title": "sendSupportMessage IPC throws",
+    "message": "No pudimos obtener respuesta del asistente de soporte. Intenta de nuevo.",
+    "technical": "apiFetch /api/support/chat throws/aborts",
+    "source": "src/lib/y-core-api.ts → sendSupportMessage()",
+    "actions": [
+      "retry"
+    ],
+    "triggers": [
+      "API render down",
+      "timeout 30s",
+      "429 rate limit"
+    ]
+  },
+  {
+    "id": "CHAT-API-NOREPLY",
+    "severity": "error",
+    "category": "Support Chat",
+    "title": "sendSupportMessage sin reply field",
+    "message": "El asistente no respondió correctamente. Vuelve a enviar tu mensaje.",
+    "technical": "resp.reply undefined",
+    "source": "src/lib/y-core-api.ts",
+    "actions": [],
+    "triggers": [
+      "Backend schema drift"
+    ]
+  },
+  {
+    "id": "TST-BASE-INSTALL",
+    "severity": "error",
+    "category": "Toast",
+    "title": "Fallo instalación HL base",
+    "message": "No pudimos instalar la base de Half-Life. Revisa los archivos.",
+    "technical": "result.errors[0] al instalar 70",
+    "source": "src/hooks/useInstallProcessor.ts",
+    "actions": [],
+    "triggers": [
+      "Lua de HL inválida"
+    ]
+  },
+  {
+    "id": "TST-CLOSE-FAIL",
+    "severity": "error",
+    "category": "Toast",
+    "title": "No se pudo cerrar Steam",
+    "message": "Steam no se cerró. Ciérralo manualmente.",
+    "technical": "closeSteam() returns success=false",
+    "source": "src/hooks/useInstallProcessor.ts",
+    "actions": [],
+    "triggers": [
+      "Usuario sigue en Steam tras 15s"
+    ]
+  },
+  {
+    "id": "TST-IMPORT-FAIL",
+    "severity": "error",
+    "category": "Toast",
+    "title": "Import falló",
+    "message": "La importación falló. Intenta de nuevo.",
+    "technical": "result.error / job.error_message",
+    "source": "src/hooks/useInstallProcessor.ts",
+    "actions": [],
+    "triggers": [
+      "Job failed"
+    ]
+  },
+  {
+    "id": "TST-IMPORT-TIMEOUT",
+    "severity": "error",
+    "category": "Toast",
+    "title": "Import agotó tiempo",
+    "message": "La importación tardó más de 10 minutos. La cancelamos.",
+    "technical": "200 intentos sin completed/failed",
+    "source": "src/hooks/useInstallProcessor.ts",
+    "actions": [],
+    "triggers": [
+      "Job colgado indefinidamente"
+    ]
+  },
+  {
+    "id": "TST-INSTALL-FAIL",
+    "severity": "error",
+    "category": "Toast",
+    "title": "Instalación falló",
+    "message": "La instalación no se completó.",
+    "technical": "result.errors[0]",
+    "source": "src/hooks/useInstallProcessor.ts",
+    "actions": [],
+    "triggers": [
+      "result.success=false"
+    ]
+  },
+  {
+    "id": "TST-RESTART-FAIL",
+    "severity": "error",
+    "category": "Toast",
+    "title": "Fallo al reiniciar Steam",
+    "message": "No pudimos reiniciar Steam.",
+    "technical": "restartSteam() returns success=false",
+    "source": "src/hooks/useInstallProcessor.ts",
+    "actions": [],
+    "triggers": [
+      "No se pudo lanzar steam.exe"
+    ]
+  },
+  {
+    "id": "TST-UNEXPECTED",
+    "severity": "error",
+    "category": "Toast",
+    "title": "Respuesta inesperada",
+    "message": "El servidor devolvió una respuesta inesperada. Intenta de nuevo.",
+    "technical": "resp.status ni ready ni queued",
+    "source": "src/hooks/useInstallProcessor.ts",
+    "actions": [],
+    "triggers": [
+      "API devolvió shape inesperada"
+    ]
+  },
+  {
+    "id": "UPD-DOWNLOAD-FAIL",
+    "severity": "error",
+    "category": "Updater",
+    "title": "Descarga de update falló",
+    "message": "No se pudo descargar la actualización. Verifica tu conexión.",
+    "technical": "autoUpdater.on(\"error\") o manualDownloadUpdate rejects",
+    "source": "electron/main.ts",
+    "actions": [],
+    "triggers": [
+      "CDN GitHub caído"
+    ]
+  },
+  {
+    "id": "UPD-INSTALL-REJECTED",
+    "severity": "error",
+    "category": "Updater",
+    "title": "Path de installer rechazado",
+    "message": "No se pudo iniciar el instalador. Se detectó una ruta no esperada.",
+    "technical": "path.resolve(installerPath) !== expectedPath",
+    "source": "electron/main.ts → app:runManualInstaller()",
+    "actions": [],
+    "triggers": [
+      "Renderer intenta ejecutar .exe distinto al temp"
+    ]
+  },
+  {
+    "id": "ACF-WATCH-PARSE",
+    "severity": "warning",
+    "category": "ACF Watcher",
+    "title": "patchAcfForDownload throws",
+    "message": "No se pudo leer un archivo de control de Steam. Seguimos intentándolo.",
+    "technical": "await fs.promises.writeFile rejects",
+    "source": "electron/modules/manifest-sync.ts → startAcfWatcher()",
+    "actions": [],
+    "triggers": [
+      "Disco lleno durante repair"
+    ]
+  },
+  {
+    "id": "AG-SUSPICIOUS",
+    "severity": "warning",
+    "category": "AddGame",
+    "title": "Archivo sospechoso bloqueado",
+    "message": "Detectamos archivos sospechosos que podrían ser malware. Te recomendamos eliminarlos.",
+    "technical": "SUSPICIOUS_PATTERNS match",
+    "source": "src/pages/AddGame.tsx → checkSuspicious()",
+    "actions": [],
+    "triggers": [
+      ".exe/.scr/.com/.bat/.ps1/.vbs/.js/.jar",
+      ".dll/.sys/.drv",
+      "crack/patch/keygen/serial/etc"
+    ]
+  },
+  {
+    "id": "AG-UNSUPPORTED",
+    "severity": "warning",
+    "category": "AddGame",
+    "title": "Tipo de archivo no soportado",
+    "message": "Este tipo de archivo no es compatible. Solo aceptamos archivos .lua y .manifest.",
+    "technical": "detectFileType() returns \"unknown\"",
+    "source": "src/pages/AddGame.tsx",
+    "actions": [],
+    "triggers": [
+      "Archivo .exe/.dll/etc"
+    ]
+  },
+  {
+    "id": "API-NO-USERNAME",
+    "severity": "warning",
+    "category": "API",
+    "title": "Sin username en header",
+    "message": "No detectamos tu usuario. Inicia sesión para continuar.",
+    "technical": "getUsername() returns null",
+    "source": "src/lib/y-core-api.ts",
+    "actions": [],
+    "triggers": [
+      "Login expirado",
+      "Antes de auth"
+    ]
+  },
+  {
+    "id": "LOGIN-AUTH-IPC-FAIL",
+    "severity": "warning",
+    "category": "Auth (login)",
+    "title": "isAuthenticated throws",
+    "message": "No pudimos verificar tu identidad. Iniciamos sesión como invitado.",
+    "technical": ".catch silencioso",
+    "source": "src/stores/useAuthStore.ts → init()",
+    "actions": [],
+    "triggers": [
+      "isAuthenticated IPC throws"
+    ]
+  },
+  {
+    "id": "LOGIN-PATTERN-INVALID",
+    "severity": "warning",
+    "category": "Auth (login)",
+    "title": "Username no matchea pattern",
+    "message": "El formulario detectó datos inválidos. Revisa usuario y contraseña.",
+    "technical": "pattern=\"[a-zA-Z0-9_\\- ]+\"",
+    "source": "src/pages/LoginPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Caracteres especiales: ñ, !@#$%"
+    ]
+  },
+  {
+    "id": "LOGIN-USERNAME-IPC",
+    "severity": "warning",
+    "category": "Auth (login)",
+    "title": "getUsername throws",
+    "message": "Ese nombre de usuario no es válido. Usa entre 3 y 32 caracteres (letras, números, _ o -).",
+    "technical": "await rejects en init",
+    "source": "src/stores/useAuthStore.ts",
+    "actions": [],
+    "triggers": [
+      "getUsername IPC throws"
+    ]
+  },
+  {
+    "id": "LOGIN-USERNAME-TOO-SHORT",
+    "severity": "warning",
+    "category": "Auth (login)",
+    "title": "Username demasiado corto",
+    "message": "Tu nombre de usuario es demasiado corto. Usa al menos 3 caracteres.",
+    "technical": "username.trim().length < 2",
+    "source": "src/pages/LoginPage.tsx → handleSubmit()",
+    "actions": [],
+    "triggers": [
+      "user submits 0/1 char"
+    ]
+  },
+  {
+    "id": "BOOT-APP-READY-LATE",
+    "severity": "warning",
+    "category": "Boot",
+    "title": "app:ready demora",
+    "message": "Y-core está tardando en arrancar. Ten paciencia; si pasa de 30 segundos, reinicia la aplicación.",
+    "technical": "renderer sends app:ready tarde",
+    "source": "electron/main.ts",
+    "actions": [],
+    "triggers": [
+      "Carga lenta renderer"
+    ]
+  },
+  {
+    "id": "BOOT-SPLASH-IPC-MISS",
+    "severity": "warning",
+    "category": "Boot",
+    "title": "splash:setStatus no responde",
+    "message": "La pantalla de inicio no responde. Cierra Y-core y vuelve a abrirla.",
+    "technical": "ipcMain.handle(\"splash:setStatus\") missing",
+    "source": "electron/main.ts",
+    "actions": [],
+    "triggers": [
+      "preload llama pero main no registra"
+    ]
+  },
+  {
+    "id": "COVER-CDN-1ST",
+    "severity": "warning",
+    "category": "CoverImage",
+    "title": "Cover principal (Steam CDN) falla",
+    "message": "La primera fuente de carátula no funcionó. Probaremos con la siguiente.",
+    "technical": "onError src → fallbackSrc",
+    "source": "src/components/ui/CoverImage.tsx (uso en LibraryPage, GameDetailPage, etc.)",
+    "actions": [],
+    "triggers": [
+      "App sin header.jpg en CDN"
+    ]
+  },
+  {
+    "id": "COVER-DEPOTBOX-2ND",
+    "severity": "warning",
+    "category": "CoverImage",
+    "title": "Cover depotbox 2nd-tier",
+    "message": "No encontramos carátula en ninguna fuente. Verás el ícono por defecto.",
+    "technical": "onError fallback",
+    "source": "src/components/ui/CoverImage.tsx",
+    "actions": [],
+    "triggers": [
+      "depotbox.org down"
+    ]
+  },
+  {
+    "id": "DRMP-CHECK-IPC",
+    "severity": "warning",
+    "category": "DrmRemover (página)",
+    "title": "checkDrmStatus throws",
+    "message": "No se pudo revisar el estado del juego.",
+    "technical": "await no manejado",
+    "source": "src/pages/DrmRemoverPage.tsx",
+    "actions": [],
+    "triggers": [
+      "game no instalado",
+      "dll-inject no responde"
+    ]
+  },
+  {
+    "id": "EH-NATIVE-DIALOG",
+    "severity": "warning",
+    "category": "ErrorHandler",
+    "title": "showNativeError llamado",
+    "message": "Y-core detectó un error y te lo muestra en una ventana emergente.",
+    "technical": "useErrorStore.setState({open: true})",
+    "source": "src/lib/error-handler.ts → showNativeError()",
+    "actions": [
+      "retry",
+      "report",
+      "close"
+    ],
+    "triggers": [
+      "Cualquier YCoreNativeError"
+    ]
+  },
+  {
+    "id": "EH-RETRY-MISSING",
+    "severity": "warning",
+    "category": "ErrorHandler",
+    "title": "ErrorDialog sin retry function",
+    "message": "No se pudo reintentar esta operación. Cierra la ventana y vuelve a hacerlo manualmente.",
+    "technical": "!onRetry presente",
+    "source": "src/components/ui/ErrorDialog.tsx",
+    "actions": [],
+    "triggers": [
+      "showNativeError sin fn pasada"
+    ]
+  },
+  {
+    "id": "GDP-CACHE-STALE",
+    "severity": "warning",
+    "category": "GameDetail (página)",
+    "title": "Datos stale del cache 30min",
+    "message": "Los datos del juego pueden estar desactualizados. La próxima vez se refrescarán.",
+    "technical": "Date.now() - cached.timestamp >= CACHE_TTL NO usado (solo <TTL sirve)",
+    "source": "src/lib/steam-store-api.ts",
+    "actions": [
+      "refresh"
+    ],
+    "triggers": [
+      "Recuerda state 30min después de actualización Steam"
+    ]
+  },
+  {
+    "id": "GDP-HERO-404",
+    "severity": "warning",
+    "category": "GameDetail (página)",
+    "title": "CDN hero.jpg 404",
+    "message": "El juego no tiene una imagen de portada. Mostraremos una alternativa.",
+    "technical": "image onError → set src al header.jpg",
+    "source": "src/pages/GameDetailPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Juego sin library_hero.jpg"
+    ]
+  },
+  {
+    "id": "GDP-INSTALL-INCOMPATIBLE",
+    "severity": "warning",
+    "category": "GameDetail (página)",
+    "title": "Incompatible launcher detectado",
+    "message": "Este juego requiere otro launcher y puede no funcionar con Online Fix.",
+    "technical": "getLauncherInfo(appId) returns truthy",
+    "source": "src/pages/GameDetailPage.tsx → handleInstall()",
+    "actions": [
+      "confirm"
+    ],
+    "triggers": [
+      "App con RGL/EA/Ubisoft/Battle.net/Paradox/2K launcher"
+    ]
+  },
+  {
+    "id": "GDP-LIGHTBOX-IMG",
+    "severity": "warning",
+    "category": "GameDetail (página)",
+    "title": "Lightbox img no carga",
+    "message": "No pudimos ampliar la imagen. Puede ser muy grande o estar dañada.",
+    "technical": "<img>.onError onClick stopPropagation",
+    "source": "src/pages/GameDetailPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Network failure en full image"
+    ]
+  },
+  {
+    "id": "GDP-PORTRAIT-404",
+    "severity": "warning",
+    "category": "GameDetail (página)",
+    "title": "CDN library_600x900.jpg 404",
+    "message": "El juego no tiene una imagen vertical. No la mostraremos.",
+    "technical": "<img>.onError retry chain",
+    "source": "src/pages/GameDetailPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Sin portrait image"
+    ]
+  },
+  {
+    "id": "GDP-VIDEO-PLAY",
+    "severity": "warning",
+    "category": "GameDetail (página)",
+    "title": "Video.mp4/.webm no carga",
+    "message": "No se pudo reproducir el video del juego. Te mostraremos una imagen fija.",
+    "technical": "<video onError>",
+    "source": "src/pages/GameDetailPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Codec no soportado en chromium"
+    ]
+  },
+  {
+    "id": "GOLDSRC-NO-LUA",
+    "severity": "warning",
+    "category": "GoldSrc",
+    "title": "Half-Life base Lua no encontrada",
+    "message": "No hay un script Lua configurado para Half-Life. Algunas funciones no estarán disponibles.",
+    "technical": "readGoldSrcBaseDepots() returns null",
+    "source": "electron/modules/goldsrc.ts → ensureGoldSrcBaseDepots()",
+    "actions": [],
+    "triggers": [
+      "Half-Life no instalado"
+    ]
+  },
+  {
+    "id": "INST-MANIFEST-MISSING",
+    "severity": "warning",
+    "category": "Instalación",
+    "title": "Manifest no encontrado",
+    "message": "No encontramos el archivo manifesto del juego. Vuelve a importarlo.",
+    "technical": "Promise.allSettled → no fulfilled",
+    "source": "electron/modules/manifest-sync.ts → smartManifestSync()",
+    "actions": [],
+    "triggers": [
+      "depotcache vacío + Downloads vacío + API 404"
+    ]
+  },
+  {
+    "id": "INST-NO-DEPOTCACHE",
+    "severity": "warning",
+    "category": "Instalación",
+    "title": "depotcache path no encontrado",
+    "message": "No se encontró la carpeta de manifiestos de Steam. Reinicia Steam.",
+    "technical": "getDepotCachePath() returns null",
+    "source": "electron/modules/manifest-sync.ts",
+    "actions": [],
+    "triggers": [
+      "Steam no instalado"
+    ]
+  },
+  {
+    "id": "INST-NO-LUA-DIR",
+    "severity": "warning",
+    "category": "Instalación",
+    "title": "No se pudo escribir Lua",
+    "message": "No pudimos guardar el script Lua del juego. El juego seguirá funcionando sin él.",
+    "technical": "getLuaScriptsDir() === null",
+    "source": "electron/modules/manifest-sync.ts",
+    "actions": [],
+    "triggers": [
+      "YCoreTool.dll ausente"
+    ]
+  },
+  {
+    "id": "IMG-CACHE-MISS",
+    "severity": "warning",
+    "category": "IPC (imágenes)",
+    "title": "Imagen solicitada pero cache MISS",
+    "message": "No encontramos la imagen en caché. La descargaremos de otra fuente.",
+    "technical": "storeImageCache.has(appId) === false",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "AppID nunca solicitada antes"
+    ]
+  },
+  {
+    "id": "IMG-CACHE-NEGATIVE",
+    "severity": "warning",
+    "category": "IPC (imágenes)",
+    "title": "Cache tiene resultado negativo previa",
+    "message": "Ya intentamos buscar esta imagen hace poco. Espera unos segundos.",
+    "technical": "cache has(appId) y value.success=false",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "First-time lookups failed transiently"
+    ]
+  },
+  {
+    "id": "IMG-HTML-ACCESS-DENIED",
+    "severity": "warning",
+    "category": "IPC (imágenes)",
+    "title": "Steam store devolvió Access Denied",
+    "message": "Steam nos bloqueó el acceso a la imagen. Usaremos una alternativa.",
+    "technical": "html.includes \"Access Denied\"",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "IP flagged por Steam"
+    ]
+  },
+  {
+    "id": "IMG-HTML-NOMETA",
+    "severity": "warning",
+    "category": "IPC (imágenes)",
+    "title": "No og:image meta tag",
+    "message": "Steam no tiene una imagen para este juego.",
+    "technical": "match null",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "Nueva estructura HTML de Steam"
+    ]
+  },
+  {
+    "id": "IMG-ICON-NOICON",
+    "severity": "warning",
+    "category": "IPC (imágenes)",
+    "title": "Icon assets missing o format absent",
+    "message": "No hay ícono disponible para este juego.",
+    "technical": "icon_url/format ambos undefined",
+    "source": "electron/modules/store-images.ts → getStoreIconUrl()",
+    "actions": [],
+    "triggers": [
+      "App sin icon en catálogo"
+    ]
+  },
+  {
+    "id": "IMG-SGDB-AUTH-FAIL",
+    "severity": "warning",
+    "category": "IPC (imágenes)",
+    "title": "SteamGridDb auth failed",
+    "message": "SteamGridDB rechazó nuestra petición. Buscaremos la imagen en otra fuente.",
+    "technical": "Bearer header sin éxito → gameRes.ok=false",
+    "source": "electron/modules/store-images.ts → getSteamGridDbImageUrl()",
+    "actions": [],
+    "triggers": [
+      "API key inválida o expirada"
+    ]
+  },
+  {
+    "id": "IMG-SGDB-NOGRIDS",
+    "severity": "warning",
+    "category": "IPC (imágenes)",
+    "title": "Sin grids para el juego",
+    "message": "SteamGridDB no tiene imágenes en cuadrícula para este juego.",
+    "technical": "grid.data.length === 0",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "SGDB no tiene 600x900 submitted"
+    ]
+  },
+  {
+    "id": "IMG-SGDB-NOTFOUND",
+    "severity": "warning",
+    "category": "IPC (imágenes)",
+    "title": "Juego no existe en SteamGridDb",
+    "message": "No encontramos la carátula personalizada. Usaremos la original de Steam.",
+    "technical": "game.success=false o !data?.id",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "App niche o muy nuevo"
+    ]
+  },
+  {
+    "id": "IMG-STORE-BROWSE-NOASSET",
+    "severity": "warning",
+    "category": "IPC (imágenes)",
+    "title": "assets.asset_url_format missing",
+    "message": "El catálogo no tiene una imagen para este juego.",
+    "technical": "no item o assets undefined",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "Nuevo juego sin assets aún"
+    ]
+  },
+  {
+    "id": "IMG-STORE-BROWSE-NOMATCH",
+    "severity": "warning",
+    "category": "IPC (imágenes)",
+    "title": "AppID no matchea store_items",
+    "message": "No encontramos la imagen en el catálogo de la comunidad.",
+    "technical": "store_items.find fallback null",
+    "source": "electron/modules/store-images.ts",
+    "actions": [],
+    "triggers": [
+      "AppID response stale"
+    ]
+  },
+  {
+    "id": "SIM-CHECKAPPTYPES",
+    "severity": "warning",
+    "category": "IPC (steam)",
+    "title": "steam:checkAppTypes failed",
+    "message": "No se pudo identificar si el juego es gratuito o de pago.",
+    "technical": "IPC throws silently",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "rate limit"
+    ]
+  },
+  {
+    "id": "SIM-ISFREE",
+    "severity": "warning",
+    "category": "IPC (steam)",
+    "title": "steam:isFreeToPlay returned failure",
+    "message": "No pudimos saber si el juego es gratuito. Asumimos que no lo es.",
+    "technical": "IPC returns !success o throws",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "rate limit"
+    ]
+  },
+  {
+    "id": "SIM-LISTLUA-IPC",
+    "severity": "warning",
+    "category": "IPC (steam)",
+    "title": "steam:listLuaScripts returned failure",
+    "message": "No se pudo obtener la lista de scripts Lua instalados.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "scripts dir missing"
+    ]
+  },
+  {
+    "id": "SIM-RESOLVE",
+    "severity": "warning",
+    "category": "IPC (steam)",
+    "title": "steam:resolveOrphanNames throws",
+    "message": "No se pudo obtener la información del juego desde Steam.",
+    "technical": ".catch en LibraryStore",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "API rate limit"
+    ]
+  },
+  {
+    "id": "SIM-SEARCH-IPC",
+    "severity": "warning",
+    "category": "IPC (steam)",
+    "title": "steam:searchGames returned failure",
+    "message": "La búsqueda en Steam no devolvió resultados. Intenta con otros términos.",
+    "technical": "IPC returns !success",
+    "source": "electron/modules/steam-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "query vacío"
+    ]
+  },
+  {
+    "id": "LIB-COVER-IMG-FAIL",
+    "severity": "warning",
+    "category": "Library (página)",
+    "title": "Cover image no carga",
+    "message": "No pudimos cargar la carátula del juego. Se mostrará un ícono alternativo.",
+    "technical": "<img onError>",
+    "source": "src/pages/LibraryPage.tsx → CoverImage",
+    "actions": [],
+    "triggers": [
+      "CDN Steam caído",
+      "App sin imagen"
+    ]
+  },
+  {
+    "id": "LIB-HERO-IMG-FAIL",
+    "severity": "warning",
+    "category": "Library (página)",
+    "title": "library_hero no carga",
+    "message": "No pudimos cargar la imagen principal del juego.",
+    "technical": "onError se propaga",
+    "source": "src/pages/LibraryPage.tsx",
+    "actions": [],
+    "triggers": [
+      "App muy nueva sin hero",
+      "CDN 404"
+    ]
+  },
+  {
+    "id": "LUA-INVALID",
+    "severity": "warning",
+    "category": "Lua",
+    "title": "Lua script no parseable",
+    "message": "No se pudo leer este script Lua. El archivo puede estar dañado.",
+    "technical": "parseLuaScript() lanza excepción",
+    "source": "@y-core/shared/lua-parser",
+    "actions": [],
+    "triggers": [
+      "Lua con sintaxis rota"
+    ]
+  },
+  {
+    "id": "LUAS-COPY-IPC-FAIL",
+    "severity": "warning",
+    "category": "LuaScripts (página)",
+    "title": "navigator.clipboard.writeText throws",
+    "message": "No se pudo copiar el contenido del script Lua al portapapeles.",
+    "technical": "no catch en handleCopy",
+    "source": "src/pages/LuaScripts.tsx",
+    "actions": [],
+    "triggers": [
+      "clipboard permission denegado"
+    ]
+  },
+  {
+    "id": "LUAS-LIST-FAIL",
+    "severity": "warning",
+    "category": "LuaScripts (página)",
+    "title": "listLuaScripts returned failure",
+    "message": "Tu lista de scripts Lua está vacía.",
+    "technical": "result.success=false (silent)",
+    "source": "src/pages/LuaScripts.tsx → loadScripts()",
+    "actions": [],
+    "triggers": [
+      "scripts dir no existe",
+      "getLuaScriptsDir null"
+    ]
+  },
+  {
+    "id": "MF-LIST-FAIL",
+    "severity": "warning",
+    "category": "Manifests (página)",
+    "title": "listManifestFiles returned failure",
+    "message": "Tu lista de manifiestos está vacía.",
+    "technical": "result.success=false sin usar .error",
+    "source": "src/pages/ManifestFiles.tsx",
+    "actions": [],
+    "triggers": [
+      "depotcache no existe"
+    ]
+  },
+  {
+    "id": "NET-NAVIGATOR-INIT-NOLINE",
+    "severity": "warning",
+    "category": "Network",
+    "title": "Initial state offline",
+    "message": "Tu navegador indica que no hay conexión a internet.",
+    "technical": "navigator.onLine inicial false",
+    "source": "src/hooks/useOnlineStatus.ts",
+    "actions": [],
+    "triggers": [
+      "App abierta sin internet"
+    ]
+  },
+  {
+    "id": "NET-OFFLINE",
+    "severity": "warning",
+    "category": "Network",
+    "title": "Browser offline event",
+    "message": "Estás sin conexión. Algunas funciones no estarán disponibles hasta que vuelvas a estar en línea.",
+    "technical": "window event \"offline\"",
+    "source": "src/hooks/useOnlineStatus.ts",
+    "actions": [],
+    "triggers": [
+      "WiFi dropped, cable unplugged"
+    ]
+  },
+  {
+    "id": "OFP-COMPAT-API-FAIL",
+    "severity": "warning",
+    "category": "OnlineFixPage (página)",
+    "title": "getOnlineFixCompatibilityBatch rejectea",
+    "message": "No se pudo consultar la compatibilidad del juego con Online Fix.",
+    "technical": "catch → fallback",
+    "source": "src/pages/OnlineFixPage.tsx",
+    "actions": [],
+    "triggers": [
+      "API Render down",
+      "rate limit"
+    ]
+  },
+  {
+    "id": "OFP-COMPAT-COMPAT",
+    "severity": "warning",
+    "category": "OnlineFixPage (página)",
+    "title": "Juego con compatibility incompatible oculta",
+    "message": "Este juego puede no ser compatible con Online Fix.",
+    "technical": "isDisabled = compat.status === \"incompatible\"",
+    "source": "src/pages/OnlineFixPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Cualquier juego en INCOMPATIBLE_GAMES map"
+    ]
+  },
+  {
+    "id": "OFP-DETECT-MAP-FAIL",
+    "severity": "warning",
+    "category": "OnlineFixPage (página)",
+    "title": "detectOnlineFix throws",
+    "message": "No se pudo detectar el tipo de Online Fix necesario.",
+    "technical": "await no manejado en forEach",
+    "source": "src/pages/OnlineFixPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Steam path missing",
+      "game dir missing"
+    ]
+  },
+  {
+    "id": "OFP-DISMISS-WRITE-IPC",
+    "severity": "warning",
+    "category": "OnlineFixPage (página)",
+    "title": "writeConfig al dismiss warning",
+    "message": "No se pudo guardar el ajuste. Lo recordaremos para la próxima sesión.",
+    "technical": "await reject en try",
+    "source": "src/pages/OnlineFixPage.tsx → dismissWarning()",
+    "actions": [],
+    "triggers": [
+      "config:write IPC throws"
+    ]
+  },
+  {
+    "id": "OFP-READCFG-IPC",
+    "severity": "warning",
+    "category": "OnlineFixPage (página)",
+    "title": "readConfig rejectea",
+    "message": "No se pudo leer la configuración del juego.",
+    "technical": "await .catch",
+    "source": "src/pages/OnlineFixPage.tsx",
+    "actions": [],
+    "triggers": [
+      "config:read IPC throws"
+    ]
+  },
+  {
+    "id": "FUT-BACKUP-CORRUPT",
+    "severity": "warning",
+    "category": "Posible",
+    "title": "Backup .bak se corrompe",
+    "message": "La copia de seguridad está dañada. Restauraremos desde la más reciente.",
+    "technical": "sort sobre *.backup-*",
+    "source": "electron/modules/dll-inject.ts → restoreOrDelete()",
+    "actions": [],
+    "triggers": [
+      "Disco se desconectó durante backup"
+    ]
+  },
+  {
+    "id": "FUT-DLL-LOAD-GPU",
+    "severity": "warning",
+    "category": "Posible",
+    "title": "koffi.load → GPU driver issue",
+    "message": "Tu tarjeta gráfica puede no ser compatible. Actualiza los drivers.",
+    "technical": "koffi requiere drivers GPU compatibles con Vulkan/D3D12",
+    "source": "(no implementado)",
+    "actions": [],
+    "triggers": [
+      "Drivers GPU sin actualizar"
+    ]
+  },
+  {
+    "id": "FUT-DOWNLOAD-IDLE",
+    "severity": "warning",
+    "category": "Posible",
+    "title": "Descarga sin progreso >60s",
+    "message": "La descarga estuvo inactiva demasiado tiempo. La reiniciaremos.",
+    "technical": "req.setTimeout(IDLE_TIMEOUT_MS)",
+    "source": "electron/modules/onlinefix.ts → downloadFile()",
+    "actions": [],
+    "triggers": [
+      "CDN con conexión zombie"
+    ]
+  },
+  {
+    "id": "FUT-NETWORK-OFFLINE",
+    "severity": "warning",
+    "category": "Posible",
+    "title": "Sin internet",
+    "message": "No hay conexión a internet. Te avisaremos cuando vuelva.",
+    "technical": "useOnlineStatus hook",
+    "source": "src/hooks/useOnlineStatus.ts",
+    "actions": [],
+    "triggers": [
+      "Wi-Fi caído",
+      "Avión mode"
+    ]
+  },
+  {
+    "id": "FUT-RPC-DISCORD-FAIL",
+    "severity": "warning",
+    "category": "Posible",
+    "title": "Discord RPC falla",
+    "message": "No pudimos conectar con Discord. Tu estado seguirá actualizándose internamente.",
+    "technical": "discord-rpc throw caught internally",
+    "source": "electron/modules/discord-rpc.ts",
+    "actions": [],
+    "triggers": [
+      "Discord no instalado",
+      "Discord bloqueado por firewall"
+    ]
+  },
+  {
+    "id": "FUT-STEAM-UPDATE",
+    "severity": "warning",
+    "category": "Posible",
+    "title": "Steam actualiza mientras corre",
+    "message": "Steam se actualizó. Tus archivos del juego pueden necesitar reimportarse.",
+    "technical": "revalidateHookIfUpdated hook",
+    "source": "electron/modules/dll-inject.ts",
+    "actions": [],
+    "triggers": [
+      "Steam se actualiza solo"
+    ]
+  },
+  {
+    "id": "REC-ADDLOG-IPC-FAIL",
+    "severity": "warning",
+    "category": "Recommendations",
+    "title": "addLog throws",
+    "message": "No pudimos registrar este juego en tu historial.",
+    "technical": ".catch silencioso",
+    "source": "src/lib/recommendations.ts",
+    "actions": [],
+    "triggers": [
+      "logs:add IPC throws"
+    ]
+  },
+  {
+    "id": "REC-ISFREE-IPC-FAIL",
+    "severity": "warning",
+    "category": "Recommendations",
+    "title": "isFreeToPlay throws per game",
+    "message": "No pudimos saber si el juego es gratuito. Mostraremos opciones generales.",
+    "technical": "catch → {isFree: false}",
+    "source": "src/lib/recommendations.ts → filterFreeGames()",
+    "actions": [],
+    "triggers": [
+      "store details API rate limit"
+    ]
+  },
+  {
+    "id": "REC-LIBRARY-LOAD-FAIL",
+    "severity": "warning",
+    "category": "Recommendations",
+    "title": "useLibraryStore libros vacíos OR error state",
+    "message": "No pudimos cargar las recomendaciones desde tu biblioteca.",
+    "technical": "game fetch falló",
+    "source": "src/stores/useLibraryStore.ts",
+    "actions": [],
+    "triggers": [
+      "Steam path broken"
+    ]
+  },
+  {
+    "id": "FUSE-INVALID-OPTIONS",
+    "severity": "warning",
+    "category": "Search",
+    "title": "fuseOptions inválido",
+    "message": "La configuración de búsqueda es incorrecta. Restableceremos los valores por defecto.",
+    "technical": "IFuseOptions invalid",
+    "source": "src/stores/useLibraryStore.ts",
+    "actions": [],
+    "triggers": [
+      "threshold manipulable"
+    ]
+  },
+  {
+    "id": "SET-LOGCFG-IPC",
+    "severity": "warning",
+    "category": "Settings (página)",
+    "title": "getLogConfig falló",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "window.steamtools.getLogConfig rejects",
+    "source": "src/pages/SettingsPage.tsx",
+    "actions": [],
+    "triggers": [
+      "IPC no registrado",
+      "Main process no responde"
+    ]
+  },
+  {
+    "id": "SET-READCFG-IPC",
+    "severity": "warning",
+    "category": "Settings (página)",
+    "title": "readConfig falló",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "window.steamtools.readConfig rejects",
+    "source": "src/pages/SettingsPage.tsx",
+    "actions": [],
+    "triggers": [
+      "config:read IPC error"
+    ]
+  },
+  {
+    "id": "SET-REPORT-USER-VAR-IPC",
+    "severity": "warning",
+    "category": "Settings (página)",
+    "title": "getUsername rejectea",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "await rejects",
+    "source": "src/pages/SettingsPage.tsx → community report",
+    "actions": [],
+    "triggers": [
+      "auth:getUsername IPC error"
+    ]
+  },
+  {
+    "id": "SET-RESTART-TOUR-IPC",
+    "severity": "warning",
+    "category": "Settings (página)",
+    "title": "writeConfig fallo al resetear tour",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "await rejects",
+    "source": "src/pages/SettingsPage.tsx → restartTour button",
+    "actions": [],
+    "triggers": [
+      "config:write IPC throw durante reset tour"
+    ]
+  },
+  {
+    "id": "SET-STEAMPATH-IPC",
+    "severity": "warning",
+    "category": "Settings (página)",
+    "title": "getSteamPath throw",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "await en refreshSteamPath rejects (catch silencioso)",
+    "source": "src/pages/SettingsPage.tsx → refreshSteamPath()",
+    "actions": [],
+    "triggers": [
+      "Steam path detection IPC throws"
+    ]
+  },
+  {
+    "id": "SET-VERSION-IPC",
+    "severity": "warning",
+    "category": "Settings (página)",
+    "title": "getVersion falló",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "window.steamtools.getVersion rejects",
+    "source": "src/pages/SettingsPage.tsx",
+    "actions": [],
+    "triggers": [
+      "app:getVersion IPC error"
+    ]
+  },
+  {
+    "id": "STORE-DETAILS-IPC-FAIL",
+    "severity": "warning",
+    "category": "Steam Store API",
+    "title": "fetchAppDetails IPC falló",
+    "message": "No se pudo obtener la información del juego desde la tienda de Steam.",
+    "technical": "!result.success o !result.data o throw",
+    "source": "src/lib/steam-store-api.ts",
+    "actions": [],
+    "triggers": [
+      "main handler fetchAppDetails devuelve error"
+    ]
+  },
+  {
+    "id": "STORE-MIRROR-IP",
+    "severity": "warning",
+    "category": "Steam Store API",
+    "title": "Steam CDN cambia IP / asset",
+    "message": "La URL de imagen no es válida. Mostraremos una imagen alternativa.",
+    "technical": "CDN rotation",
+    "source": "cdn.akamai.steamstatic.com",
+    "actions": [],
+    "triggers": [
+      "Steam cambia CDN URLs"
+    ]
+  },
+  {
+    "id": "STM-LIBS-FAIL",
+    "severity": "warning",
+    "category": "Store (steam)",
+    "title": "getLibraryFolders returned failure",
+    "message": "No se pudieron leer las bibliotecas de Steam desde el registro.",
+    "technical": "!result.success",
+    "source": "src/stores/useSteamStore.ts → loadLibraryFolders()",
+    "actions": [],
+    "triggers": [
+      "Steam path null"
+    ]
+  },
+  {
+    "id": "STM-PATH-FAIL",
+    "severity": "warning",
+    "category": "Store (steam)",
+    "title": "getSteamPath returned failure",
+    "message": "No se pudo leer la ruta de instalación de Steam. Quedó sin definir.",
+    "technical": "!result.success sin error path",
+    "source": "src/stores/useSteamStore.ts → loadSteamPath()",
+    "actions": [],
+    "triggers": [
+      "Steam no detectado"
+    ]
+  },
+  {
+    "id": "STM-RUNNING-FAIL",
+    "severity": "warning",
+    "category": "Store (steam)",
+    "title": "isSteamRunning returns sin running flag",
+    "message": "Steam no está en ejecución. La app seguirá funcionando en modo limitado.",
+    "technical": "result.running undefined",
+    "source": "src/stores/useSteamStore.ts → loadSteamRunning()",
+    "actions": [],
+    "triggers": [
+      "tasklist command empty stdout"
+    ]
+  },
+  {
+    "id": "TOUR-CONFIG-IPC-FAIL",
+    "severity": "warning",
+    "category": "Tour",
+    "title": "readConfig falla al boot",
+    "message": "No pudimos guardar el paso del tour. Continuaremos con valores por defecto.",
+    "technical": ".catch → start(TOUR_STEPS)",
+    "source": "src/components/ui/TourOverlay.tsx",
+    "actions": [],
+    "triggers": [
+      "config:read IPC throws en boot"
+    ]
+  },
+  {
+    "id": "TOUR-PICK-IPC-FAIL",
+    "severity": "warning",
+    "category": "Tour",
+    "title": "openSteamFolderDialog throws",
+    "message": "No se pudo abrir el selector de carpetas.",
+    "technical": "catch{}",
+    "source": "src/components/ui/TourOverlay.tsx → handlePickSteamFolder",
+    "actions": [],
+    "triggers": [
+      "dialog crash mid-tour"
+    ]
+  },
+  {
+    "id": "TOUR-STEAMPATH-IPC",
+    "severity": "warning",
+    "category": "Tour",
+    "title": "getSteamPath en step steampath",
+    "message": "Cancelaste la selección de carpeta. Toma el control manualmente desde Configuración.",
+    "technical": ".catch silencioso",
+    "source": "src/components/ui/TourOverlay.tsx",
+    "actions": [],
+    "triggers": [
+      "IPC throws mid-tour"
+    ]
+  },
+  {
+    "id": "TOUR-TARGET-NOTFOUND",
+    "severity": "warning",
+    "category": "Tour",
+    "title": "querySelector no encuentra target",
+    "message": "No se pudo mostrar este paso del tour interactivo.",
+    "technical": "document.querySelector(step.target) returns null",
+    "source": "src/components/ui/TourOverlay.tsx",
+    "actions": [],
+    "triggers": [
+      "route cambió pero DOM stale"
+    ]
+  },
+  {
+    "id": "TOUR-WRITE-IPC-FAIL",
+    "severity": "warning",
+    "category": "Tour",
+    "title": "writeConfig tourDone=false rejectea",
+    "message": "No pudimos guardar tu progreso en el tour.",
+    "technical": ".catch?.(()=>{})",
+    "source": "src/components/ui/TourOverlay.tsx",
+    "actions": [],
+    "triggers": [
+      "config:write IPC throws al reset tour"
+    ]
+  },
+  {
+    "id": "TRAY-ICON-MISS",
+    "severity": "warning",
+    "category": "Tray",
+    "title": "createTray icon missing",
+    "message": "No pudimos mostrar el icono de Y-core en la bandeja del sistema.",
+    "technical": "icon path no existe",
+    "source": "electron/modules/windows.ts",
+    "actions": [],
+    "triggers": [
+      "Build rota assets"
+    ]
+  },
+  {
+    "id": "CSS-MISSING-VAR",
+    "severity": "warning",
+    "category": "UI",
+    "title": "CSS variable indefinida",
+    "message": "Falta una variable visual. Puede que veas colores incorrectos.",
+    "technical": "var(--accent) sin valor",
+    "source": "src/components/* css",
+    "actions": [],
+    "triggers": [
+      "theme sin --accent"
+    ]
+  },
+  {
+    "id": "UPD-CHECK-FAIL",
+    "severity": "warning",
+    "category": "Updater",
+    "title": "Chequeo de updates falló",
+    "message": "No pudimos comprobar si hay actualizaciones. Lo intentaremos más tarde.",
+    "technical": "Update check failed: {message}",
+    "source": "electron/main.ts → checkForUpdates()",
+    "actions": [],
+    "triggers": [
+      "Sin internet en startup"
+    ]
+  },
+  {
+    "id": "WIN-CLOSE-FAIL",
+    "severity": "warning",
+    "category": "Window",
+    "title": "window-close throws",
+    "message": "Y-core no se pudo cerrar correctamente.",
+    "technical": "handler missing",
+    "source": "electron/preload.ts",
+    "actions": [],
+    "triggers": []
+  },
+  {
+    "id": "WIN-MAXIMIZE-FAIL",
+    "severity": "warning",
+    "category": "Window",
+    "title": "window-maximize throws",
+    "message": "No se pudo maximizar la ventana.",
+    "technical": "handler missing",
+    "source": "electron/preload.ts",
+    "actions": [],
+    "triggers": []
+  },
+  {
+    "id": "WIN-MINIMIZE-FAIL",
+    "severity": "warning",
+    "category": "Window",
+    "title": "window-minimize IPC throws",
+    "message": "No se pudo minimizar la ventana.",
+    "technical": "no handler",
+    "source": "electron/preload.ts → windowMinimize",
+    "actions": [],
+    "triggers": [
+      "handler no registrado"
+    ]
+  },
+  {
+    "id": "AUTH-NO-USERNAME-FILE",
+    "severity": "info",
+    "category": "Auth",
+    "title": "No había username file",
+    "message": "Esta es tu primera ejecución. Configuraremos un usuario predeterminado.",
+    "technical": "loadUsername() catche el missing file",
+    "source": "electron/modules/auth-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "Primera ejecución"
+    ]
+  },
+  {
+    "id": "LOGIN-AUTH-ALREADY",
+    "severity": "info",
+    "category": "Auth (login)",
+    "title": "init() llamado múltiples veces",
+    "message": "Ya habías iniciado sesión. No hay nada nuevo que hacer.",
+    "technical": "get().initialized === true early return",
+    "source": "src/stores/useAuthStore.ts → init()",
+    "actions": [],
+    "triggers": [
+      "StrictMode double-mount en dev"
+    ]
+  },
+  {
+    "id": "LOGIN-LOGOUT-FALLBACK",
+    "severity": "info",
+    "category": "Auth (login)",
+    "title": "logout completed con IPC failure",
+    "message": "No pudimos cerrar sesión limpiamente. Te desconectamos igualmente.",
+    "technical": "await logout rejection via catch{}",
+    "source": "src/stores/useAuthStore.ts → logout()",
+    "actions": [],
+    "triggers": [
+      "logout handler unreachable"
+    ]
+  },
+  {
+    "id": "BOOT-LOCK-NOT-GOT",
+    "severity": "info",
+    "category": "Boot",
+    "title": "Single instance: segunda instancia",
+    "message": "Otra instancia de Y-core ya está abierta. Ciérrala antes de iniciar una nueva.",
+    "technical": "gotTheLock === false",
+    "source": "electron/main.ts",
+    "actions": [],
+    "triggers": [
+      "Doble click mientras corre"
+    ]
+  },
+  {
+    "id": "CMD-KD-NOOP",
+    "severity": "info",
+    "category": "Command Palette",
+    "title": "Ctrl+K fuera de focus",
+    "message": "No hay nada que abrir o cerrar en este momento.",
+    "technical": "e.ctrlKey || e.metaKey && e.key === \"k\"",
+    "source": "src/App.tsx",
+    "actions": [],
+    "triggers": [
+      "User shortcut"
+    ]
+  },
+  {
+    "id": "DRM-DISABLED",
+    "severity": "info",
+    "category": "DRM Boundary",
+    "title": "Función deshabilitada",
+    "message": "Esta función (eliminación de protección de juegos) no está disponible en esta versión.",
+    "technical": "NOT_IMPLEMENTED: {feature}",
+    "source": "electron/modules/drm-stub.ts",
+    "actions": [],
+    "triggers": [
+      "Cualquier intento de circumvention en este build"
+    ]
+  },
+  {
+    "id": "DRMP-CONFIRM-CANCEL",
+    "severity": "info",
+    "category": "DrmRemover (página)",
+    "title": "User canceló dialog nativo",
+    "message": "Cancelaste la operación. No se modificó nada.",
+    "technical": "window.confirm returns false",
+    "source": "src/pages/DrmRemoverPage.tsx → handleRemoveDrm()",
+    "actions": [],
+    "triggers": [
+      "user click Cancelar"
+    ]
+  },
+  {
+    "id": "EH-GRACEFUL-NOOP",
+    "severity": "info",
+    "category": "ErrorHandler",
+    "title": "handleNativeErrorGraceful usado",
+    "message": "Continuamos con el modo limitado. Algunas funciones avanzadas quedaron desactivadas.",
+    "technical": "log(msg) only, sin UI",
+    "source": "src/lib/error-handler.ts",
+    "actions": [],
+    "triggers": [
+      "Operaciones que degradan intencionalmente"
+    ]
+  },
+  {
+    "id": "I18N-MISSING-KEY",
+    "severity": "info",
+    "category": "i18n",
+    "title": "Translation key faltante",
+    "message": "Falta una traducción para este mensaje. Puede aparecer en inglés.",
+    "technical": "t(key) === key",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "lang no tiene translation"
+    ]
+  },
+  {
+    "id": "AUTH-LOGOUT-FAIL",
+    "severity": "info",
+    "category": "IPC (Auth)",
+    "title": "Logout limpiado en memoria",
+    "message": "No pudimos cerrar tu sesión correctamente. Tus datos locales fueron limpiados de todas formas.",
+    "technical": "state.username = \"user\"; saveUsername()",
+    "source": "electron/modules/auth-ipc.ts",
+    "actions": [],
+    "triggers": [
+      "Flujo normal de logout"
+    ]
+  },
+  {
+    "id": "IMG-CACHE-EVICT",
+    "severity": "info",
+    "category": "IPC (imágenes)",
+    "title": "LRU evict eldest entry",
+    "message": "Limpiamos imágenes antiguas de la caché para liberar espacio.",
+    "technical": "map.size >= max (500)",
+    "source": "electron/modules/store-images.ts → LRUCache",
+    "actions": [],
+    "triggers": [
+      "500+ apps cacheados sin recency"
+    ]
+  },
+  {
+    "id": "LIBSTORE-RESOLVE-IPC",
+    "severity": "info",
+    "category": "LibraryStore",
+    "title": "resolveOrphanNames throws",
+    "message": "No se pudo obtener la información del juego desde Steam.",
+    "technical": ".catch(()=>{})",
+    "source": "src/stores/useLibraryStore.ts",
+    "actions": [],
+    "triggers": [
+      "Steam store details API down"
+    ]
+  },
+  {
+    "id": "LIBSTORE-RESOLVE-NONE",
+    "severity": "info",
+    "category": "LibraryStore",
+    "title": "Ningún orphan resolveu",
+    "message": "No hay información disponible para este juego.",
+    "technical": "resolved.length === 0",
+    "source": "src/stores/useLibraryStore.ts",
+    "actions": [],
+    "triggers": [
+      "Todos nombres siguen raw"
+    ]
+  },
+  {
+    "id": "MF-DROP-EMPTY",
+    "severity": "info",
+    "category": "Manifests (página)",
+    "title": "Drop sin .manifest files",
+    "message": "No soltaste ningún archivo .manifest válido.",
+    "technical": "droppedFiles.filter length === 0",
+    "source": "src/pages/ManifestFiles.tsx",
+    "actions": [],
+    "triggers": [
+      "drop de .exe/.lua/etc"
+    ]
+  },
+  {
+    "id": "MOCK-NOT-INSTALL",
+    "severity": "info",
+    "category": "Mock (dev)",
+    "title": "Mock skipped (no DEV)",
+    "message": "El sistema simulado ya estaba activo. No se instaló de nuevo.",
+    "technical": "guard: import.meta.env.DEV && !window.steamtools",
+    "source": "src/lib/mockSteamtools.ts",
+    "actions": [],
+    "triggers": [
+      "Producción"
+    ]
+  },
+  {
+    "id": "MOCK-OVERRIDE-MISS",
+    "severity": "info",
+    "category": "Mock (dev)",
+    "title": "Window.steamtools.* sin override",
+    "message": "No se encontró el reemplazo. Usamos el comportamiento por defecto.",
+    "technical": "Prop no está en overrides",
+    "source": "src/lib/mockSteamtools.ts (DEV only)",
+    "actions": [],
+    "triggers": [
+      "Nueva API añadida sin mock"
+    ]
+  },
+  {
+    "id": "NET-ONLINE-RECOVERY",
+    "severity": "info",
+    "category": "Network",
+    "title": "Browser online event",
+    "message": "Conexión restablecida. Las funciones vuelven a estar disponibles.",
+    "technical": "window event \"online\"",
+    "source": "src/hooks/useOnlineStatus.ts",
+    "actions": [],
+    "triggers": [
+      "Red recuperada"
+    ]
+  },
+  {
+    "id": "REC-LIBRARY-EMPTY",
+    "severity": "info",
+    "category": "Recommendations",
+    "title": "Library vacía",
+    "message": "Tu biblioteca está vacía. Agrega juegos para recibir recomendaciones.",
+    "technical": "libraryGames.length === 0",
+    "source": "src/lib/recommendations.ts → getRecommendations()",
+    "actions": [],
+    "triggers": [
+      "Sin juegos instalados"
+    ]
+  },
+  {
+    "id": "REC-STORE-EMPTY",
+    "severity": "info",
+    "category": "Recommendations",
+    "title": "Store vacío",
+    "message": "La tienda no devolvió recomendaciones. Intenta de nuevo más tarde.",
+    "technical": "storeGames.length === 0",
+    "source": "src/lib/recommendations.ts",
+    "actions": [],
+    "triggers": [
+      "API sin resultados"
+    ]
+  },
+  {
+    "id": "SET-COLORTHEME-NOOP",
+    "severity": "info",
+    "category": "Settings (página)",
+    "title": "colorTheme no reconocido",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "root.classList.add(themeId) con ID inválido",
+    "source": "src/pages/SettingsPage.tsx → handleColorTheme()",
+    "actions": [],
+    "triggers": [
+      "themeId no está en COLOR_THEMES"
+    ]
+  },
+  {
+    "id": "SET-LOGSELECT-DISABLED",
+    "severity": "info",
+    "category": "Settings (página)",
+    "title": "Log level selector disabled",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "logConfigLoading || !logConfig?.enabled",
+    "source": "src/pages/SettingsPage.tsx",
+    "actions": [],
+    "triggers": [
+      "Logs deshabilitados"
+    ]
+  },
+  {
+    "id": "SET-REPORT-EMPTY",
+    "severity": "info",
+    "category": "Settings (página)",
+    "title": "User canceló el prompt de reporte",
+    "message": "No pudimos guardar este ajuste. Intenta de nuevo.",
+    "technical": "window.prompt returns null || empty.trim",
+    "source": "src/pages/SettingsPage.tsx → community tab report button",
+    "actions": [],
+    "triggers": [
+      "User cancela o submit empty"
+    ]
+  },
+  {
+    "id": "STORE-DETAILS-CACHE",
+    "severity": "info",
+    "category": "Steam Store API",
+    "title": "fetchAppDetails hit cache",
+    "message": "No se pudo comunicar con el catálogo público de Steam.",
+    "technical": "Date.now() - timestamp < 30min",
+    "source": "src/lib/steam-store-api.ts → fetchAppDetails()",
+    "actions": [],
+    "triggers": [
+      "mismo AppID en <30min"
+    ]
+  },
+  {
+    "id": "TEST-LUA-PARSE",
+    "severity": "info",
+    "category": "Tests",
+    "title": "parseLuaScript rejects",
+    "message": "Una prueba interna del parser Lua falló. Te avisamos por transparencia.",
+    "technical": "expect().rejects en tests/lua-parser.test.ts",
+    "source": "tests/lua-parser.test.ts",
+    "actions": [],
+    "triggers": [
+      "Lua inválida en fixtures"
+    ]
+  },
+  {
+    "id": "TAIL-ES-RETRY",
+    "severity": "warning",
+    "category": "Traductor (reintentar)",
+    "title": "Reintentar",
+    "message": "Reintentar",
+    "technical": "Origen: clave errors.retry de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-OFFLINE",
+    "severity": "warning",
+    "category": "Traductor (offline)",
+    "title": "Sin conexión",
+    "message": "Sin conexión a internet — algunas funciones pueden no estar disponibles",
+    "technical": "Origen: clave errors.offline de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-CRASH-TITLE",
+    "severity": "warning",
+    "category": "Traductor (crash)",
+    "title": "crash title",
+    "message": "Algo salió mal",
+    "technical": "Origen: clave errors.crash.title de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-CRASH-DESC",
+    "severity": "warning",
+    "category": "Traductor (crash)",
+    "title": "crash desc",
+    "message": "Y-core encontró un error inesperado. Tus datos están seguros.",
+    "technical": "Origen: clave errors.crash.desc de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-CRASH-RELOAD",
+    "severity": "warning",
+    "category": "Traductor (crash)",
+    "title": "crash reload",
+    "message": "Recargar app",
+    "technical": "Origen: clave errors.crash.reload de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-CRASH-COPY",
+    "severity": "warning",
+    "category": "Traductor (crash)",
+    "title": "crash copy",
+    "message": "Copiar error",
+    "technical": "Origen: clave errors.crash.copy de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-CRASH-REPORT",
+    "severity": "warning",
+    "category": "Traductor (crash)",
+    "title": "crash report",
+    "message": "Reportar en Discord",
+    "technical": "Origen: clave errors.crash.report de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-GENERIC",
+    "severity": "warning",
+    "category": "Traductor (genérico)",
+    "title": "Genérico",
+    "message": "Ocurrió un error inesperado",
+    "technical": "Origen: clave errors.generic de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-SUGGESTIONS-STEAM-NOT-FOUND",
+    "severity": "warning",
+    "category": "Traductor (sugerencias)",
+    "title": "suggestions steam not found",
+    "message": "Ve a Ajustes → Steam y verifica la ruta de instalación.",
+    "technical": "Origen: clave errors.suggestions.steam.not_found de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-SUGGESTIONS-STEAM-NOT-RUNNING",
+    "severity": "warning",
+    "category": "Traductor (sugerencias)",
+    "title": "suggestions steam not running",
+    "message": "Abre Steam desde tu escritorio y vuelve a intentar.",
+    "technical": "Origen: clave errors.suggestions.steam.not_running de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-SUGGESTIONS-GENERIC",
+    "severity": "warning",
+    "category": "Traductor (sugerencias)",
+    "title": "Genérico",
+    "message": "Si el problema persiste, únete a nuestro Discord para obtener ayuda.",
+    "technical": "Origen: clave errors.suggestions.generic de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-REFRESH",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common refresh",
+    "message": "Actualizar",
+    "technical": "Origen: clave common.refresh de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-CLEAR",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common clear",
+    "message": "Limpiar",
+    "technical": "Origen: clave common.clear de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-CLOSE",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common close",
+    "message": "Cerrar",
+    "technical": "Origen: clave common.close de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-BACK",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common back",
+    "message": "Atrás",
+    "technical": "Origen: clave common.back de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-SUCCESS",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common success",
+    "message": "Éxito",
+    "technical": "Origen: clave common.success de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-ERROR",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common error",
+    "message": "Error",
+    "technical": "Origen: clave common.error de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-CANCEL",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common cancel",
+    "message": "Cancelar",
+    "technical": "Origen: clave common.cancel de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-DELETE",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common delete",
+    "message": "Eliminar",
+    "technical": "Origen: clave common.delete de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-EDIT",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common edit",
+    "message": "Editar",
+    "technical": "Origen: clave common.edit de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-CONFIRM",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common confirm",
+    "message": "Confirmar",
+    "technical": "Origen: clave common.confirm de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-ENABLED",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common enabled",
+    "message": "Activado",
+    "technical": "Origen: clave common.enabled de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-DISABLED",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common disabled",
+    "message": "Desactivado",
+    "technical": "Origen: clave common.disabled de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-IMPORTING",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common importing",
+    "message": "Importando...",
+    "technical": "Origen: clave common.importing de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-COPIED",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common copied",
+    "message": "Copiado",
+    "technical": "Origen: clave common.copied de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-FAILED",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "Falló",
+    "message": "Falló",
+    "technical": "Origen: clave common.failed de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-INVALIDFILE",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common invalidFile",
+    "message": "Archivo no válido",
+    "technical": "Origen: clave common.invalidFile de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-DISMISS",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common dismiss",
+    "message": "Descartar",
+    "technical": "Origen: clave common.dismiss de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-IMPORT",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common import",
+    "message": "Importar",
+    "technical": "Origen: clave common.import de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  },
+  {
+    "id": "TAIL-ES-COMMON-PREVIEW",
+    "severity": "warning",
+    "category": "Traductor (common)",
+    "title": "common preview",
+    "message": "Vista previa",
+    "technical": "Origen: clave common.preview de i18n.ts (sin patrón regex en error-translator.ts)",
+    "source": "src/lib/i18n.ts",
+    "actions": [],
+    "triggers": [
+      "Fallback cuando ningún patrón de error-translator.ts matchea el mensaje"
+    ]
+  }
+];
+
+/* ============================================================
+   STATE + DOM REFS
+   ============================================================ */
+const state = { severity: 'all', category: 'all', search: '' };
+
+const grid           = document.getElementById('grid');
+const searchInput    = document.getElementById('search');
+const filters        = document.getElementById('filters');
+const emptyState     = document.getElementById('empty-state');
+const visibleCount   = document.getElementById('visible-count');
+const totalCount     = document.getElementById('total-count');
+const activeFiltersInfo = document.getElementById('active-filters-info');
+const statTotal      = document.getElementById('stat-total');
+const statCritical   = document.getElementById('stat-critical');
+const statError      = document.getElementById('stat-error');
+const statWarning    = document.getElementById('stat-warning');
+const statInfo       = document.getElementById('stat-info');
+const expandAll      = document.getElementById('expandAll');
+const collapseAll    = document.getElementById('collapseAll');
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+function escapeHTML(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* ============================================================
+   STATS
+   ============================================================ */
+function updateStats() {
+  const c = { critical: 0, error: 0, warning: 0, info: 0 };
+  ALL_ERRORS.forEach(e => { c[e.severity] = (c[e.severity] || 0) + 1; });
+  if (statTotal)     statTotal.textContent     = ALL_ERRORS.length;
+  if (statCritical)  statCritical.textContent  = c.critical || 0;
+  if (statError)     statError.textContent     = c.error || 0;
+  if (statWarning)   statWarning.textContent   = c.warning || 0;
+  if (statInfo)      statInfo.textContent      = c.info || 0;
+  if (totalCount)    totalCount.textContent    = ALL_ERRORS.length;
+}
+
+/* ============================================================
+   FILTERS (severity + category pills)
+   ============================================================ */
+function buildFilters() {
+  const categories = [...new Set(ALL_ERRORS.map(e => e.category))].sort();
+  const sevList = ['all', 'critical', 'error', 'warning', 'info'];
+
+  const sevPills = sevList.map(s => {
+    const cnt = s === 'all' ? ALL_ERRORS.length : ALL_ERRORS.filter(e => e.severity === s).length;
+    const cls = 'filter-pill' + (state.severity === s ? ' active' : '');
+    const lbl = s === 'all' ? 'Todas' : s;
+    return `<button class="${cls}" data-type="sev" data-value="${s}"> ${lbl} <span class="pill-count">${cnt}</span></button>`;
+  }).join('');
+
+  const catPills = ['<button class="filter-pill' + (state.category === 'all' ? ' active' : '') + '" data-type="cat" data-value="all"> Todas <span class="pill-count">' + ALL_ERRORS.length + '</span></button>']
+    .concat(categories.map(c => {
+      const cnt = ALL_ERRORS.filter(e => e.category === c).length;
+      const cls = 'filter-pill' + (state.category === c ? ' active' : '');
+      return `<button class="${cls}" data-type="cat" data-value="${escapeHTML(c)}"> ${escapeHTML(c)} <span class="pill-count">${cnt}</span></button>`;
+    }))
+    .join('');
+
+  if (filters) {
+    filters.innerHTML =
+      '<span class="filter-label">Severidad:</span>' + sevPills +
+      '<span class="filter-label" style="margin-left:14px">Categoría:</span>' + catPills;
+
+    filters.querySelectorAll('.filter-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        const t = pill.getAttribute('data-type');
+        const v = pill.getAttribute('data-value');
+        if (t === 'sev') state.severity = v;
+        else if (t === 'cat') state.category = v;
+        buildFilters();
+        render();
+      });
+    });
+  }
+}
+
+/* ============================================================
+   CARD RENDER
+   ============================================================ */
+function matchError(e) {
+  if (state.severity !== 'all' && e.severity !== state.severity) return false;
+  if (state.category !== 'all' && e.category !== state.category) return false;
+  if (state.search) {
+    const q = state.search.toLowerCase();
+    if (!JSON.stringify(e).toLowerCase().includes(q)) return false;
+  }
+  return true;
+}
+
+function errorCardHTML(e) {
+  const sev = e.severity || 'info';
+  const triggers = (e.triggers || [])
+    .map(t => `<div class="trigger-item">${escapeHTML(t)}</div>`)
+    .join('') || '<div class="trigger-item" style="opacity:0.4">— sin triggers documentados</div>';
+  const actions = (e.actions || [])
+    .map(a => `<span class="action-chip">${escapeHTML(a)}</span>`)
+    .join('') || '<span class="action-chip" style="opacity:0.4">— sin acción UI</span>';
+  const sourceShort = (e.source || '').split(/[\\/]/).pop() || '—';
+  const code = e.code != null ? ` · ${e.code}` : '';
+  return `
+    <article class="error-card sev-${sev}" data-id="${escapeHTML(e.id)}" role="button" tabindex="0" aria-expanded="false">
+      <header class="error-head">
+        <span class="error-id">${escapeHTML(e.id)}${escapeHTML(code)}</span>
+        <div class="error-info">
+          <div class="error-title">
+            <span class="badge badge-${sev}">${sev}</span>
+            <span>${escapeHTML(e.title || '—')}</span>
+          </div>
+          <div class="error-message">${escapeHTML(e.message || '')}</div>
+        </div>
+        <div class="error-meta">
+          <span class="badge badge-cat">${escapeHTML(e.category || '—')}</span>
+          <span class="error-id">${escapeHTML(sourceShort)}</span>
+        </div>
+      </header>
+      <div class="error-body">
+        <div class="body-grid">
+          <div class="body-section">
+            <span class="body-label">Mensaje para el usuario</span>
+            <div class="body-value">${escapeHTML(e.message || '—')}</div>
+          </div>
+          <div class="body-section">
+            <span class="body-label">Detalle técnico (log)</span>
+            <div class="body-value mono">${escapeHTML(e.technical || '—')}</div>
+          </div>
+          <div class="body-section full">
+            <span class="body-label">Cuándo se dispara</span>
+            <div class="trigger-list">${triggers}</div>
+          </div>
+          <div class="body-section">
+            <span class="body-label">Acciones UI disponibles</span>
+            <div class="body-actions">${actions}</div>
+          </div>
+          <div class="body-section">
+            <span class="body-label">Origen en el código</span>
+            <div class="body-value mono">${escapeHTML(e.source || '—')}</div>
+          </div>
+          <div class="body-section full">
+            <button class="copy-btn" data-copy="${escapeHTML(e.id)}" type="button">Copiar JSON</button>
+          </div>
+        </div>
+      </div>
+    </article>`;
+}
+
+function render() {
+  if (!grid || !emptyState || !visibleCount || !activeFiltersInfo) return;
+  const filtered = ALL_ERRORS.filter(matchError);
+  visibleCount.textContent = filtered.length;
+
+  const bits = [];
+  if (state.severity !== 'all') bits.push('severidad: ' + state.severity);
+  if (state.category !== 'all') bits.push('categoría: ' + state.category);
+  if (state.search) bits.push('búsqueda: "' + state.search + '"');
+  activeFiltersInfo.textContent = bits.length ? 'Filtros activos · ' + bits.join(' · ') : '';
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '';
+    emptyState.style.display = 'block';
+    return;
+  }
+  emptyState.style.display = 'none';
+  grid.innerHTML = filtered.map(errorCardHTML).join('');
+
+  // attach card handlers
+  grid.querySelectorAll('.error-card').forEach(card => {
+    const toggle = () => {
+      const expanded = card.classList.toggle('expanded');
+      card.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    };
+    card.addEventListener('click', (e) => {
+      if (e.target && typeof e.target.closest === 'function' && e.target.closest('.copy-btn')) return;
+      toggle();
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
+    });
+  });
+
+  // copy buttons
+  grid.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-copy');
+      const err = ALL_ERRORS.find(x => x.id === id);
+      if (!err) return;
+      const blob = JSON.stringify(err, null, 2);
+      try {
+        await navigator.clipboard.writeText(blob);
+        btn.textContent = '✓ Copiado';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copiar JSON'; btn.classList.remove('copied'); }, 1800);
+      } catch {
+        btn.textContent = 'Sin portapapeles';
+        setTimeout(() => { btn.textContent = 'Copiar JSON'; }, 1800);
+      }
+    });
+  });
+}
+
+/* ============================================================
+   LISTENERS + INIT
+   ============================================================ */
+if (searchInput) {
+  searchInput.addEventListener('input', () => {
+    state.search = searchInput.value;
+    render();
+  });
+}
+if (expandAll) {
+  expandAll.addEventListener('click', () => {
+    grid.querySelectorAll('.error-card').forEach(card => {
+      card.classList.add('expanded');
+      card.setAttribute('aria-expanded', 'true');
+    });
+  });
+}
+if (collapseAll) {
+  collapseAll.addEventListener('click', () => {
+    grid.querySelectorAll('.error-card').forEach(card => {
+      card.classList.remove('expanded');
+      card.setAttribute('aria-expanded', 'false');
+    });
+  });
+}
+
+updateStats();
+buildFilters();
+render();
+
+
+
+
+
+
+
+</script>
+</body>
+</html>

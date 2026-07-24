@@ -75,6 +75,16 @@ export default defineConfig({
                 'depot-downloader-js',
                 'lzma',
                 'lzma-native',
+                // 7zip-min: marcar external evita que Vite bundle el módulo
+                // dentro del chunk steamcmd-fetcher. Si se bundlea, la
+                // `require('./index.js')` interna del paquete queda relativa
+                // al chunk file (dist-electron/) en lugar de
+                // node_modules/7zip-min/ → "Cannot find module './index.js'".
+                // Cargando 7zip-min via require('7zip-min') hacemos que Node
+                // CJS haga la resolución contra node_modules/** y funcione
+                // tanto en dev como empaquetado (electron-builder incluye
+                // node_modules/** en el asar).
+                '7zip-min',
               ],
               output: {
                 format: 'cjs',

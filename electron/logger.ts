@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { app, BrowserWindow } from 'electron'
+import { getUserDataDir, safeEmitToRenderers } from './modules/electron-context'
 
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
 
@@ -41,12 +41,11 @@ let inMemoryLogs: LogEntry[] = []
 const MAX_IN_MEMORY = 500
 
 function getLogDir(): string {
-  const userDataPath = app.getPath('userData')
-  const logDir = path.join(userDataPath, 'logs')
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true })
+  const dir = path.join(getUserDataDir(), 'logs')
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
   }
-  return logDir
+  return dir
 }
 
 function loadConfig(): void {
@@ -106,13 +105,9 @@ function notifyRenderers(entry: LogEntry): void {
   if (inMemoryLogs.length > MAX_IN_MEMORY) {
     inMemoryLogs = inMemoryLogs.slice(-MAX_IN_MEMORY)
   }
-
-  for (const win of BrowserWindow.getAllWindows()) {
-    try {
-      win.webContents.send('log:entry', entry)
-    } catch {
-    }
-  }
+  // safeEmitToRenderers es no-op fuera de Electron. La CLI consume
+  // logs por su propio reader (futuro H1.8.b).
+  safeEmitToRenderers('log:entry', entry)
 }
 
 function log(level: LogLevel, message: string, source?: string): void {
