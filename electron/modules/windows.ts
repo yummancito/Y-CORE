@@ -6,8 +6,18 @@ import { logger } from '../logger'
 import { state, setMainWindow, setLoginWindow, setSplashWindow, setIsQuitting, getIsQuitting } from '../state'
 import { getSteamPath } from './steam-helpers'
 
-const appIconPath = path.join(app.getAppPath(), 'public', 'logo.ico')
-const appIcon = fs.existsSync(appIconPath) ? appIconPath : undefined
+// Lazy: NO llamar app.getAppPath a nivel de módulo (crashea si el bundler
+// evalúa el módulo antes de que Electron inicialice `app`). Cache tras primer uso.
+let _appIcon: string | undefined
+let _appIconResolved = false
+function getAppIcon(): string | undefined {
+  if (!_appIconResolved) {
+    const appIconPath = path.join(app.getAppPath(), 'public', 'logo.ico')
+    _appIcon = fs.existsSync(appIconPath) ? appIconPath : undefined
+    _appIconResolved = true
+  }
+  return _appIcon
+}
 
 export function createSplashWindow(): void {
   if (state.splashWindow && !state.splashWindow.isDestroyed()) {
@@ -24,7 +34,7 @@ export function createSplashWindow(): void {
     alwaysOnTop: true,
     center: false,
     show: false,
-    icon: appIcon,
+    icon: getAppIcon(),
     backgroundColor: 'rgba(0, 0, 0, 0)',
     webPreferences: {
       preload: path.join(__dirname, 'splash-preload.js'),
@@ -71,7 +81,7 @@ export function createLoginWindow(): void {
     transparent: true,
     show: false,
     alwaysOnTop: true,
-    icon: appIcon,
+    icon: getAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -175,7 +185,7 @@ export function createWindow(): void {
     titleBarStyle: 'hidden',
     transparent: true,
     title: 'Y-core',
-    icon: appIcon,
+    icon: getAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -260,6 +270,7 @@ export function createWindow(): void {
 export function createTray(): void {
   let trayIcon: Electron.NativeImage
 
+  const appIcon = getAppIcon()
   if (appIcon && fs.existsSync(appIcon)) {
     trayIcon = nativeImage.createFromPath(appIcon)
     if (trayIcon.isEmpty()) {

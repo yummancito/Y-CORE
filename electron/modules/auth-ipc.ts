@@ -4,9 +4,16 @@ import fs from 'fs'
 import { logger } from '../logger'
 import { state } from '../state'
 
-const USERNAME_FILE = path.join(app.getPath('userData'), 'ycore-username.json')
+// Lazy: NO llamar app.getPath a nivel de módulo. Si el bundler evalúa este
+// módulo antes de que Electron inicialice `app`, `app.getPath` crashea con
+// "Cannot read properties of undefined (reading 'getPath')". Resolvemos el
+// path bajo demanda dentro de cada función.
+function getUsernameFile(): string {
+  return path.join(app.getPath('userData'), 'ycore-username.json')
+}
 
 export function loadUsername(): void {
+  const USERNAME_FILE = getUsernameFile()
   try {
     if (fs.existsSync(USERNAME_FILE)) {
       const raw = fs.readFileSync(USERNAME_FILE, 'utf-8')
@@ -22,6 +29,7 @@ export function loadUsername(): void {
 }
 
 export function saveUsername(): void {
+  const USERNAME_FILE = getUsernameFile()
   try {
     if (state.username) {
       fs.writeFileSync(USERNAME_FILE, JSON.stringify({ username: state.username }), { encoding: 'utf-8', mode: 0o600 })

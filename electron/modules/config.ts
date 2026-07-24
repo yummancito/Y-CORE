@@ -3,7 +3,11 @@ import fs from 'fs'
 import path from 'path'
 import { logger } from '../logger'
 
-const CONFIG_PATH = path.join(app.getPath('userData'), 'ycore-config.json')
+// Lazy: NO llamar app.getPath a nivel de módulo (crashea si el bundler evalúa
+// este módulo antes de que Electron inicialice `app`).
+function getConfigPath(): string {
+  return path.join(app.getPath('userData'), 'ycore-config.json')
+}
 
 const ALLOWED_CONFIG_KEYS = new Set([
   'steamGridDbApiKey',
@@ -62,6 +66,7 @@ function validateConfigValue(value: unknown, depth: number): boolean {
 
 export function registerConfigHandlers() {
   ipcMain.handle('config:read', async () => {
+    const CONFIG_PATH = getConfigPath()
     try {
       if (!fs.existsSync(CONFIG_PATH)) return null
       const raw = fs.readFileSync(CONFIG_PATH, 'utf-8')
@@ -76,6 +81,7 @@ export function registerConfigHandlers() {
   })
 
   ipcMain.handle('config:write', async (_event, data: object) => {
+    const CONFIG_PATH = getConfigPath()
     try {
       if (!data || typeof data !== 'object' || Array.isArray(data)) {
         return { success: false, error: 'Config must be a plain object' }

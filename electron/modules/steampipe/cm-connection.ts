@@ -33,6 +33,11 @@ import net from 'net'
 import type { CmServer } from './types'
 import { decryptPacket, encryptPacket } from './aes-session'
 
+function preLog(msg: string): void {
+  // eslint-disable-next-line no-console
+  console.log(msg)
+}
+
 /**
  * Pre-handshake server→client packets we know how to read.
  * Used by the connection to slice received raw bytes into a per-EMsg
@@ -172,8 +177,13 @@ function makeConnection(sock: net.Socket): CmConnection {
       if (state.preBuf.length < totalFrameLen) return // wait for more bytes
       const payload = state.preBuf.subarray(8, totalFrameLen)
       state.preBuf = state.preBuf.subarray(totalFrameLen)
-      // The real EMsg is the first u32le of the payload struct.
-      const emsg = payload.length >= 4 ? payload.readUInt32LE(0) : -1
+      // The real EMsg is the first u32le of the payload struct. Steam sets the
+      // high bit (0x80000000) as a "protobuf" flag on the EMsg; mask it off to
+      // get the actual message id (e.g. got 0x517=1303 → &0x7fffffff still 1303,
+      // but for protobuf-flagged it strips the flag). ChannelEncryptRequest=109.
+      const rawEmsg = payload.length >= 4 ? payload.readUInt32LE(0) : -1
+      const emsg = rawEmsg === -1 ? -1 : (rawEmsg & 0x7fffffff)
+      preLog(`[steampipe] preFrame: payloadLen=${payloadLen} rawEmsg=${rawEmsg} (0x${(rawEmsg>>>0).toString(16)}) emsg=${emsg} payloadHead=${payload.subarray(0, 16).toString('hex')}`)
       const pre: PreHandshakePacket = { emsg, payload }
       if (state.preWaiters.length > 0) {
         state.preWaiters.shift()!(pre)
