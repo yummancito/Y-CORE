@@ -320,14 +320,46 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
           lastUpdatedAt: Date.now(),
         })
 
-        // H1.4 — dispatch entre SteamCMD y cliente Lua.
+        // H1.4 — dispatch entre SteamCMD, steampipe y cliente Lua.
         const { installMethod } = useSettingsStore.getState()
         const wantsSteamCmd = installMethod === 'steamcmd' || installMethod === 'auto'
+        const wantsSteampipe = installMethod === 'steampipe'
         let usedSteamCmd = false
+        let usedSteampipe = false
         let aborted = false
         let fallbackReason: InstallFallbackReason | null = null
 
-        if (wantsSteamCmd) {
+        // Try steampipe first if user explicitly chose it
+        if (wantsSteampipe && resp.game.depot_keys.length > 0) {
+          safeAddLog('INFO', `[Install] Using steampipe (direct CDN download) for ${item.name}`)
+          showToast('info', 'Descargando con steampipe (sin Steam)...')
+          try {
+            const steampipeResult = await downloadGameWithoutSteam(
+              String(resp.game.app_id),
+              resp.game.name,
+              resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
+              resp.game.manifest_files
+            )
+            if (steampipeResult.success) {
+              usedSteampipe = true
+              try { await reportDownloaded(item.appId) } catch {}
+              consumeGame(item.appId)
+              safeAddLog('INFO', `[Install] ${item.name} downloaded via steampipe (appId=${resp.game.app_id})`)
+            } else {
+              fallbackReason = 'spawn-failed'
+              await useSettingsStore.getState().setInstallFallbackReason(fallbackReason)
+              showToast('error', steampipeResult.error || 'Steampipe download failed')
+              safeAddLog('WARN', `[Install] Steampipe failed: ${steampipeResult.error}`)
+            }
+          } catch (err: any) {
+            fallbackReason = 'spawn-failed'
+            await useSettingsStore.getState().setInstallFallbackReason(fallbackReason)
+            showToast('error', err.message || 'Steampipe error')
+            safeAddLog('WARN', `[Install] Steampipe error: ${err.message}`)
+          }
+        }
+
+        if (!usedSteampipe && wantsSteamCmd) {
           let available = await window.steamtools?.isSteamCmdAvailable?.()
           // H1.7.3 — SteamCMD no está descargado pero el usuario quiere
           // SteamCMD (o auto). Descargamos en background con toast visible
@@ -415,7 +447,7 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
           }
         }
 
-        if (!usedSteamCmd && !aborted) {
+        if (!usedSteamCmd && !usedSteampipe && !aborted) {
           let result = await window.steamtools.storeInstallGame({
             app_id: resp.game.app_id,
             name: resp.game.name,
