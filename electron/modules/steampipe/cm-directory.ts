@@ -40,11 +40,11 @@ import {
 import type { CmListResponse, CmServer } from './types'
 
 const SERVICE_DIRECTORY_HOST = 'api.steampowered.com'
-// El endpoint IServiceDirectory/v1 devuelve 404. El endpoint correcto y
-// estable de Valve para obtener CM servers es ISteamDirectory/GetCMListForConnect,
-// que devuelve JSON (no protobuf) con la lista de servers para conectar.
-// Ref: SteamKit2 SteamDirectory.LoadAsync usa este mismo endpoint.
-const SERVICE_DIRECTORY_PATH = '/ISteamDirectory/GetCMListForConnect/v1/'
+// GetCMList (sin "ForConnect") devuelve serverlist con endpoints TCP puros
+// (host:port en 27017/27018) que hablan el protocolo ChannelEncrypt de Steam
+// sobre TCP crudo. GetCMListForConnect en cambio devuelve endpoints WebSocket
+// (443, TLS) que nuestro handshake TCP no entiende. Usamos GetCMList.
+const SERVICE_DIRECTORY_PATH = '/ISteamDirectory/GetCMList/v1/'
 // Matches SteamKit2 + Valve's published convention. Rejecting other content
 // types (e.g. text/plain) drops your request silently server-side.
 const CONTENT_TYPE_PROTOBUF = 'application/x-protobuf'
@@ -287,54 +287,47 @@ export async function getCmServerList(opts: {
 }
 
 /**
- * Parsea la respuesta JSON de ISteamDirectory/GetCMListForConnect.
+ * Parsea la respuesta JSON de ISteamDirectory/GetCMList.
  * Formato Valve:
  *   {
  *     "response": {
- *       "serverlist": [
- *         { "endpoint": "162.254.196.67:27017", "legacy_endpoint": "...",
- *           "type": "netfilter", "dc": "iad", "realm": "steamglobal",
- *           "load": 117, "wtd_load": 5.53 },
- *         ...
- *       ],
- *       "success": true
+ *       "serverlist": [ "155.133.248.36:27017", "155.133.248.37:27018", ... ],
+ *       "serverlist_websockets": [ "cm1.steampowered.com:443", ... ],
+ *       "result": 1,
+ *       "message": "..."
  *     }
  *   }
- * Cada endpoint es "host:port". Filtramos los tipo "netfilter" (TCP CM) y
- * también aceptamos "websockets" convirtiéndolos con isWebSocket=true.
+ * `serverlist` son endpoints TCP puros (27017/27018) — los que queremos.
+ * `serverlist_websockets` son TLS/WSS (443) — los ignoramos (nuestro handshake
+ * es TCP crudo). Cada entrada es un string "host:port".
  */
 export function parseJsonCmList(json: string, requestedCellId: number): CmListResponse {
   const data = JSON.parse(json) as {
     response?: {
-      serverlist?: Array<{
-        endpoint?: string
-        legacy_endpoint?: string
-        type?: string
-        load?: number
-        wtd_load?: number
-      }>
-      success?: boolean
+      serverlist?: string[]
+      serverlist_websockets?: string[]
+      result?: number
+      message?: string
     }
   }
   const serverlist = data.response?.serverlist ?? []
   const servers: CmServer[] = []
-  for (const entry of serverlist) {
-    // Preferimos legacy_endpoint (host:port TCP puro) si existe, sino endpoint.
-    const ep = entry.legacy_endpoint || entry.endpoint
-    if (!ep) continue
+  for (const ep of serverlist) {
+    if (typeof ep !== 'string') continue
     const lastColon = ep.lastIndexOf(':')
     if (lastColon < 0) continue
     const host = ep.slice(0, lastColon)
     const port = parseInt(ep.slice(lastColon + 1), 10)
     if (!host || Number.isNaN(port)) continue
-    const isWs = (entry.type || '').toLowerCase().includes('websocket')
+    // Solo TCP puro (27017/27018). Descartamos cualquier 443 que se cuele.
+    if (port === 443) continue
     servers.push({
       host,
       port,
       type: 2, // Blue/CM
       sourceId: 0,
-      isWebSocket: isWs,
+      isWebSocket: false,
     })
   }
-  return { cellId: requestedCellId, loadSummaryCode: 1, servers }
+  return { cellId: requestedCellId, loadSummaryCode: data.response?.result ?? 1, servers }
 }
