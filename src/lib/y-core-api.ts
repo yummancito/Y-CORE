@@ -61,11 +61,12 @@ async function apiFetch<T>(
       // Envelope JSON: parseError del renderer desempaqueta y sustituye {status}
       const env = JSON.stringify({
         k: errorBody.error && /^[a-z]+\.[a-z]+/.test(errorBody.error) ? errorBody.error : 'errors.api.httpRequest',
-        p: { status: resp.status },
-        t: errorBody.error || `HTTP ${resp.status}`,
+        p: { status: resp.status, details: errorBody.details || errorBody.message || '' },
+        t: errorBody.error || errorBody.message || `HTTP ${resp.status}`,
       })
       const err = new Error(env)
       ;(err as any).status = resp.status
+      ;(err as any).fullResponse = errorBody
       throw err
     }
 

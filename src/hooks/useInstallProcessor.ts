@@ -380,18 +380,23 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
       }
     } catch (err: any) {
       const errorMsg = err.message || 'Unknown error'
-      window.steamtools.addLog({ level: 'ERROR', message: `[Install] Install failed: ${errorMsg}` }).catch((e) => console.warn('[Install] addLog failed:', e))
+      const fullDetails = err.fullResponse ? JSON.stringify(err.fullResponse) : ''
+      window.steamtools.addLog({
+        level: 'ERROR',
+        message: `[Install] Install failed for appId=${item.appId}: ${errorMsg}${fullDetails ? ' | Details: ' + fullDetails : ''}`
+      }).catch((e) => console.warn('[Install] addLog failed:', e))
+
       let displayMsg = errorMsg
       if (displayMsg.includes('429') || displayMsg.includes('rate limit')) {
-        displayMsg = t('errors.api.rateLimited', { default: 'Too many requests, try again in a moment' })
+        displayMsg = t('errors.api.rateLimited')
       } else if (displayMsg.includes('403') || displayMsg.includes('Forbidden')) {
-        displayMsg = t('errors.api.forbidden', { default: 'You don\'t have permission to download this game' })
+        displayMsg = t('errors.api.forbidden')
       } else if (displayMsg.includes('404') || displayMsg.includes('Not Found')) {
-        displayMsg = t('errors.api.notFound', { default: 'Game not found or no longer available' })
-      } else if (displayMsg.includes('subscription') || displayMsg.includes('suscripción')) {
-        displayMsg = t('errors.api.needsSubscription', { default: 'This game requires an active subscription' })
+        displayMsg = t('errors.api.notFound')
+      } else if (displayMsg.includes('subscription') || displayMsg.includes('suscripción') || displayMsg.includes('Subscription')) {
+        displayMsg = 'Este juego requiere autenticación real de Steam (no es F2P). El servidor no pudo obtenerlo anónimamente.'
       } else if (displayMsg.includes('timeout')) {
-        displayMsg = t('errors.api.timeout', { default: 'Request timed out, please try again' })
+        displayMsg = t('errors.api.timeout')
       }
       showToast('error', displayMsg)
     } finally {
