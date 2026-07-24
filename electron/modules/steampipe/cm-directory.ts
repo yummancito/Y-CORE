@@ -40,7 +40,11 @@ import {
 import type { CmListResponse, CmServer } from './types'
 
 const SERVICE_DIRECTORY_HOST = 'api.steampowered.com'
-const SERVICE_DIRECTORY_PATH = '/IServiceDirectory/v1/'
+// El endpoint IServiceDirectory/v1 devuelve 404. El endpoint correcto y
+// estable de Valve para obtener CM servers es ISteamDirectory/GetCMListForConnect,
+// que devuelve JSON (no protobuf) con la lista de servers para conectar.
+// Ref: SteamKit2 SteamDirectory.LoadAsync usa este mismo endpoint.
+const SERVICE_DIRECTORY_PATH = '/ISteamDirectory/GetCMListForConnect/v1/'
 // Matches SteamKit2 + Valve's published convention. Rejecting other content
 // types (e.g. text/plain) drops your request silently server-side.
 const CONTENT_TYPE_PROTOBUF = 'application/x-protobuf'
@@ -215,9 +219,12 @@ export async function getCmServerList(opts: {
   // worst-case server selection. Throw early to surface caller mistakes.
   const timeoutMs = opts.timeoutMs ?? 15000
 
-  const body = buildGetSdrConfig(cellId, maxServers)
+  // GET con query params — Valve's ISteamDirectory devuelve JSON.
+  // maxcount limita cuántos servers devuelve; pedimos maxServers.
+  const query = `?cellid=${cellId}&maxcount=${maxServers}&format=json`
+  const fullPath = SERVICE_DIRECTORY_PATH + query
   logger.info(
-    `[steampipe] ServiceDirectory request body=${body.length}B cellId=${cellId} maxServers=${maxServers}`,
+    `[steampipe] ServiceDirectory GET ${fullPath} cellId=${cellId} maxServers=${maxServers}`,
     'steampipe',
   )
 
@@ -226,11 +233,10 @@ export async function getCmServerList(opts: {
       {
         host: SERVICE_DIRECTORY_HOST,
         port: 443,
-        path: SERVICE_DIRECTORY_PATH,
-        method: 'POST',
+        path: fullPath,
+        method: 'GET',
         headers: {
-          'Content-Type': CONTENT_TYPE_PROTOBUF,
-          'Content-Length': body.length,
+          'Accept': 'application/json',
           'User-Agent': 'Y-core/0.4 steampipe',
         },
         timeout: timeoutMs,
@@ -249,12 +255,12 @@ export async function getCmServerList(opts: {
             return
           }
           try {
-            const parsed = parseSdrConfigResponse(raw)
+            const parsed = parseJsonCmList(raw.toString('utf-8'), cellId)
             if (parsed.servers.length === 0) {
               logger.warn('[steampipe] ServiceDirectory returned 0 servers', 'steampipe')
             } else {
               logger.info(
-                `[steampipe] ServiceDirectory OK: ${parsed.servers.length} servers (cellId=${parsed.cellId}, loadSummaryCode=${parsed.loadSummaryCode})`,
+                `[steampipe] ServiceDirectory OK: ${parsed.servers.length} servers (cellId=${parsed.cellId})`,
                 'steampipe',
               )
             }
@@ -276,7 +282,59 @@ export async function getCmServerList(opts: {
       logger.warn(`[steampipe] ServiceDirectory request error: ${err.message}`, 'steampipe')
       reject(err)
     })
-    req.write(body)
     req.end()
   })
+}
+
+/**
+ * Parsea la respuesta JSON de ISteamDirectory/GetCMListForConnect.
+ * Formato Valve:
+ *   {
+ *     "response": {
+ *       "serverlist": [
+ *         { "endpoint": "162.254.196.67:27017", "legacy_endpoint": "...",
+ *           "type": "netfilter", "dc": "iad", "realm": "steamglobal",
+ *           "load": 117, "wtd_load": 5.53 },
+ *         ...
+ *       ],
+ *       "success": true
+ *     }
+ *   }
+ * Cada endpoint es "host:port". Filtramos los tipo "netfilter" (TCP CM) y
+ * también aceptamos "websockets" convirtiéndolos con isWebSocket=true.
+ */
+export function parseJsonCmList(json: string, requestedCellId: number): CmListResponse {
+  const data = JSON.parse(json) as {
+    response?: {
+      serverlist?: Array<{
+        endpoint?: string
+        legacy_endpoint?: string
+        type?: string
+        load?: number
+        wtd_load?: number
+      }>
+      success?: boolean
+    }
+  }
+  const serverlist = data.response?.serverlist ?? []
+  const servers: CmServer[] = []
+  for (const entry of serverlist) {
+    // Preferimos legacy_endpoint (host:port TCP puro) si existe, sino endpoint.
+    const ep = entry.legacy_endpoint || entry.endpoint
+    if (!ep) continue
+    const lastColon = ep.lastIndexOf(':')
+    if (lastColon < 0) continue
+    const host = ep.slice(0, lastColon)
+    const port = parseInt(ep.slice(lastColon + 1), 10)
+    if (!host || Number.isNaN(port)) continue
+    const isWs = (entry.type || '').toLowerCase().includes('websocket')
+    servers.push({
+      host,
+      port,
+      type: 2, // Blue/CM
+      sourceId: 0,
+      isWebSocket: isWs,
+    })
+  }
+  return { cellId: requestedCellId, loadSummaryCode: 1, servers }
 }
