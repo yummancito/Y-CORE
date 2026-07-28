@@ -100,6 +100,32 @@ export function injectYCoreTool(): { success: boolean; injected: number; error?:
       }
     }
 
+    // Copiar recursivamente directorio ipc/ (IPC specs para diferentes versiones de steamclient)
+    const srcIpcDir = path.join(dllDir, 'ipc')
+    const dstIpcDir = path.join(steamPath, 'ycoretool', 'ipc')
+    if (fs.existsSync(srcIpcDir)) {
+      try {
+        const copyDirRecursive = (src: string, dst: string) => {
+          if (!fs.existsSync(dst)) fs.mkdirSync(dst, { recursive: true })
+          const files = fs.readdirSync(src)
+          for (const file of files) {
+            const srcFile = path.join(src, file)
+            const dstFile = path.join(dst, file)
+            if (fs.statSync(srcFile).isDirectory()) {
+              copyDirRecursive(srcFile, dstFile)
+            } else {
+              fs.copyFileSync(srcFile, dstFile)
+            }
+          }
+        }
+        copyDirRecursive(srcIpcDir, dstIpcDir)
+        logger.info(`[ycore-tool-injector] Injected ycoretool/ipc/ directory`, 'injector')
+        injected++
+      } catch (err: any) {
+        logger.warn(`[ycore-tool-injector] Failed to copy ipc/ directory: ${err.message}`, 'injector')
+      }
+    }
+
     // Remover DLLs viejos/incompatibles
     const oldDlls = ['OpenSteamTool.dll', 'steamtools_hook.dll', 'ycore_hook.dll']
     for (const oldDll of oldDlls) {
