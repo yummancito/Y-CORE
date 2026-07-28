@@ -203,7 +203,7 @@ export function stripDepotsWithoutKeys(
   lua: string,
   mainAppId: string,
   depotKeys: { depot_id: string; key: string }[]
-): { strippedDepots: string[]; cleanedLua: string } {
+): { strippedDepots: string[]; luaContent: string } {
   const keyedDepotIds = new Set(depotKeys.map((d) => d.depot_id))
   keyedDepotIds.add(mainAppId)
   const strippedDepots: string[] = []
@@ -231,16 +231,17 @@ export function stripDepotsWithoutKeys(
     keepLines.push(line)
   }
 
-  const cleanedLua = keepLines.join('\n').replace(/\n\s*\n/g, '\n').trim()
-  return { strippedDepots, cleanedLua }
+  const luaContent = keepLines.join('\n').replace(/\n\s*\n/g, '\n').trim()
+  return { strippedDepots, luaContent }
 }
 
 export async function installGameCore(
   appId: string,
   gameName: string,
-  luaContent: string,
+  luaSource: string,
   depotKeys: { depot_id: string; key: string }[],
-  steamPath: string
+  steamPath: string,
+  language?: string
 ): Promise<{ actions: string[]; errors: string[]; warnings: string[] }> {
   const actions: string[] = []
   const errors: string[] = []
@@ -260,11 +261,12 @@ export async function installGameCore(
   // tengamos el 90%+ de las claves. El catalog API devuelve 7/10 keys porque
   // Steam nos prohíbe scrapear DLC/OST/regional. Lo correcto: instalar SOLO
   // el subset que sí podemos descifrar.
-  const { cleanedLua, strippedDepots } = stripDepotsWithoutKeys(
-    luaContent,
+  const strippingResult = stripDepotsWithoutKeys(
+    luaSource,
     appId,
     depotKeys,
   )
+  const { luaContent, strippedDepots } = strippingResult
   if (strippedDepots.length > 0) {
     actions.push(
       `Depots sin clave omitidos (${strippedDepots.length}): ${strippedDepots.join(', ')} \u2014 consegilos en depotbox.org si los necesit\u00e1s`,
@@ -278,7 +280,7 @@ export async function installGameCore(
     }
     const luaFileName = `${appId}.lua`
     const luaDest = path.join(scriptsDir, luaFileName)
-    await fs.promises.writeFile(luaDest, cleanedLua, 'utf-8')
+    await fs.promises.writeFile(luaDest, luaContent, 'utf-8')
     actions.push(`Lua: ${luaFileName} \u2192 config\\\\stplug-in`)
   }
 
@@ -294,10 +296,10 @@ export async function installGameCore(
   const steamAppsPath = getSteamAppsPath()
   if (steamAppsPath) {
     const depotIdsWithKeys = new Set(depotKeys.map((k) => k.depot_id))
-    const acfResult = await createAppManifestFromLua(appId, cleanedLua, gameName, depotIdsWithKeys)
+    const acfResult = await createAppManifestFromLua(appId, luaContent, gameName, depotIdsWithKeys)
     if (acfResult.success) {
       actions.push(`appmanifest_${appId}.acf created`)
-      if (GOLDSRC_MOD_APP_IDS.has(appId)) {          const baseAcfResult = await createGoldSrcBaseAppManifest(cleanedLua, depotIdsWithKeys)
+      if (GOLDSRC_MOD_APP_IDS.has(appId)) {          const baseAcfResult = await createGoldSrcBaseAppManifest(luaContent, depotIdsWithKeys)
         if (baseAcfResult.success) {
           actions.push('appmanifest_70.acf created for Half-Life base depots')
         } else {

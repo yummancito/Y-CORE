@@ -132,7 +132,14 @@ const fakeAppDetails: Record<string, any> = {
   },
 }
 
-const overrides: Record<string, (...args: any[]) => any> = {
+const overrides: Record<string, unknown> = {
+  // Gateway — needed by BaseService.on() / subscribeToEvent for IPC events.
+  // Without it, the Proxy's fallback returns `async () => ({ success: true })`
+  // (a function), which masquerades as truthy but lacks `.on` → TypeError.
+  gateway: {
+    call: async () => {},
+    on: () => () => {},
+  },
   appReady: async () => {},
   getLocale: async () => 'es',
   getVersion: async () => '3.0.1-dev',
@@ -166,6 +173,11 @@ const overrides: Record<string, (...args: any[]) => any> = {
 export function installMockSteamtools() {
   if (!import.meta.env.DEV) return
   if (typeof window === 'undefined' || window.steamtools) return
+  // Skip mock when the renderer is on the dedicated mobile route — the
+  // real WebSocket-backed bridge (browser-bridge.ts) takes over so iPhone
+  // devs in `npm run electron:dev` get the actual signaling pipeline, not
+  // a Proxy that swallows gateway.call() into a no-op.
+  if (typeof window !== 'undefined' && window.location?.hash?.startsWith?.('#/remote-mobile')) return
 
   window.steamtools = new Proxy({} as Window['steamtools'], {
     get(_target, prop: string) {

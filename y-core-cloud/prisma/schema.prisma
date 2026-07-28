@@ -1,0 +1,184 @@
+// ============================================================================
+// y-core-cloud/prisma/schema.prisma
+// ----------------------------------------------------------------------------
+// Schema completo para Y-Core Cloud — Remote Play Anywhere.
+//
+// Gestiona:
+//   - Usuarios y autenticación (JWT con refresh token)
+//   - Hosts (PCs registrados para Remote Play)
+//   - Dispositivos autorizados (móviles, tablets)
+//   - Solicitudes de conexión (pairing entre dispositivos)
+//   - Sesiones de juego activas
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// USUARIOS Y AUTENTICACIÓN
+// ═══════════════════════════════════════════════════════════════
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(USER)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  hosts           Host[]
+  devices         Device[]
+  refreshTokens   RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HOSTS (PCs registrados para Remote Play)
+// ═══════════════════════════════════════════════════════════════
+
+enum HostStatus {
+  ONLINE
+  OFFLINE
+  AWAY
+}
+
+model Host {
+  id              String     @id @default(uuid())
+  userId          String     @map("user_id")
+  name            String
+  os              String     @default("")
+  version         String     @default("")
+  publicIp        String     @default("")
+  status          HostStatus @default(OFFLINE)
+  capabilities    String[]   @default([])
+  gameCount       Int        @default(0) @map("game_count")
+  lastHeartbeatAt DateTime?  @map("last_heartbeat_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionRequests ConnectionRequest[]
+  activeSessions    ActiveSession[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("hosts")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DISPOSITIVOS AUTORIZADOS (móviles, tablets, otros PCs)
+// ═══════════════════════════════════════════════════════════════
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+  WINDOWS
+  MAC
+  LINUX
+  WEB
+}
+
+model Device {
+  id              String         @id @default(uuid())
+  userId          String         @map("user_id")
+  name            String
+  platform        DevicePlatform @default(ANDROID)
+  pushToken       String?        @map("push_token")
+  trusted         Boolean        @default(false)
+  trustedAt       DateTime?      @map("trusted_at")
+  lastConnectedAt DateTime?      @map("last_connected_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionRequests ConnectionRequest[]
+
+  @@index([userId])
+  @@index([userId, trusted])
+  @@map("devices")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SOLICITUDES DE CONEXIÓN (Pairing)
+// ═══════════════════════════════════════════════════════════════
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELED
+}
+
+model ConnectionRequest {
+  id         String        @id @default(uuid())
+  hostId     String        @map("host_id")
+  deviceId   String        @map("device_id")
+  status     RequestStatus @default(PENDING)
+  expiresAt  DateTime      @map("expires_at")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  respondedAt DateTime?    @map("responded_at")
+
+  host   Host   @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  device Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([hostId, status])
+  @@index([deviceId, status])
+  @@index([expiresAt])
+  @@map("connection_requests")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SESIONES DE JUEGO ACTIVAS
+// ═══════════════════════════════════════════════════════════════
+
+enum SessionStatus {
+  LAUNCHING
+  STREAMING
+  ENDED
+  FAILED
+}
+
+model ActiveSession {
+  id              String        @id @default(uuid())
+  hostId          String        @map("host_id")
+  deviceId        String?       @map("device_id")
+  gameId          String        @map("game_id")
+  gameName        String        @map("game_name")
+  status          SessionStatus
+  startedAt       DateTime      @default(now()) @map("started_at")
+  endedAt         DateTime?     @map("ended_at")
+
+  host Host @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([hostId, status])
+  @@index([deviceId, status])
+  @@map("active_sessions")
+}

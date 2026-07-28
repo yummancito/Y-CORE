@@ -10,6 +10,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.ts', 'src/services/__tests__/*.test.ts'],
   },
 })

@@ -1,0 +1,29 @@
+node_modules/
+dist/
+dist-electron/
+build/
+.next/
+coverage/
+release/
+release2/
+installer/
+installers/
+tmp/
+logs/
+
+# Extracted asar copy - build artifact, not source
+asar-extract/
+
+# Cloned external repos kept only for reference (not our code)
+reference/research/
+reference/service-layer/research/
+
+# Downloaded Android SDK/toolchain, not source
+y-core-android/android-sdk/
+y-core-android/android-sdk-temp/
+y-core-android/cmdline-tools/
+y-core-android/cmdline-tools-temp/
+y-core-android/gradle-extract/
+y-core-android/jdk17-install/
+y-core-android/.gradle/
+*.zip

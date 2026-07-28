@@ -14,13 +14,20 @@ import { getLauncherInfo } from '../lib/onlinefix-compatibility'
 import { type MergedGame } from '../components/store/GameCard'
 import { ConfirmModal } from '../components/ui/ConfirmModal'
 import { usePageHeader } from '../components/layout/AppShell'
-import { MethodBadge } from '../components/method-badge'
-import { useSettingsStore } from '../stores/useSettingsStore'
-import { useSteamCmdJobsStore } from '../stores/useSteamCmdJobsStore'
+import { RuntimeCenter } from '../components/gre/RuntimeCenter'
+import { LaunchProfileEditor } from '../components/gre/LaunchProfileEditor'
+import { launchDedup } from '../lib/launch-deduper'
+import { SaveManagerUI } from '../components/gre/SaveManagerUI'
+import { GameStatistics } from '../components/gre/GameStatistics'
+import { GameNotesPanel } from '../components/library/GameNotesPanel'
 
 export default function GameDetailPage() {
   const { appId } = useParams<{ appId: string }>()
   const navigate = useNavigate()
+  // Round-10: showToast via the existing destructure is sufficient — no
+  // need to re-wire with a separate selector. Both `const { showToast }`
+  // and `` would clash
+  // (TS2451 redeclaration); we already have the destructure.
   const { showToast } = useToastStore()
   const enqueueGame = useDownloadQueueStore((s) => s.enqueue)
   const queuedAppIds = useDownloadQueueStore((s) => s.queue)
@@ -65,8 +72,9 @@ export default function GameDetailPage() {
   const isInstalled = appId ? installedGames.some((g) => g.appId === appId) : false
   const isInstalling = appId ? currentInstall?.appId === appId : false
   const isQueued = appId ? queuedAppIds.some((q) => q.appId === appId) : false
-  const installMethod = useSettingsStore((s) => s.installMethod)
-  const activeSteamJob = useSteamCmdJobsStore((s) => s.active)
+  // V2-only: install method is implicit (V2 engine). Active download state
+  // is owned by useDownloadEngineV3Store (selected live by GameDetailPanel
+  // in LibraryPage). The legacy SteamCMD jobs store was deleted.
   const heroUrl = appId ? getSteamCdnUrl(appId, 'hero') : ''
   const portraitUrl = appId ? getSteamCdnUrl(appId, 'portrait') : ''
   const headerUrl = appId ? getSteamCdnUrl(appId, 'header') : ''
@@ -74,21 +82,24 @@ export default function GameDetailPage() {
 
   const fetchDetails = useCallback(async () => {
     if (!appId) return
+    const requestedAppId = appId
     setLoading(true)
     setError(false)
     setHeroLoaded(false)
     setPortraitLoaded(false)
     try {
-      const data = await fetchAppDetails(appId)
+      const data = await fetchAppDetails(requestedAppId)
+      if (requestedAppId !== appId) return // navigated to another game meanwhile
       if (data) {
         setDetails(data)
       } else {
         setError(true)
       }
     } catch {
+      if (requestedAppId !== appId) return
       setError(true)
     } finally {
-      setLoading(false)
+      if (requestedAppId === appId) setLoading(false)
     }
   }, [appId])
 
@@ -142,10 +153,48 @@ export default function GameDetailPage() {
     enqueueGame({ appId, name: details.name })
   }, [appId, details, enqueueGame])
 
-  const handlePlay = useCallback(() => {
+  // Round-10 (debouncer): launchDedup (src/lib/launch-deduper.ts) is a
+  // module-scoped Promise<unknown> tracker shared across LibraryPage and
+  // DetailPage. The deduper promise lifecycle gates each appId cleanly:
+  //   first click  → IPC + restore + spawn, promise stays inflight;
+  //   second click → returns null immediately (no thrash);
+  //   route change → reloads component, deduper STILL inflight, click blocked;
+  //   settle       (success OR error) → entry deleted, retry allowed.
+  // No fixed 1500ms timeout — slow Steamless scans no longer produce thrash.
+  const handlePlay = useCallback(async () => {
     if (!appId) return
-    window.steamtools.launchGame(appId)
-  }, [appId])
+    const result = await launchDedup(appId, () => window.steamtools.launchGame(appId))
+    if (result === null) return // already in-flight from another click
+
+    if (!result?.success) {
+      // Failure path: now mirrors LibraryPage. Detail page used to be silent —
+      // that confused users whose Jugar click "did nothing".
+      showToast(
+        'error',
+        'No se pudo iniciar el juego: ' + (result?.error ?? 'error desconocido'),
+      )
+      return
+    }
+
+    const wasAlive = result.wasSteamAliveAtLaunch === true
+    const wasKilled = result.killedSteamBeforeLaunch === true
+    if (wasKilled) {
+      showToast(
+        'info',
+        'Steam estaba activo y fue terminado antes del launch. Y-core corre 100% independiente.',
+      )
+    } else if (wasAlive) {
+      showToast(
+        'info',
+        'Steam estaba activo pero Y-core lanzó el juego nativamente. Steam NO es el launcher.',
+      )
+    } else {
+      showToast(
+        'info',
+        'Steam NO estaba corriendo. El juego se lanzó independientemente desde Y-core.',
+      )
+    }
+  }, [appId, showToast])
 
   if (loading) {
     return (
@@ -298,13 +347,6 @@ export default function GameDetailPage() {
               </span>
             </div>
             <div className="flex gap-3.5 flex-wrap items-center">
-              {/* Method badge near the Install button */}
-              <MethodBadge
-                method={installMethod}
-                liveState={activeSteamJob && activeSteamJob.appId === appId ? activeSteamJob.state : undefined}
-                onClick={() => navigate('/downloads')}
-                size="md"
-              />
               {isInstalled ? (
                 <button
                   onClick={handlePlay}
@@ -583,6 +625,19 @@ export default function GameDetailPage() {
           <span className="absolute bottom-6 left-1/2 -translate-x-1/2 text-sm font-mono" style={{ color: '#a1a1aa' }}>
             {selectedMedia + 1} / {mediaItems.length}
           </span>
+        </div>
+      )}
+
+      {/* Game Runtime Environment Section */}
+      {isInstalled && appId && (
+        <div className="px-10 pb-10 space-y-6">
+          <div className="border-t border-white/[0.06] pt-8 mb-2">
+            <GameStatistics appId={appId} />
+          </div>
+          <RuntimeCenter />
+          <LaunchProfileEditor gameId={appId} />
+          <SaveManagerUI appId={appId} gameName={details.name} />
+          {appId && <GameNotesPanel appId={appId} />}
         </div>
       )}
 

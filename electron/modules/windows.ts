@@ -19,6 +19,27 @@ function getAppIcon(): string | undefined {
   return _appIcon
 }
 
+let _windowControlHandlersRegistered = false
+function registerWindowControlHandlers(): void {
+  if (_windowControlHandlersRegistered) return
+  _windowControlHandlersRegistered = true
+
+  ipcMain.handle('window-minimize', () => {
+    state.mainWindow?.minimize()
+  })
+  ipcMain.handle('window-maximize', () => {
+    if (state.mainWindow?.isMaximized()) {
+      state.mainWindow?.unmaximize()
+    } else {
+      state.mainWindow?.maximize()
+    }
+  })
+  ipcMain.handle('window-close', () => {
+    setIsQuitting(true)
+    state.mainWindow?.close()
+  })
+}
+
 export function createSplashWindow(): void {
   if (state.splashWindow && !state.splashWindow.isDestroyed()) {
     state.splashWindow.show()
@@ -53,12 +74,17 @@ export function createSplashWindow(): void {
   })
 
   win.once('ready-to-show', () => {
+    console.log('[STARTUP] [1] Splash ready-to-show')
     win.show()
   })
 
   win.loadFile(path.join(app.getAppPath(), 'electron/splash.html'))
+  win.webContents.once('did-finish-load', () => {
+    console.log('[STARTUP] [2] Splash did-finish-load')
+  })
 
   win.on('closed', () => {
+    console.log('[STARTUP] [1.5] Splash closed')
     setSplashWindow(null)
   })
 
@@ -137,6 +163,7 @@ export function createLoginWindow(): void {
 }
 
 export function showMainWindow(): void {
+  console.log('[STARTUP] [6] showMainWindow called')
   if (!state.mainWindow || state.mainWindow.isDestroyed()) return
 
   if (state.mainWindow.isMinimized()) state.mainWindow.restore()
@@ -194,6 +221,10 @@ export function createWindow(): void {
     },
   })
 
+  win.once('ready-to-show', () => {
+    console.log('[STARTUP] [4.5] Main window ready-to-show (but show: false, waiting for appReady)')
+  })
+
   win.on('close', (e) => {
     if (!getIsQuitting()) {
       e.preventDefault()
@@ -205,21 +236,10 @@ export function createWindow(): void {
     setMainWindow(null)
   })
 
-  // Window controls IPC
-  ipcMain.handle('window-minimize', () => {
-    state.mainWindow?.minimize()
-  })
-  ipcMain.handle('window-maximize', () => {
-    if (state.mainWindow?.isMaximized()) {
-      state.mainWindow?.unmaximize()
-    } else {
-      state.mainWindow?.maximize()
-    }
-  })
-  ipcMain.handle('window-close', () => {
-    setIsQuitting(true)
-    state.mainWindow?.close()
-  })
+  // Window controls IPC — registered once. createWindow() can run again
+  // (e.g. app.on('activate') recreating the main window with zero windows
+  // open), and ipcMain.handle() throws synchronously on a duplicate channel.
+  registerWindowControlHandlers()
 
   // Open DevTools for debugging (video loading issues, etc.)
   if (!app.isPackaged) {
@@ -228,10 +248,14 @@ export function createWindow(): void {
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173/'
   if (process.env.VITE_DEV_SERVER_URL || !app.isPackaged) {
+    console.log('[STARTUP] [4] Main window loading Vite dev server URL')
     win.loadURL(devServerUrl)
   } else {
     win.loadFile(path.join(app.getAppPath(), 'dist/index.html'))
   }
+  win.webContents.once('did-finish-load', () => {
+    console.log('[STARTUP] [5] Main window did-finish-load')
+  })
 
   // Content Security Policy
   const isDev = process.env.VITE_DEV_SERVER_URL || !app.isPackaged

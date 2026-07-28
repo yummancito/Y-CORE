@@ -9,6 +9,19 @@ interface SteamResult {
   error?: string
   message?: string
   path?: string | null
+  /** Round-10: fact Y-core returns on every launch — true if Steam.exe was
+   *  alive IN THIS PROCESS BEFORE Y-core started the launch chain. Lets the
+   *  renderer disambiguate "Y-core spawned the game" vs "Steam was already
+   *  running independently and Y-core ignored it". */
+  wasSteamAliveAtLaunch?: boolean
+  /** Round-10: true iff killSteamBeforeLaunch=true AND wasSteamAliveAtLaunch=true
+   *  AND closeSteamProcess succeeded. Use this to render an unambiguous
+   *  "Steam fue terminado antes del launch" toast. */
+  killedSteamBeforeLaunch?: boolean
+  /** Already-present on success path: not all callers honor this. */
+  exePath?: string
+  /** Already-present on success path. */
+  native?: boolean
 }
 
 interface InstalledGame {
@@ -102,8 +115,14 @@ interface LogConfig {
   maxBackups: number
 }
 
+interface Gateway {
+  call: <T = unknown>(service: string, method: string, ...args: unknown[]) => Promise<T>
+  on: <T = unknown>(event: string, callback: (data: T) => void) => () => void
+}
+
 interface Window {
   steamtools: {
+    gateway: Gateway
     appReady: () => Promise<void>
     setSplashStatus: (status: string, percent: number) => Promise<void>
     getLocale: () => Promise<string>
@@ -237,6 +256,36 @@ interface Window {
       source?: 'cache' | 'fresh' | 'forced' | 'error'
       error?: string
       errorKey?: string
+    }>
+
+    // ── Windows Defender Auto-Fix ────────────────────────────────────────
+    getDefenderStatus: () => Promise<{
+      hasMissingCritical: boolean
+      hasMissingExpected: boolean
+      hasEmptyDlls: boolean
+      dlls: { path: string; name: string; exists: boolean; isEmpty: boolean; mtime: string | null; size: number | null }[]
+      hasDefenderArtifacts: boolean
+      suggestions: string[]
+    }>
+    getEmulatorDiagnostics: () => Promise<{
+      dllPath: string | null
+      version: string | null
+      dllSizeBytes: number | null
+      parseError: string | null
+      koffiError: string | null
+      exportCount: number
+      exports: string[]
+      exportsDetailed: { address: string; name: string; ordinal: number }[]
+      expectedSettingsFiles: string[]
+      goldbergLayoutSupported: string[]
+    }>
+    runDefenderFix: () => Promise<{
+      success: boolean
+      message: string
+      detail: string
+      elevated: boolean
+      restored: boolean
+      error?: string
     }>
   }
 }

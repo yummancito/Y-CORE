@@ -3,9 +3,15 @@ packages:
   - 'packages/*'
 nodeLinker: hoisted
 allowBuilds:
+  cwebp-bin: set this to true or false
   electron: false
   esbuild: false
+  gifsicle: set this to true or false
+  jpegtran-bin: set this to true or false
   koffi: false
+  mozjpeg: set this to true or false
+  optipng-bin: set this to true or false
+  pngquant-bin: set this to true or false
 onlyBuiltDependencies:
   - electron
   - esbuild

@@ -1,142 +1,35 @@
+// ============================================================================
+// src/hooks/useInstallProcessor.ts
+// ----------------------------------------------------------------------------
+// V2-ONLY install processor. Single linear path:
+//
+//   queue → dequeue → Y-core API /install →
+//     if 'queued'    → poll job until ready → recurse with `game`
+//     if 'ready'     → map shape (depot_id↔depotId) → installService.startV2Download →
+//                      installService.waitForV2TaskComplete →
+//                      consumeGame + reportDownloaded → next item
+//     else           → toast error
+//
+// The processor NEVER tries SteamCMD, NEVER falls back to a Lua store install,
+// NEVER opens Steam client. V2 is the only path now.
+//
+// The `waitForV2TaskComplete` inside this hook is the one-shot completion
+// detection. The store-side `useDownloadEngineV3Store` ALSO subscribes to
+// download:* IPC events, so concurrent page views (e.g. /downloads open
+// while install is running) see live updates regardless.
+// ============================================================================
+
 import { useCallback, useEffect, useRef } from 'react'
-import path from 'path'
-import { useSettingsStore, type InstallFallbackReason } from '../stores/useSettingsStore'
-import { t } from '../lib/i18n'
 import { useToastStore } from '../stores/useToastStore'
 import { useDownloadQueueStore } from '../stores/useDownloadQueueStore'
 import { useRecommendationStore } from '../stores/useRecommendationStore'
-import { useSteamCmdJobsStore } from '../stores/useSteamCmdJobsStore'
-import { installGame, getJobStatus, reportDownloaded, fetchDepotKeysFromApi } from '../lib/y-core-api'
-import { extractMissingDepotIds, buildDepotboxLinks } from '../lib/parse-error'
-
-interface DepotKey {
-  depot_id: string
-  key: string
-}
-
-interface ManifestFile {
-  depot_id: string
-  manifest_gid: string
-}
-
-async function downloadGameWithoutSteam(
-  appId: string,
-  gameName: string,
-  depotKeys: DepotKey[],
-  manifestFiles: ManifestFile[]
-): Promise<{ success: boolean; error?: string; actions?: string[]; errors?: string[] }> {
-  if (!window.steamtools?.downloadDepot) {
-    return {
-      success: false,
-      error: 'steampipe:downloadDepot not available',
-      errors: ['steampipe module not available in this build'],
-    }
-  }
-
-  const actions: string[] = []
-  const errors: string[] = []
-  const appNum = parseInt(appId, 10)
-  let successCount = 0
-
-  try {
-    // Crear un map de depotId -> manifest para lookup rápido
-    const manifestMap = new Map(manifestFiles.map(m => [m.depot_id, m.manifest_gid]))
-
-    if (manifestMap.size === 0) {
-      return {
-        success: false,
-        error: 'No manifest files available to download',
-        errors: ['Cannot download without manifest files'],
-      }
-    }
-
-    safeAddLog('INFO', `[Steampipe] Starting download for ${gameName} (appId=${appId}) with ${manifestMap.size} manifest(s)`)
-
-    // Descargar cada depot que tenemos manifest
-    for (const [depotId, manifestId] of manifestMap) {
-      const depotNum = parseInt(depotId, 10)
-      const depotKey = depotKeys.find(k => k.depot_id === depotId)
-
-      if (!depotKey) {
-        errors.push(`Depot ${depotNum}: No depot key available`)
-        safeAddLog('WARN', `[Steampipe] Depot ${depotNum} has no key, skipping`)
-        continue
-      }
-
-      try {
-        safeAddLog('INFO', `[Steampipe] Downloading depot ${depotNum} (manifest: ${manifestId})`)
-
-        const downloadResult = await window.steamtools.downloadDepot({
-          appId: appNum,
-          depotId: depotNum,
-          manifestId: manifestId,
-          // installDir vacío → el main process resuelve
-          // ${userData}/Games/${appId} (el renderer no tiene acceso a rutas absolutas).
-          installDir: '',
-          cellId: 0,
-        })
-
-        if (downloadResult.success) {
-          const sizeMB = (downloadResult.bytesDownloaded / 1024 / 1024).toFixed(2)
-          const durationSec = (downloadResult.durationMs / 1000).toFixed(1)
-          actions.push(`✓ Depot ${depotNum}: ${sizeMB} MB (${durationSec}s)`)
-          safeAddLog('INFO', `[Steampipe] Depot ${depotNum} downloaded: ${sizeMB} MB`)
-          successCount++
-        } else {
-          const errMsg = downloadResult.errorMessage || 'unknown error'
-          errors.push(`Depot ${depotNum}: ${errMsg}`)
-          safeAddLog('WARN', `[Steampipe] Depot ${depotNum} failed: ${errMsg}`)
-        }
-      } catch (err: any) {
-        const errMsg = err.message || String(err)
-        errors.push(`Depot ${depotNum}: ${errMsg}`)
-        safeAddLog('ERROR', `[Steampipe] Depot ${depotNum} exception: ${errMsg}`)
-      }
-    }
-
-    safeAddLog('INFO', `[Steampipe] Download summary: ${successCount}/${manifestMap.size} depots downloaded`)
-
-    if (successCount > 0) {
-      const msg = `${gameName}: ${successCount}/${manifestMap.size} depots downloaded to AppData/Local/Y-core/Games/${appId}`
-      actions.push(msg)
-      return { success: errors.length === 0, actions, errors }
-    } else {
-      return { success: false, error: 'No depots downloaded successfully', actions, errors }
-    }
-  } catch (err: any) {
-    const errMsg = err.message || String(err)
-    safeAddLog('ERROR', `[Steampipe] Fatal error: ${errMsg}`)
-    return {
-      success: false,
-      error: errMsg,
-      errors: [errMsg],
-    }
-  }
-}
-
-/**
- * H1.7 (missing-depots UX fix) — toma una lista de mensajes de error del
- * backend y los enriquece con URLs de depotbox.org si detectamos el patrón
- * "Missing depot keys for: ...". Steam nos prohíbe scrape nosotros mismos;
- * mostramos al usuario exactamente qué depot necesita clave externa y un
- * enlace directo al proveedor comunitario que sí las ofrece.
- */
-function enrichErrorsWithDepotLinks(errors: string[] | undefined): string[] {
-  if (!errors || errors.length === 0) return []
-  return errors.map((err) => {
-    const missing = extractMissingDepotIds(err)
-    if (missing.length === 0) return err
-    const links = buildDepotboxLinks(missing)
-    const extra = t('errors.missingDepots')
-    return `${err}\n${extra}\n${links}`
-  })
-}
-
-interface InstallResult { type: 'success' | 'error' | 'info'; message: string }
+import { useLibraryStore } from '../stores/useLibraryStore'
+import { installService, enrichErrorsWithDepotLinks, parseErrorMessage } from '../services/install.service'
 
 const GOLDSRC_MOD_APP_IDS = new Set([
   '10', '20', '30', '40', '50', '60', '80', '100', '130',
 ])
+const HALF_LIFE_APP_ID = '70'
 
 export interface RestartPrompt {
   title: string
@@ -145,151 +38,143 @@ export interface RestartPrompt {
   confirmLabel?: string
 }
 
-/**
- * H1.4 — clasifica el errorKey de SteamCMD hacia una razón de fallback
- * humanamente visible en SettingsPage. Si llega un errorKey no clasificado,
- * logueamos warning para que devs lo agreguen al switch sin pasar
- * desapercibido.
- */
-function reasonFromSteamCmdErrorKey(errorKey?: string): InstallFallbackReason {
-  switch (errorKey) {
-    case 'errors.steamcmd.notFound':
-    case 'errors.steamcmd.installDirCreateFailed':
-    case 'errors.steamcmd.alreadyRunning':
-      return 'steamcmd-not-available'
-    case 'errors.steamcmd.notAnonymous':
-      return 'notAnonymous'
-    case 'errors.steamcmd.spawnFailed':
-      return 'spawn-failed'
-    default:
-      if (errorKey) {
-        // Visible: nuevo errorKey sin clasificar — agregar al switch.
-        try {
-          const fn = window.steamtools?.addLog
-          if (fn) fn({ level: 'WARN', message: `[Install] unknown SteamCMD errorKey="${errorKey}", defaulting to 'stalled'` }).catch(() => {})
-        } catch { /* non-Electron */ }
-      }
-      return 'stalled'
-  }
+interface V2TaskCompletion {
+  reason: 'completed' | 'failed' | 'timeout' | 'not-found' | 'cancelled' | 'blocked-prereq'
+  errorMessage?: string
 }
 
 /**
- * H1.4 — wrapper robusto para window.steamtools.addLog que sobrevive en
- * contextos no-Electron (tests, CLI). El patrón `?.addLog?.(...)?.catch?.()`
- * evita TypeError si addLog está undefined (el `.catch` no es opcional).
- */
-function safeAddLog(level: 'INFO' | 'WARN' | 'ERROR', message: string): void {
-  const fn = window.steamtools?.addLog
-  if (fn) fn({ level, message }).catch(() => { /* swallow */ })
-}
-
-/**
- * H1.4 — flujo de install vía SteamCMD cuando esté disponible.
+ * Install a single game via the V2 download engine and wait for completion
+ * before returning. Throws only on actual `failed`; cancelled/timeout/not-found
+ * are returned as V2TaskCompletion so the caller picks the UX.
  *
- * Retorna:
- *   { success: true }            → install manager aceptó la request.
- *   { success: false, reason }   → la request falló; caller debe hacer fallback a cliente.
- *
- * IMPORTANTE: NO pasamos installDir desde renderer — main side lo computa
- * como ${userData}/Library/${appId} (ver H1.2 IPC handler en electron/main.ts).
- * El renderer no tiene acceso a userData absoluto, así que cualquier path
- * calculado acá fallaría el sanitization check del gatekeeper.
+ * Why this contract: GoldSrc mods need to check the HL1 prerequisite
+ * outcome BEFORE proceeding to their own install. If we threw on cancel,
+ * the outer .catch would short-circuit the whole queue appropriately — but
+ * the cancel-as-return design lets `processQueue` decide whether to abort
+ * the queue (GoldSrc prerequisite fail) or just skip (GoldSrc main game
+ * cancel) without breaking other flows.
  */
-async function trySteamCmdInstallFlow(
-  appId: string,
-  gameName: string,
-): Promise<{ success: boolean; reason?: InstallFallbackReason }> {
-  // 1. Steam debe estar cerrado antes del fork (SteamCMD toma el lock).
-  const closeResult = await window.steamtools?.closeSteam?.()
-  if (closeResult && !closeResult.success) {
-    return { success: false, reason: 'spawn-failed' }
+async function installOneGameV2(opts: {
+  appId: string
+  name: string
+}): Promise<V2TaskCompletion> {
+  installService.addLog('INFO', `[V2] installing ${opts.name} (appId=${opts.appId})`)
+
+  // 1. Resolve install data via Y-core API.
+  const resp = await installService.installGameFromApi(opts.appId)
+
+  if (resp.status === 'queued' && resp.job_id) {
+    // API server-side queue (e.g. DepotBox import in progress). Polling happens
+    // OUTSIDE this function because GoldSrc prerequisites may need to chain
+    // queued-to-ready responses — main processQueue handles that loop.
+    throw new Error('API_RESPONSE_QUEUED:' + resp.job_id)
+  }
+  if (resp.status !== 'ready' || !resp.game) {
+    throw new Error(`API returned unexpected response: status=${resp.status}, error=${resp.error_message ?? '—'}`)
+  }
+  const game = resp.game
+
+  // 2. Map shape: API returns { depot_id, manifest_gid, decryption_key } but the
+  // V2 engine wants { depotId, manifestId, key }. Translate here so the engine
+  // call uses its native shape exactly.
+  const manifestFiles = (game.manifest_files ?? []).map((m: any) => ({
+    depotId: m.depot_id,
+    manifestId: m.manifest_gid,
+  }))
+  let depotKeys = (game.depot_keys ?? []).map((k: any) => ({
+    depotId: k.depot_id,
+    key: k.decryption_key,
+  }))
+
+  // 3. Defensive: if /install didn't return keys (server glitch), try /depot-keys
+  // before giving up. V2's steampipe worker rejects upfront with a clear error
+  // on missing keys, so this is the difference between "failed" and "skip".
+  if (depotKeys.length === 0) {
+    installService.addLog('INFO', `[V2] depot_keys empty from /install, fetching from /depot-keys endpoint`)
+    try {
+      const fetched = await installService.fetchDepotKeysFromApi(String(game.app_id))
+      depotKeys = fetched.map((k) => ({ depotId: k.depot_id, key: k.key }))
+      installService.addLog('INFO', `[V2] fetched ${depotKeys.length} depot keys for appId=${game.app_id}`)
+    } catch (keyErr: any) {
+      throw new Error(`Cannot download: no depot keys returned by Y-core API (${keyErr.message})`)
+    }
   }
 
-  try {
-    const result = await window.steamtools?.startSteamCmdInstall?.({ appId })
-    if (!result?.success) {
-      return {
-        success: false,
-        reason: reasonFromSteamCmdErrorKey(result?.errorKey) || 'stalled',
-      }
-    }
-    if (result.queued) {
-      // Concurrency llena; el manager arrancará cuando libere slot. Para el
-      // processor esto cuenta como "success" eventual salvo polled FAILED.
-    }
-    return { success: true }
-  } catch {
-    return { success: false, reason: 'spawn-failed' }
+  installService.addLog(
+    'INFO',
+    `[V2] dispatching ${opts.name} (appId=${game.app_id}) — depots=${manifestFiles.length}, keys=${depotKeys.length}`,
+  )
+
+  // 4. Start the V2 task. Returns taskId on success.
+  const started = await installService.startV2Download({
+    appId: String(game.app_id),
+    name: game.name,
+    manifestFiles,
+    depotKeys,
+    priority: 1, // NORMAL — engine constant; keyed by DownloadPriority enum on the
+                  // other side.
+  })
+  if (!started.success || !started.taskId) {
+    throw new Error(started.error ?? 'V2 engine refused to enqueue task')
   }
+  installService.addLog('INFO', `[V2] task ${started.taskId} enqueued for ${game.name}`)
+
+  // 5. Block on completion (success OR failure).
+  const completion = await installService.waitForV2TaskComplete(started.taskId)
+  if (!completion.success) {
+    // Only real 'failed' bubbles as a thrown Error — that path is caught by
+    // processQueue's outer try/catch and surfaces to the user as an error
+    // toast with depot-link enrichment. The non-failure outcomes cancel/timeout/
+    // not-found are returned as V2TaskCompletion so the caller decides UX:
+    //   • GoldSrc prerequisite: abort the rest of the queue (HL1 must succeed)
+    //   • Main game cancel:    skip the game and continue the queue
+    //   • Timeout:             same as cancel
+    //   • Not-found:           same as cancel (engine memory rotation; safe)
+    if (completion.reason === 'cancelled' || completion.reason === 'timeout' || completion.reason === 'not-found') {
+      return completion
+    }
+    throw new Error(completion.errorMessage ?? `V2 task ${started.taskId} ended in ${completion.reason}`)
+  }
+  installService.addLog('INFO', `[V2] ${game.name} complete via V2 task ${started.taskId}`)
+  return completion
 }
 
-// Processes the global download queue. Mounted once at the app shell level so
-// installs keep progressing regardless of which page the user navigates to —
-// previously this lived inside StorePage and silently stalled ("queued forever")
-// whenever an install was started from a page other than the store (e.g. GameDetailPage).
 export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => void) {
   const { showToast } = useToastStore()
   const consumeGame = useRecommendationStore((s) => s.consumeGame)
+  // Subscribed so GoldSrc installs check the LATEST installed list —
+  // pulling from `getState()` would miss the in-flight state when comparing
+  // against an HL1 install that just completed.
+  const installedGames = useLibraryStore((s) => s.games)
   const pollAbortRef = useRef<AbortController | null>(null)
-  const pollJobRef = useRef<((jobId: string, appId: string, gameName?: string) => Promise<void>) | null>(null)
 
-  const pollJob = useCallback(async (jobId: string, appId: string, _gameName?: string) => {
+  /**
+   * Poll a Y-core API `queued` response until it becomes `ready` or `failed`.
+   * Returns the ready response on success, or null on failure/timeout.
+   */
+  const pollJob = useCallback(async (jobId: string, appId: string): Promise<any> => {
     pollAbortRef.current?.abort()
     const abortController = new AbortController()
     pollAbortRef.current = abortController
 
-    const { setImportProgress } = useDownloadQueueStore.getState()
-    setImportProgress({ appId, status: 'queued' })
-
-    let attempts = 0
     const maxAttempts = 200
-    while (attempts < maxAttempts) {
-      if (abortController.signal.aborted) return
-      await new Promise(resolve => setTimeout(resolve, 3000))
-      if (abortController.signal.aborted) return
-      attempts++
+    for (let i = 0; i < maxAttempts; i++) {
+      if (abortController.signal.aborted) return null
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+      if (abortController.signal.aborted) return null
 
-      let job
+      let job: any
       try {
-        job = await getJobStatus(jobId)
-      } catch (err: any) {
-        window.steamtools?.addLog?.({ level: 'WARN', message: `[Install] pollJob: getJobStatus error (attempt ${attempts}): ${err.message}` })?.catch?.(() => {})
+        job = await installService.getJobStatus(jobId)
+      } catch {
         continue
       }
-
-      if (job.status === 'completed' && job.result) {
-        setImportProgress(null)
-        const result = await window.steamtools.storeInstallGame({
-          app_id: job.result.app_id,
-          name: job.result.name,
-          lua_content: job.result.lua_content,
-          manifest_files: job.result.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
-          depot_keys: job.result.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
-        })
-        if (result.success) {
-          try { await reportDownloaded(appId) } catch {}
-          consumeGame(appId)
-        } else {
-          showToast('error', result.errors?.[0] || result.error || `${t('store.installFailed')} after import`)
-        }
-        return
-      }
-
-      if (job.status === 'failed') {
-        setImportProgress(null)
-        showToast('error', job.error_message || t('store.importFailed'))
-        return
-      }
-
-      setImportProgress({ appId, status: job.status })
+      if (job.status === 'completed') return job
+      if (job.status === 'failed') return null
     }
-
-    if (abortController.signal.aborted) return
-    setImportProgress(null)
-    showToast('error', t('store.importTimeout'))
-  }, [consumeGame, showToast])
-
-  pollJobRef.current = pollJob
+    return null
+  }, [])
 
   const processQueue = useCallback(async () => {
     const { processing, dequeue, setProcessing, setCurrent, setImportProgress } = useDownloadQueueStore.getState()
@@ -300,339 +185,198 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
     setProcessing(true)
     setCurrent(item)
     try {
-      const closeResult = await window.steamtools.closeSteam()
-      if (closeResult && !closeResult.success) {
-        showToast('error', closeResult.error || t('store.failedCloseSteam'))
+      // ── GoldSrc mods: install Half-Life (appId 70) as a prerequisite first.
+      //
+      // Strategy:
+      //   • If HL1 is ALREADY in the library (i.e. the user has Half-Life
+      //     installed from before), we skip the prereq enqueue and a single
+      //     V2 task is enough. installOneGameV2 handles this case below.
+      //   • Otherwise, we use the NEW `createGoldSrcInstall` flow:
+      //     1) Creates HL1 V2 task with priority HIGH (downloads first via
+      //        concurrency slot)
+      //     2) Creates the mod's V2 task with priority NORMAL and
+      //        `prereqTaskId` pointing at the HL1 task
+      //     3) The V2 engine blocks the mod task until HL1 is `completed`.
+      //     4) If HL1 fails, the mod task transitions to `blocked-prereq`
+      //        and the UI shows the banner explaining the prerequisite.
+      //
+      // The previous flow did an in-process install of HL1 before the mod
+      // (which serialized the two downloads). The new flow uses the engine
+      // itself, so HL1 and other concurrent downloads share slots, pause,
+      // and persistence uniformly.
+      let dependentTaskId: string | undefined
+      if (GOLDSRC_MOD_APP_IDS.has(item.appId)) {
+        const hl1AlreadyInstalled = installedGames.some((g) => g.appId === HALF_LIFE_APP_ID)
+        installService.addLog(
+          'INFO',
+          `[V2] GoldSrc ${item.name} (appId=${item.appId}) — HL1 installed=${hl1AlreadyInstalled}`,
+        )
+
+        // Resolver el mod vía API primero (necesitamos manifest/depot keys
+        // para crear la tarea dependiente).
+        let modResp = await installService.installGameFromApi(item.appId)
+        if (modResp.status === 'queued' && modResp.job_id) {
+          const polled = await pollJob(modResp.job_id, item.appId)
+          if (!polled) {
+            setImportProgress(null)
+            showToast('error', 'Y-core API never produced manifest for this game (job timed out).')
+            return
+          }
+          modResp = polled
+        }
+        if (modResp.status !== 'ready' || !modResp.game) {
+          throw new Error(`Y-core API returned unexpected response for ${item.name} (status=${modResp.status})`)
+        }
+
+        const manifestFiles = (modResp.game.manifest_files ?? []).map((m: any) => ({
+          depotId: m.depot_id,
+          manifestId: m.manifest_gid,
+        }))
+        let depotKeys = (modResp.game.depot_keys ?? []).map((k: any) => ({
+          depotId: k.depot_id,
+          key: k.decryption_key,
+        }))
+        if (depotKeys.length === 0) {
+          installService.addLog('INFO', `[V2] mod depot_keys empty from /install, fetching from /depot-keys endpoint`)
+          try {
+            const fetched = await installService.fetchDepotKeysFromApi(String(modResp.game.app_id))
+            depotKeys = fetched.map((k) => ({ depotId: k.depot_id, key: k.key }))
+          } catch (keyErr: any) {
+            throw new Error(`Cannot download: no depot keys returned by Y-core API (${keyErr.message})`)
+          }
+        }
+
+        // Crear las tareas vía la nueva ruta de prerrequisito.
+        const goldSrc = await installService.createGoldSrcInstall({
+          appId: String(modResp.game.app_id),
+          name: item.name,
+          manifestFiles,
+          depotKeys,
+          isPrereqInstalled: hl1AlreadyInstalled,
+        })
+        if (!goldSrc.success || !goldSrc.dependentTaskId) {
+          throw new Error(goldSrc.error ?? 'createGoldSrcInstall failed without error')
+        }
+        // Si HL1 no estaba instalado, también esperarlo para reportarlo al
+        // backend (cumplir cuota diaria) — `consumeGame('70')` se hace si
+        // completó.
+        dependentTaskId = goldSrc.dependentTaskId
+        installService.addLog(
+          'INFO',
+          `[V2] GoldSrc ${item.name} task ${dependentTaskId} enqueued (skippedPrereq=${goldSrc.skippedPrereq}, prereqTaskId=${goldSrc.prereqTaskId ?? 'n/a'})`,
+        )
+
+        // Esperar al mod (que internamente esperará a HL1 vía engine).
+        const completion = await installService.waitForV2TaskComplete(dependentTaskId)
+        if (completion.reason !== 'completed') {
+          if (completion.reason === 'cancelled') {
+            showToast('info', `Descarga cancelada: ${item.name}`, 5000)
+            installService.addLog('INFO', `[V2] ${item.name} cancelled by user`)
+            return
+          }
+          if (completion.reason === 'timeout') {
+            showToast('warning', `Descarga agotó el tiempo de espera: ${item.name}`, 8000)
+            installService.addLog('WARN', `[V2] ${item.name} timed out`)
+            return
+          }
+          if (completion.reason === 'not-found') {
+            installService.addLog('WARN', `[V2] ${item.name} engine rotated task without history entry — skipping`)
+            return
+          }
+          if (completion.reason === 'blocked-prereq') {
+            // HL1 (u otro prereq) falló — explicamos al usuario y lo dejamos
+            // saber qué necesita resolver. NO hacemos `consumeGame` ni
+            // reportamos el mod como instalado.
+            showToast(
+              'warning',
+              `${item.name} requiere Half-Life (u otro prerrequisito) para funcionar. Instálalo primero y vuelve a añadir ${item.name}.`,
+              10000,
+            )
+            installService.addLog('WARN', `[V2] ${item.name} blocked by prereq: ${completion.errorMessage}`)
+            return
+          }
+          // falló
+          const detail = completion.errorMessage ?? completion.reason
+          showToast('error', `Descarga sin Steam falló: ${detail}`, 8000)
+          installService.addLog('WARN', `[V2] ${item.name} failed: ${detail}`)
+          const enriched = enrichErrorsWithDepotLinks([detail])
+          throw new Error(enriched[0] ?? detail)
+        }
+
+        // Si llegamos aquí con HL1 también encolo, lo reportamos/consumimos
+        // para que el recomendador lo descuente.
+        if (goldSrc.prereqTaskId && !goldSrc.skippedPrereq) {
+          try { await installService.reportDownloaded(HALF_LIFE_APP_ID) } catch { /* ok */ }
+          consumeGame(HALF_LIFE_APP_ID)
+        }
+        try { await installService.reportDownloaded(item.appId) } catch { /* ok */ }
+        consumeGame(item.appId)
+        installService.addLog('INFO', `[V2] ${item.name} complete and reported`)
         return
       }
 
-      if (GOLDSRC_MOD_APP_IDS.has(item.appId)) {
-        const baseResp = await installGame('70')
-        if (baseResp.status === 'ready' && baseResp.game) {
-          const result = await window.steamtools.storeInstallGame({
-            app_id: '70',
-            name: 'Half-Life',
-            lua_content: baseResp.game.lua_content,
-            manifest_files: baseResp.game.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
-            depot_keys: baseResp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
-          })
-          if (!result.success) {
-            showToast('error', result.errors?.[0] || result.error || t('store.failedInstallBase'))
-            return
-          }
-          try { await reportDownloaded('70') } catch {}
-        } else if (baseResp.status === 'queued') {
-          await pollJobRef.current!(baseResp.job_id!, '70')
+      // ── Non-GoldSrc path: install the actual game via V2.
+      const completion = await installOneGameV2({
+        appId: item.appId,
+        name: item.name,
+        // Use the API-returned app_id (the user clicked on the "store" id but
+        // /install resolves to the canonical Steam app_id, which the engine
+      // actually downloads).
+      }).catch((err) => {
+        // installOneGameV2 may throw if the API queued — handle polling
+        if (err.message?.startsWith('API_RESPONSE_QUEUED:')) {
+          // shouldn't reach here because we polled above, but log defensively
+          installService.addLog('WARN', `[V2] unexpected queued response after polling: ${err.message}`)
+          return { reason: 'failed', errorMessage: 'API re-queued mid-install' } as V2TaskCompletion
         }
+        throw err
+      })
+
+      if (completion.reason !== 'completed') {
+        // Each non-success reason gets its own UX — NEVER lump them into
+        // "falló" because that triggers the auto-retry / depotbox-enrichment
+        // path which is wrong for user/system signals.
+        if (completion.reason === 'cancelled') {
+          showToast('info', `Descarga cancelada: ${item.name}`, 5000)
+          installService.addLog('INFO', `[V2] ${item.name} cancelled by user`)
+          return
+        }
+        if (completion.reason === 'timeout') {
+          showToast('warning', `Descarga agotó el tiempo de espera: ${item.name}`, 8000)
+          installService.addLog('WARN', `[V2] ${item.name} timed out`)
+          return
+        }
+        if (completion.reason === 'not-found') {
+          // Engine rotated the task without a history entry — likely a
+          // cleanup race, not a real failure. Silently advance.
+          installService.addLog('WARN', `[V2] ${item.name} engine rotated task without history entry — skipping`)
+          return
+        }
+        // Only `failed` reaches here.
+        const detail = completion.errorMessage ?? completion.reason
+        showToast('error', `Descarga sin Steam falló: ${detail}`, 8000)
+        installService.addLog('WARN', `[V2] ${item.name} failed: ${detail}`)
+        const enriched = enrichErrorsWithDepotLinks([detail])
+        throw new Error(enriched[0] ?? detail)
       }
 
-      const resp = await installGame(item.appId)
-
-      if (resp.status === 'ready' && resp.game) {
-        // Reflejar el job como 'preparing' de inmediato en el store para que
-        // /downloads lo muestre en cuanto el install es despachable. El
-        // bridge de SteamCMD va a sobrescribir upsertActive con el primer
-        // progress event real (típicamente ~50-200 ms más tarde). Para el
-        // camino Lua (sin eventos SteamCMD) el estado queda en 'preparing'
-        // hasta que el dispatch termina — no abrimos ningún modal, la
-        // página /downloads es la única superficie de progreso.
-        const { upsertActive } = useSteamCmdJobsStore.getState()
-        upsertActive({
-          appId: String(resp.game.app_id),
-          gameName: resp.game.name,
-          state: 'preparing',
-          percent: 0,
-          bytesDownloaded: 0,
-          bytesTotal: 0,
-          speed: 0,
-          eta: null,
-          currentFile: null,
-          error: null,
-          retries: 0,
-          peakSpeed: 0,
-          elapsedSec: 0,
-          startedAt: Date.now(),
-          lastUpdatedAt: Date.now(),
-        })
-
-        // H1.4 — dispatch entre SteamCMD, steampipe y cliente Lua.
-        const { installMethod } = useSettingsStore.getState()
-        safeAddLog('INFO', `[Install] Dispatch: installMethod="${installMethod}" appId=${item.appId} depotKeys=${resp.game.depot_keys.length}`)
-        const wantsSteamCmd = installMethod === 'steamcmd' || installMethod === 'auto'
-        const wantsSteampipe = installMethod === 'steampipe'
-        let usedSteamCmd = false
-        let usedSteampipe = false
-        let aborted = false
-        let fallbackReason: InstallFallbackReason | null = null
-
-        // Try steampipe first if user explicitly chose it
-        if (wantsSteampipe) {
-          safeAddLog('INFO', `[Install] Using steampipe (direct CDN download) for ${item.name}`)
-          showToast('info', 'Descargando con steampipe (sin Steam)...')
-          try {
-            // El API /install a veces devuelve depot_keys vacío; en ese caso
-            // las pedimos explícitamente al endpoint /depot-keys (misma fuente
-            // que usa el flujo de Steam via fetchDepotKeys en electron).
-            let depotKeys = resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key }))
-            if (depotKeys.length === 0) {
-              safeAddLog('INFO', `[Install] depot_keys empty from /install, fetching from /depot-keys endpoint`)
-              try {
-                depotKeys = await fetchDepotKeysFromApi(String(resp.game.app_id))
-                safeAddLog('INFO', `[Install] Fetched ${depotKeys.length} depot keys from API for steampipe`)
-              } catch (keyErr: any) {
-                safeAddLog('WARN', `[Install] Failed to fetch depot keys: ${keyErr.message}`)
-              }
-            }
-
-            if (depotKeys.length === 0) {
-              aborted = true
-              showToast('error', 'No se pudieron obtener las depot keys para descargar sin Steam', 8000)
-              safeAddLog('WARN', `[Install] Steampipe aborted: no depot keys available`)
-              throw new Error('__steampipe_no_keys__')
-            }
-
-            const steampipeResult = await downloadGameWithoutSteam(
-              String(resp.game.app_id),
-              resp.game.name,
-              depotKeys,
-              resp.game.manifest_files
-            )
-            if (steampipeResult.success) {
-              usedSteampipe = true
-              try { await reportDownloaded(item.appId) } catch {}
-              consumeGame(item.appId)
-              safeAddLog('INFO', `[Install] ${item.name} downloaded via steampipe (appId=${resp.game.app_id})`)
-            } else {
-              // El usuario ELIGIÓ explícitamente "Sin Steam". NO caemos a Steam.
-              // Abortamos y mostramos el error de steampipe.
-              aborted = true
-              const errDetail = (steampipeResult.errors && steampipeResult.errors.length > 0)
-                ? steampipeResult.errors.join('; ')
-                : (steampipeResult.error || 'Descarga sin Steam falló')
-              showToast('error', `Descarga sin Steam falló: ${errDetail}`, 8000)
-              safeAddLog('WARN', `[Install] Steampipe failed (no fallback to Steam): ${errDetail}`)
-            }
-          } catch (err: any) {
-            aborted = true
-            // __steampipe_no_keys__ ya mostró su toast; no duplicar.
-            if (err?.message !== '__steampipe_no_keys__') {
-              showToast('error', `Error en descarga sin Steam: ${err.message}`, 8000)
-              safeAddLog('WARN', `[Install] Steampipe error (no fallback): ${err.message}`)
-            }
-          }
-        }
-
-        if (!usedSteampipe && wantsSteamCmd) {
-          let available = await window.steamtools?.isSteamCmdAvailable?.()
-          // H1.7.3 — SteamCMD no está descargado pero el usuario quiere
-          // SteamCMD (o auto). Descargamos en background con toast visible
-          // y reintentamos. Sin esto el dispatcher caía silenciosamente a
-          // cliente Lua y el usuario quedaba sin saber por qué SteamCMD
-          // "no funciona".
-          if (!available && window.steamtools?.fetchSteamCmd) {
-            showToast(
-              'info',
-              t('install.fetchingSteamCmd') ||
-                'Descargando SteamCMD por primera vez (~10 MB)...',
-            )
-            safeAddLog('INFO', `[Install] SteamCMD no disponible, disparando fetch on-demand`)
-            const fetchResult = await window.steamtools.fetchSteamCmd()
-            if (fetchResult?.success) {
-              available = await window.steamtools?.isSteamCmdAvailable?.()
-              if (available) {
-                showToast('success', t('install.steamCmdReady') || 'SteamCMD listo.')
-                safeAddLog('INFO', `[Install] SteamCMD descargado y disponible`)
-              }
-            } else {
-              safeAddLog(
-                'WARN',
-                `[Install] SteamCMD on-demand failed: ${fetchResult?.error ?? 'unknown'}`,
-              )
-            }
-          }
-          if (available) {
-            const steamResult = await trySteamCmdInstallFlow(
-              String(resp.game.app_id),
-              resp.game.name,
-            )
-            if (steamResult.success) {
-              usedSteamCmd = true
-              try { await reportDownloaded(item.appId) } catch {}
-              consumeGame(item.appId)
-              safeAddLog('INFO', `[Install] ${item.name} started via SteamCMD (appId=${resp.game.app_id})`)
-            } else {
-              fallbackReason = steamResult.reason ?? 'stalled'
-              await useSettingsStore.getState().setInstallFallbackReason(fallbackReason)
-              // H1.7.5 — sanity log para devs: si reason es spawn-failed
-              // cuando solo estaba el binario ausente, lvl=WARN.
-              if (fallbackReason === 'spawn-failed') {
-                safeAddLog(
-                  'WARN',
-                  `[Install] SteamCMD returned reason='spawn-failed' \u2014 \u00bffue el binario ausente o un spawn real? Ver electron/modules/steamcmd-manager.ts.`,
-                )
-              }
-              showToast('info', t('install.fallbackToClient') || `SteamCMD no se pudo (${fallbackReason}), usando cliente Steam.`)
-              safeAddLog('WARN', `[Install] SteamCMD fallback a cliente: ${fallbackReason}`)
-            }
-          } else {
-            // H1.7.4 — fix de "el cmd no funciona": el comportamiento correcto
-            // depende de qué método eligió el usuario.
-            if (installMethod === 'steamcmd') {
-              // Usuario FORZÓ SteamCMD. Respetamos su decisión: NO caemos al
-              // cliente Lua. Eso era exactamente el bug original. ABORTAMOS
-              // el install y dejamos que vaya a Configuración → SteamCMD.
-              // NO persistimos `lastInstallFallbackReason` porque NO ocurrió
-              // un fallback — sería misleading: el banner amber diría
-              // "cayó al cliente Steam" cuando en realidad abortamos.
-              showToast(
-                'error',
-                t('install.steamCmdRequired') ||
-                  'SteamCMD no está disponible y elegiste SteamCMD. Abrí Configuración → SteamCMD o cambiá a Steam Client / Auto.',
-                8000,
-              )
-              safeAddLog('WARN', `[Install] SteamCMD forzado pero no disponible; install ABORTADO (no fallback). appId=${item.appId}`)
-              aborted = true
-            } else {
-              // 'auto' o 'steamclient': ambos son consentimientos explícitos o
-              // implícitos de caer al cliente Lua. Persistimos la razón para
-              // que SettingsPage muestre el banner amber con el motivo.
-              fallbackReason = 'steamcmd-not-available'
-              await useSettingsStore.getState().setInstallFallbackReason(fallbackReason)
-              if (installMethod === 'auto') {
-                showToast(
-                  'info',
-                  t('install.fallbackToClient') ||
-                    'SteamCMD no disponible, usando cliente Steam como alternativa.',
-                )
-              }
-              // 'steamclient' es silent (es el método elegido, no es fallback).
-            }
-          }
-        }
-
-        if (!usedSteamCmd && !usedSteampipe && !aborted) {
-          // First, try with Steam if installed
-          const canUseSteam = await window.steamtools?.getSteamPath?.().then((r) => r.success).catch(() => false)
-
-          let result: any = null
-
-          if (canUseSteam) {
-            result = await window.steamtools.storeInstallGame({
-              app_id: resp.game.app_id,
-              name: resp.game.name,
-              lua_content: resp.game.lua_content,
-              manifest_files: resp.game.manifest_files.map(m => ({ depot_id: m.depot_id, manifest_id: m.manifest_gid })),
-              depot_keys: resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
-            })
-          }
-
-          // Fallback: si Steam no está disponible O storeInstallGame falló, usa steampipe
-          if (!result?.success && resp.game.depot_keys.length > 0) {
-            if (!canUseSteam) {
-              safeAddLog('INFO', `[Install] Steam not found, downloading without Steam for ${item.name}`)
-              showToast('info', 'Steam no encontrado, descargando sin Steam...')
-            } else {
-              safeAddLog('INFO', `[Install] storeInstallGame failed, trying steampipe fallback for ${item.name}`)
-              showToast('info', 'Usando fallback: steampipe...')
-            }
-            try {
-              result = await downloadGameWithoutSteam(
-                resp.game.app_id,
-                resp.game.name,
-                resp.game.depot_keys.map(k => ({ depot_id: k.depot_id, key: k.decryption_key })),
-                resp.game.manifest_files
-              )
-            } catch (fallbackErr: any) {
-              result = {
-                success: false,
-                error: `Steampipe fallback failed: ${fallbackErr.message}`,
-                actions: [],
-                errors: [`Steampipe fallback failed: ${fallbackErr.message}`],
-              }
-            }
-          }
-
-          if (!result) {
-            result = {
-              success: false,
-              error: 'No installation method available',
-              actions: [],
-              errors: ['Steam is not installed and steampipe is not available'],
-            }
-          }
-
-          const actions: InstallResult[] = []
-          if (result.actions) for (const a of result.actions) actions.push({ type: 'info', message: a })
-          if (result.errors) for (const e of result.errors) actions.push({ type: 'error', message: e })
-          if (result.success) {
-            actions.push({ type: 'success', message: `${item.name} installed` })
-            try { await reportDownloaded(item.appId) } catch {}
-            consumeGame(item.appId)
-          }
-          for (const action of actions) {
-            window.steamtools.addLog({
-              level: action.type === 'error' ? 'ERROR' : 'INFO',
-              message: `[Install] ${action.message}`,
-            }).catch((e) => console.warn('[Install] addLog failed:', e))
-          }
-          if (!result.success) {
-            const enriched = enrichErrorsWithDepotLinks(result.errors)
-            showToast('error', enriched[0] || result.error || t('store.installFailed'))
-          }
-        }
-      } else if (resp.status === 'queued' && resp.job_id) {
-        await pollJobRef.current!(resp.job_id, item.appId, item.name)
-      } else {
-        showToast('error', t('store.unexpectedResponse'))
-      }
+      try { await installService.reportDownloaded(item.appId) } catch { /* ok */ }
+      consumeGame(item.appId)
+      installService.addLog('INFO', `[V2] ${item.name} complete and reported`)
     } catch (err: any) {
       const errorMsg = err.message || 'Unknown error'
-      const fullDetails = err.fullResponse ? JSON.stringify(err.fullResponse) : ''
-      window.steamtools.addLog({
-        level: 'ERROR',
-        message: `[Install] Install failed for appId=${item.appId}: ${errorMsg}${fullDetails ? ' | Details: ' + fullDetails : ''}`
-      }).catch((e) => console.warn('[Install] addLog failed:', e))
-
-      let displayMsg = errorMsg
-
-      // Try to extract backend error details from JSON
-      try {
-        const parsed = JSON.parse(errorMsg)
-        if (parsed.t) displayMsg = parsed.t
-        if (parsed.p?.details) displayMsg = parsed.p.details + ' (' + parsed.t + ')'
-      } catch {}
-
-      if (displayMsg.includes('429') || displayMsg.includes('rate limit')) {
-        displayMsg = displayMsg + ' — ' + t('errors.api.rateLimited')
-      } else if (displayMsg.includes('403') || displayMsg.includes('Forbidden')) {
-        displayMsg = displayMsg + ' — ' + t('errors.api.forbidden')
-      } else if (displayMsg.includes('404') || displayMsg.includes('Not Found')) {
-        displayMsg = displayMsg + ' — ' + t('errors.api.notFound')
-      } else if (displayMsg.includes('subscription') || displayMsg.includes('suscripción') || displayMsg.includes('Subscription') || displayMsg.includes('requires login')) {
-        displayMsg = 'BACKEND ERROR - Depot Keys: ' + displayMsg + '\n\nEste juego requiere keys de depot que el servidor no pudo obtener. Motivos posibles: (1) Juego de pago sin keys públicas, (2) Server de depot keys caído, (3) Juego removido de Steam.'
-      } else if (displayMsg.includes('timeout')) {
-        displayMsg = displayMsg + ' — ' + t('errors.api.timeout')
-      }
+      installService.addLog('ERROR', `[V2] install failed for appId=${item.appId}: ${errorMsg}`)
+      const displayMsg = parseErrorMessage(errorMsg)
       showToast('error', displayMsg)
     } finally {
       setImportProgress(null)
       setCurrent(null)
       setProcessing(false)
-      // If queue is empty, offer restart
-      if (useDownloadQueueStore.getState().queue.length === 0) {
-        onRestartPrompt({
-          title: t('store.installComplete'),
-          message: t('store.restartPrompt'),
-          confirmLabel: 'Reiniciar',
-          onConfirm: async () => {
-            const r = await window.steamtools.restartSteam()
-            if (!r?.success) showToast('error', r?.error || t('store.restartFailed'))
-          },
-        })
-      }
+      // Sin prompts de reinicio — Steam se lanza automáticamente en background
+      // processQueue is recursive: kick the next item
       processQueue()
     }
-  }, [showToast, consumeGame, onRestartPrompt])
+  }, [consumeGame, showToast, onRestartPrompt, pollJob])
 
   const queue = useDownloadQueueStore((s) => s.queue)
   const processing = useDownloadQueueStore((s) => s.processing)

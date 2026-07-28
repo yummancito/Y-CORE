@@ -46,11 +46,27 @@ export const useSteamStore = create<SteamStore>((set, get) => ({
 
   init: async () => {
     set({ loading: true })
-    await Promise.all([
-      get().loadSteamPath(),
-      get().loadSteamRunning(),
-      get().loadLibraryFolders(),
-    ])
-    set({ loading: false })
+    try {
+      const [pathResult, runningResult, foldersResult] = await Promise.allSettled([
+        window.steamtools?.getSteamPath()?.catch(() => ({ success: false })) ?? Promise.resolve({ success: false }),
+        window.steamtools?.isSteamRunning()?.catch(() => ({ running: false })) ?? Promise.resolve({ running: false }),
+        window.steamtools?.getLibraryFolders()?.catch(() => ({ success: false, folders: [] })) ?? Promise.resolve({ success: false, folders: [] }),
+      ])
+
+      if (pathResult.status === 'fulfilled' && pathResult.value.success) {
+        const val = pathResult.value as { path?: string | null }
+        set({ path: val.path || null })
+      }
+      if (runningResult.status === 'fulfilled') {
+        set({ running: runningResult.value.running })
+      }
+      if (foldersResult.status === 'fulfilled' && foldersResult.value.success) {
+        set({ libraryFolders: foldersResult.value.folders })
+      }
+    } catch {
+      // Si todo falla, el estado por defecto (null/false/[]) es aceptable
+    } finally {
+      set({ loading: false })
+    }
   },
 }))

@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import electron from 'vite-plugin-electron'
 import electronRenderer from 'vite-plugin-electron-renderer'
+import imagemin from 'vite-plugin-imagemin'
 import fs from 'fs'
 import path from 'path'
 
@@ -55,6 +56,15 @@ function copyNativeResources(): import('vite').Plugin {
 export default defineConfig({
   plugins: [
     react(),
+    // Compresión de imágenes en build — reduce PNG/JPG/WebP en dist/
+    imagemin({
+      gifsicle: { optimizationLevel: 2 },
+      mozjpeg: { quality: 75 },
+      optipng: { optimizationLevel: 4 },
+      pngquant: { quality: [0.65, 0.8], speed: 4 },
+      svgo: { plugins: [{ name: 'removeViewBox' }] },
+      webp: { quality: 75 },
+    }),
     electron([
       {
         entry: 'electron/main.ts',
@@ -75,16 +85,10 @@ export default defineConfig({
                 'depot-downloader-js',
                 'lzma',
                 'lzma-native',
-                // 7zip-min: marcar external evita que Vite bundle el módulo
-                // dentro del chunk steamcmd-fetcher. Si se bundlea, la
-                // `require('./index.js')` interna del paquete queda relativa
-                // al chunk file (dist-electron/) en lugar de
-                // node_modules/7zip-min/ → "Cannot find module './index.js'".
-                // Cargando 7zip-min via require('7zip-min') hacemos que Node
-                // CJS haga la resolución contra node_modules/** y funcione
-                // tanto en dev como empaquetado (electron-builder incluye
-                // node_modules/** en el asar).
                 '7zip-min',
+                'ws',
+                'bufferutil',
+                'utf-8-validate',
               ],
               output: {
                 format: 'cjs',
@@ -126,10 +130,34 @@ export default defineConfig({
     copyNativeResources(),
   ],
   server: {
+    // Bind to 0.0.0.0 so phones / tablets on the same Wi-Fi can reach the
+    // dev server. Requires the mobile route (#/remote-mobile) + a working
+    // firewall for the 42863 / 42864 WebSocket ports on the host machine.
+    host: true,
     port: 5173,
     strictPort: true,
     watch: {
       ignored: ['**/native/**', '**/node_modules/**', '**/.git/**'],
     },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-ui': ['lucide-react', 'framer-motion', 'zustand'],
+          'vendor-utils': ['fuse.js', 'qrcode'],
+        },
+      },
+    },
+  },
+  // Root .html files other than index.html (error-catalog.html, splash.html,
+  // etc.) are NOT Vite entries — they're either static documentation or files
+  // served directly by Electron. By default Vite's dependency pre-bundling
+  // discovers them and tries to follow their `<script>` tags, which fails on
+  // files that reference missing/discarded modules (causing the dev server
+  // to crash on the first request with ERR_CONNECTION_RESET → REFUSED).
+  optimizeDeps: {
+    entries: ['index.html'],
   },
 })

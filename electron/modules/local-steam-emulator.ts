@@ -92,7 +92,7 @@ function candidateDllPaths(): string[] {
   } catch {
     // `app` puede no estar listo todavía.
   }
-  const root = path.join(__dirname, '..', '..')
+  const root = path.resolve(path.join(__dirname, '..', '..'))
   paths.push(path.join(root, 'resources', 'native', 'ycore_steam.dll'))
   paths.push(
     path.join(root, 'native', 'ycore_steam', 'build', 'Release', 'ycore_steam.dll'),
@@ -112,7 +112,7 @@ function candidateX86DllPath(): string | null {
   } catch {
     // ignore
   }
-  const root = path.join(__dirname, '..', '..')
+  const root = path.resolve(path.join(__dirname, '..', '..'))
   candidates.push(path.join(root, 'resources', 'native', 'ycore_steam_x86.dll'))
   candidates.push(
     path.join(root, 'native', 'ycore_steam', 'build_x86', 'Release', 'ycore_steam_x86.dll'),
@@ -202,6 +202,18 @@ function ensureLoaded(): boolean {
 // API pública
 // ---------------------------------------------------------------------------
 
+/**
+ * Round-11: force-reload the DLL binding. Called by build-emulator.ts
+ * after a successful build so the next `ensureLoaded()` rediscovers
+ * the now-present DLL without requiring an app restart.
+ */
+export function resetLoadAttempt(): void {
+  loadAttempted = false
+  binding = null
+  loadFailureReason = ''
+  loadedDllPath = null
+}
+
 export function isLocalSteamEmulatorAvailable(): boolean {
   return ensureLoaded()
 }
@@ -230,19 +242,50 @@ export function patchGameFolder(
   gameFolder: string,
   appId: string,
 ): {
-  success: boolean
+  success: boolean | 'partial'
   error?: string
   warnings?: string[]
+  partialScaffoldDropped?: boolean
   patchedAt?: string
 } {
-  if (!ensureLoaded() || !binding) {
-    return {
-      success: false,
-      error: loadFailureReason || 'ycore_steam.dll no disponible',
-    }
-  }
+  // Validate inputs FIRST, before attempting any file operations or fallback logic.
   if (!gameFolder || !fs.existsSync(gameFolder)) {
     return { success: false, error: `gameFolder inválido: ${gameFolder}` }
+  }
+
+  // Even when ycore_steam.dll is missing, drop the Goldberg-compatible
+  // scaffold (steam_settings/{force_account_name,offline,appid,disable_overlay}.txt
+  // + steam_appid.txt). External tools (Goldberg Lite, Steamless) read these
+  // FIRST, so this keeps the game folder sane even before our own DLL exists.
+  // The copy-the-DLL step below is the only thing that requires the binding.
+  if (!ensureLoaded() || !binding) {
+    try {
+      const warnings2: string[] = []
+      const appIdFile = path.join(gameFolder, 'steam_appid.txt')
+      if (!fs.existsSync(appIdFile)) fs.writeFileSync(appIdFile, appId, 'utf-8')
+      const settingsDir = path.join(gameFolder, 'steam_settings')
+      fs.mkdirSync(settingsDir, { recursive: true })
+      const dropIfMissing = (name: string, contents: string) => {
+        const p = path.join(settingsDir, name)
+        if (!fs.existsSync(p)) fs.writeFileSync(p, contents, 'utf-8')
+      }
+      dropIfMissing('force_account_name.txt', 'YCorePlayer\n')
+      dropIfMissing('offline.txt', '1\n')
+      dropIfMissing('disable_overlay.txt', '1\n')
+      dropIfMissing('appid.txt', String(appId).trim() + '\n')
+      warnings2.push('ycore_steam.dll ausente; el juego necesita un emulador externo (Goldberg Lite) para usar este scaffold hasta que construyas ycore_steam.dll.')
+      return {
+        success: 'partial',
+        error: loadFailureReason || 'ycore_steam.dll no disponible',
+        warnings: warnings2,
+        partialScaffoldDropped: true,
+      }
+    } catch (softErr: any) {
+      return {
+        success: false,
+        error: `ycore_steam.dll ausente; soft fallback también falló: ${softErr?.message ?? softErr}`,
+      }
+    }
   }
 
   try {
@@ -320,6 +363,30 @@ export function patchGameFolder(
     const appIdFile = path.join(gameFolder, 'steam_appid.txt')
     if (!fs.existsSync(appIdFile)) {
       fs.writeFileSync(appIdFile, appId, 'utf-8')
+    }
+
+    // Layer 3 (Goldberg-style entitlements stub): some games probe
+    // BIsSubscribedApp / RequestUserData and die with "sin licencia" if the
+    // answers don't match. Drop the Steamless/Goldberg-compatible
+    // steam_settings/ directory so the offline emulator can satisfy
+    // these calls. Best-effort: 3rd-party DRM (Denuvo, EAC) is OUT OF
+    // SCOPE — those games will still fail and surface in /logs.
+    try {
+      const settingsDir = path.join(gameFolder, 'steam_settings')
+      fs.mkdirSync(settingsDir, { recursive: true })
+      const dropIfMissing = (name, contents) => {
+        const p = path.join(settingsDir, name)
+        if (!fs.existsSync(p)) fs.writeFileSync(p, contents, 'utf-8')
+      }
+      dropIfMissing('force_account_name.txt', 'YCorePlayer\n')
+      dropIfMissing('offline.txt', '1\n')
+      dropIfMissing('disable_overlay.txt', '1\n')
+      dropIfMissing('appid.txt', String(appId).trim() + '\n')
+    } catch (err: any) {
+      logger.warn(
+        `[patchGameFolder] failed to scaffold steam_settings/: ${err?.message ?? err}`,
+        'emulator',
+      )
     }
 
     return {

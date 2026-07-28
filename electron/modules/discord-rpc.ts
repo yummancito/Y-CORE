@@ -70,6 +70,7 @@ function handleData(chunk: Buffer): void {
       try {
         const msg = JSON.parse(payload.toString('utf-8'))
         if (msg?.evt === 'READY') {
+          connected = true
           logger.info('[discord-rpc] Connected to Discord', 'discord-rpc')
           setIdleActivity()
         }
@@ -124,7 +125,8 @@ function tryConnectPipe(n: number): void {
       teardownSocket()
     })
     s.on('close', () => teardownSocket())
-    connected = true
+    // `connected` stays false until handleData sees the READY frame — see
+    // the comment on the declaration above `s.once('connect', ...)`.
     send(OP.HANDSHAKE, { v: 1, client_id: DISCORD_CLIENT_ID })
   })
 

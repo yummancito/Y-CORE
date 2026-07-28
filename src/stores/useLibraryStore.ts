@@ -1,13 +1,13 @@
 import { create } from 'zustand'
-import { useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import type { InstalledGame } from '../domain/types'
 import Fuse, { type IFuseOptions } from 'fuse.js'
 import { getErrorDetails } from '../lib/error-translator'
 import { t } from '../lib/i18n'
+import { gameService } from '../services/game.service'
 
 type SortOption = 'nameAsc' | 'nameDesc' | 'recentlyPlayed' | 'recentlyInstalled' | 'largest'
 
-// Steamworks Common Redistributables — hidden from the library view
 const STEAMWORKS_REDIST_APP_ID = '228980'
 
 function isOrphanGame(name: string | undefined, appId: string): boolean {
@@ -40,9 +40,6 @@ interface LibraryStore {
   setSelectedGame: (g: InstalledGame | null) => void
 }
 
-// Tracks orphan appIds we've already attempted to resolve, so a partial or
-// no-op resolution can never trigger an endless loadGames() → resolve → reload
-// loop. Only genuinely new orphans ever trigger a reload.
 const _attemptedOrphans = new Set<string>()
 
 export const useLibraryStore = create<LibraryStore>((set, get) => ({
@@ -57,25 +54,19 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
     if (get().loading) return
     set({ loading: true, error: null })
     try {
-      const result = await window.steamtools.listInstalledGames()
+      const result = await gameService.listInstalled()
       if (result.success) {
-        const allGames = (result.games || []).filter((g) => g.appId !== STEAMWORKS_REDIST_APP_ID)
-        // Show all games: non-orphans + previously attempted orphans (even if resolution failed)
-        const filtered = allGames.filter((g) => !isOrphanGame(g.name, g.appId) || _attemptedOrphans.has(g.appId))
+        const allGames = (result.games || []).filter((g: InstalledGame) => g.appId !== STEAMWORKS_REDIST_APP_ID)
+        const filtered = allGames.filter((g: InstalledGame) => !isOrphanGame(g.name, g.appId) || _attemptedOrphans.has(g.appId))
         set({ games: filtered, loading: false })
 
-        // Background: re-resolve NEW orphan games with generic names.
-        // Skip any orphan we've already tried — this prevents an infinite
-        // reload loop when resolution keeps reporting "resolved" for names
-        // that still read as orphans on the next listing.
         const orphanGames = allGames
-          .filter((g) => isOrphanGame(g.name, g.appId) && !_attemptedOrphans.has(g.appId))
-          .map((g) => ({ appId: g.appId, installDir: g.installDir }))
+          .filter((g: InstalledGame) => isOrphanGame(g.name, g.appId) && !_attemptedOrphans.has(g.appId))
+          .map((g: InstalledGame) => ({ appId: g.appId, installDir: g.installDir }))
         if (orphanGames.length > 0) {
           for (const g of orphanGames) _attemptedOrphans.add(g.appId)
-          window.steamtools.resolveOrphanNames(orphanGames).then(({ resolved }: { resolved: { appId: string; newName: string }[] }) => {
+          gameService.resolveOrphanNames(orphanGames).then(({ resolved }) => {
             if (resolved.length > 0) {
-              // Reload library with resolved names
               get().loadGames()
             }
           }).catch(() => {})
@@ -97,23 +88,28 @@ export const useLibraryStore = create<LibraryStore>((set, get) => ({
   setSelectedGame: (g) => set({ selectedGame: g }),
 }))
 
-let _fuse: Fuse<InstalledGame> | null = null
-let _fuseGamesLength = 0
+const _fuseCache = new Map<string, Fuse<InstalledGame>>()
 
 export function useFilteredLibraryGames(): InstalledGame[] {
   const { games, searchQuery, sortBy } = useLibraryStore()
-  const prevGamesRef = useRef(games)
 
   return useMemo(() => {
-    if (_fuse === null || prevGamesRef.current !== games) {
-      prevGamesRef.current = games
-      _fuse = new Fuse(games, fuseOptions)
-      _fuseGamesLength = games.length
+    // Crear Fuse instance por batch de games, usando hash de referencia
+    const cacheKey = games.length + '-' + (games[0]?.appId ?? '')
+    let fuse = _fuseCache.get(cacheKey)
+    if (!fuse) {
+      // Limpiar caché viejo (máximo 3 entradas para evitar memory leak)
+      if (_fuseCache.size >= 3) {
+        const firstKey = _fuseCache.keys().next().value
+        if (firstKey) _fuseCache.delete(firstKey)
+      }
+      fuse = new Fuse(games, fuseOptions)
+      _fuseCache.set(cacheKey, fuse)
     }
 
     let filtered: InstalledGame[]
     if (searchQuery.trim()) {
-      const results = _fuse.search(searchQuery.trim())
+      const results = fuse.search(searchQuery.trim())
       filtered = results.map((r) => r.item)
     } else {
       filtered = games

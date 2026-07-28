@@ -1,6 +1,11 @@
+// ============================================================================
+// src/components/layout/AppShell.tsx
+// ----------------------------------------------------------------------------
+// AppShell with horizontal top navigation — no sidebar.
+// ============================================================================
+
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { EpicSidebar } from './EpicSidebar'
-import { TitleBar } from './TitleBar'
+import { TopNav } from './TopNav'
 import { OfflineBanner } from '../ui/OfflineBanner'
 import { ErrorDialog } from '../ui/ErrorDialog'
 import { ConfirmModal } from '../ui/ConfirmModal'
@@ -10,6 +15,11 @@ import { useToastStore } from '../../stores/useToastStore'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useErrorStore } from '../../stores/useErrorStore'
 import { useInstallProcessor, type RestartPrompt } from '../../hooks/useInstallProcessor'
+import { subscribe as subscribeLanguage } from '../../lib/i18n'
+import { HostRemotePlayAuto } from '../remote-play/HostRemotePlayAuto'
+import { LogConsole } from '../ui/LogConsole'
+
+// ── PageHeader context (kept for backward compat) ──
 
 interface PageHeaderContextValue {
   setHeader: (header: ReactNode) => void
@@ -17,13 +27,40 @@ interface PageHeaderContextValue {
 
 const PageHeaderContext = createContext<PageHeaderContextValue>({ setHeader: () => {} })
 
+/**
+ * Push a JSX fragment into AppShell's page-header bar.
+ *
+ * The hook memoizes the JSX so re-renders triggered by unrelated state don't
+ * churn the header (and don't trigger the pageHeader null/undefined flicker).
+ *
+ * IMPORTANT — language reactivity:
+ *   `t()` calls inside the JSX evaluate to plain strings at JSX construction
+ *   time, NOT at render time. If we only memoized on `deps`, switching
+ *   language would leave the header frozen on whatever locale was active when
+ *   the page first mounted, even though the page body below re-renders
+ *   correctly. We subscribe to language changes and bump `langTick` so the
+ *   memo always reflects the active locale.
+ */
 export function usePageHeader(header: ReactNode, deps: React.DependencyList = []) {
   const { setHeader } = useContext(PageHeaderContext)
-  const memoizedHeader = useMemo(() => header, deps)
+  const [langTick, setLangTick] = useState(0)
+  useEffect(
+    () => subscribeLanguage(() => setLangTick((n) => n + 1)),
+    [],
+  )
+  // `header` changes on every caller's render, so it MUST be a dep or the
+  // memo will silently hand back stale JSX. We spread caller deps after it
+  // so pages can still gate re-memoization on their own state.
+  const memoizedHeader = useMemo(() => header, [header, ...deps, langTick])
   useEffect(() => {
     setHeader(memoizedHeader)
-    return () => setHeader(null)
   }, [memoizedHeader, setHeader])
+  // Clear the pageHeader slot ONLY when the page itself unmounts — putting
+  // this cleanup inside the memo's useEffect would briefly blank the header
+  // every time language (or any dep) changes.
+  useEffect(() => {
+    return () => setHeader(null)
+  }, [])
 }
 
 interface AppShellProps {
@@ -63,13 +100,7 @@ export function AppShell({ children }: AppShellProps) {
   const { init: initSteam } = useSteamStore()
   const { customization, loadFromConfig } = useSettingsStore()
   const { error, open, clearError, retry } = useErrorStore()
-  const [pickMode, setPickMode] = useState(false)
   const [pageHeader, setPageHeader] = useState<ReactNode>(null)
-  // IMPORTANTE: memoizamos el value del context. Si fuera un objeto nuevo cada
-  // render, `usePageHeader` en cada página vería cambiar `setHeader` en sus
-  // deps → useEffect corre cleanup `setHeader(null)` → AppShell re-renderiza →
-  // loop infinito ("Maximum update depth exceeded"). El ref estable mata el
-  // loop sin tocar la lógica de cada page.
   const headerContextValue = useMemo(() => ({ setHeader: setPageHeader }), [])
   const [bgDataUrl, setBgDataUrl] = useState<string | null>(null)
   const [restartPrompt, setRestartPrompt] = useState<RestartPrompt | null>(null)
@@ -92,7 +123,6 @@ export function AppShell({ children }: AppShellProps) {
           .then((url) => setBgDataUrl(url))
           .catch(() => setBgDataUrl(null))
       } else {
-        // Web/dev fallback: use the public path directly
         setBgDataUrl(customization.backgroundImage.path.replace(/^public\//, '/'))
       }
     } else {
@@ -104,7 +134,6 @@ export function AppShell({ children }: AppShellProps) {
   useEffect(() => {
     const root = document.documentElement
 
-    // Accent color override
     if (customization.accentColor.enabled && customization.accentColor.color) {
       const hex = customization.accentColor.color
       root.style.setProperty('--accent', hex)
@@ -120,7 +149,6 @@ export function AppShell({ children }: AppShellProps) {
       root.style.removeProperty('--accent-soft')
     }
 
-    // Background image
     if (customization.backgroundImage.enabled && customization.backgroundImage.path) {
       root.style.setProperty('--bg-size', customization.backgroundImage.size)
       root.style.setProperty('--bg-position', customization.backgroundImage.position)
@@ -131,10 +159,10 @@ export function AppShell({ children }: AppShellProps) {
       root.style.removeProperty('--overlay-opacity')
     }
 
-    // Navbar opacity
     root.style.setProperty('--sidebar-opacity', String(customization.navbar.sidebarOpacity / 100))
     root.style.setProperty('--titlebar-opacity', String(customization.navbar.titlebarOpacity / 100))
   }, [customization])
+
   useEffect(() => {
     initSteam()
     const interval = setInterval(() => {
@@ -143,57 +171,9 @@ export function AppShell({ children }: AppShellProps) {
     return () => clearInterval(interval)
   }, [])
 
-  // Global Pick mode: only in development builds
-  useEffect(() => {
-    if (!import.meta.env.DEV) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'p' || e.key === 'P') {
-        setPickMode(prev => !prev)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
-  useEffect(() => {
-    if (!pickMode) return
-    const onClick = (e: MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      const target = e.target as HTMLElement
-      // Find nearest section label
-      let el: HTMLElement | null = target
-      let section = ''
-      let gameName = ''
-      while (el && el !== document.body) {
-        if (!section && el.dataset.section) section = el.dataset.section
-        if (!gameName && el.dataset.name) gameName = el.dataset.name
-        if (section && gameName) break
-        el = el.parentElement
-      }
-      // Build a short selector
-      let selector = target.tagName.toLowerCase()
-      if (target.id) selector += `#${target.id}`
-      if (target.className && typeof target.className === 'string') {
-        const c = target.className.split(' ').filter(Boolean).slice(0, 2)
-        if (c.length) selector += `.${c.join('.')}`
-      }
-      // Format output
-      let output = ''
-      if (gameName) output += `Game: ${gameName}\n`
-      if (section) output += `Section: ${section}\n`
-      output += `Element: ${selector}`
-      navigator.clipboard.writeText(output)
-      showToast('success', gameName ? `Game: ${gameName}` : section ? `Section: ${section}` : selector)
-      setPickMode(false)
-    }
-    window.addEventListener('click', onClick, true)
-    return () => window.removeEventListener('click', onClick, true)
-  }, [pickMode, showToast])
-
   return (
     <PageHeaderContext.Provider value={headerContextValue}>
-      <div className={`flex h-screen w-screen relative overflow-hidden bg-bg-primary ${pickMode ? 'pick-mode' : ''}`}>
+      <div className="flex flex-col h-screen w-screen relative overflow-hidden">
         {/* Background image layer */}
         {customization.backgroundImage.enabled && customization.backgroundImage.path && bgDataUrl && (
           <>
@@ -227,17 +207,38 @@ export function AppShell({ children }: AppShellProps) {
           />
         )}
         <SupportChat />
-        <div className="flex h-full w-full relative z-[1]">
-          <EpicSidebar />
-          <div className="flex flex-col flex-1 h-full min-w-0" data-section="Main Content">
-            <TitleBar header={pageHeader} />
-            <main className="flex-1 overflow-y-auto overflow-x-hidden">
-              {children}
-            </main>
+
+        {/* Top navigation */}
+        <TopNav />
+
+        {/* Headless host-side manager for "phone launched a game" flows.
+            Listens for `remotePlay:mobileLaunch` IPC and auto-starts
+            capture + signaling + WebRTC host peer so the stream lands
+            even when the desktop user isn't on the Remote Play page.
+            Self-disables when the user IS on /remote-play (HostTab owns
+            the capture + WebRTC hooks there). Renders null. */}
+        <HostRemotePlayAuto />
+
+        {/* Page header bar (set by usePageHeader from pages) — flush with the
+            unified app surface, no hairline divider. When pages want tonal
+            differentiation (like Library), they wrap their header content with
+            their own branded panel. */}
+        {pageHeader && (
+          <div className="flex-shrink-0 px-6 py-2 relative z-[1]">
+            {pageHeader}
           </div>
-        </div>
+        )}
+
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden relative z-[1]">
+          {children}
+        </main>
+
+        {/* Floating real-time log console — shows latest log entries from any page.
+            Resolves: "los logs no llegan en tiempo real". Auto-oculta tras 8s de
+            inactividad. Pin para mantener visible. */}
+        <LogConsole />
       </div>
     </PageHeaderContext.Provider>
   )
 }
-

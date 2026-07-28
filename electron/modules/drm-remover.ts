@@ -146,8 +146,32 @@ function getGameInstallDir(appId: string): string | null {
   }
 }
 
-export function registerDrmHandlers(): void {
-  ipcMain.handle('drm:remove', async (_event, appId: string): Promise<DrmRemoveResult> => {
+export async function removeGameDrm(appId: string): Promise<DrmRemoveResult> {
+    // Y-core marker-cache hit check (cheap, runs BEFORE Steamless):
+    //   ycore.drm-removed — SteamStub removed on a previous launch
+    //   ycore.drm-free   — Steamless confirmed no DRM present
+    // Markers live next to the .exe so they auto-clear if Steam rewrites
+    // it (verify-files), triggering a re-scan automatically.
+    const _yc_installDir = getGameInstallDir(appId)
+    if (_yc_installDir) {
+      const _yc_exe = findGameExecutable(_yc_installDir)
+      if (_yc_exe) {
+        if (fs.existsSync(_yc_exe + '.ycore.drm-removed')) {
+          const _yc_bak = _yc_exe + '.bak'
+          return {
+            success: true,
+            message: 'DRM already removed (marker cache hit)',
+            hadDrm: true,
+            backupPath: fs.existsSync(_yc_bak) ? _yc_bak : undefined,
+            exePath: _yc_exe,
+          }
+        }
+        if (fs.existsSync(_yc_exe + '.ycore.drm-free')) {
+          return { success: true, message: 'No DRM (marker cache hit)', hadDrm: false, exePath: _yc_exe }
+        }
+      }
+    }
+
     const steamPath = getSteamPath()
     if (!steamPath) {
       return { success: false, message: 'Steam installation not found', hadDrm: false }
@@ -229,7 +253,8 @@ export function registerDrmHandlers(): void {
     const unpackedPath = exePath.replace(/\.exe$/i, '.exe.unpacked.exe')
     if (!fs.existsSync(unpackedPath)) {
       // Some Steamless versions replace in-place
-      logger.info('[DRM Remover] No .unpacked.exe found, assuming in-place replacement', 'drm')
+      try { fs.writeFileSync(exePath + '.ycore.drm-removed', new Date().toISOString(), 'utf-8') } catch {}
+logger.info('[DRM Remover] No .unpacked.exe found, assuming in-place replacement', 'drm')
       return {
         success: true,
         message: 'DRM removed successfully',
@@ -262,7 +287,11 @@ export function registerDrmHandlers(): void {
       backupPath,
       exePath,
     }
-  })
+}
+
+export function registerDrmHandlers(): void {
+  ipcMain.handle('drm:remove', async (_event, appId: string) => removeGameDrm(appId))
+
 
   ipcMain.handle('drm:status', async (_event, appId: string): Promise<DrmStatusResult> => {
     const installDir = getGameInstallDir(appId)
@@ -289,3 +318,4 @@ export function registerDrmHandlers(): void {
     return { status: 'drm-present', exePath, message: 'DRM status unknown — run removal to check' }
   })
 }
+

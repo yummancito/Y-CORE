@@ -154,6 +154,9 @@ export default function StorePage() {
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   const animStylesRef = useRef<Record<string, { animation: string; animationDelay: string }>>({})
   const loadingMoreRef = useRef(false)
+  // Guards against a stale response (e.g. the user flips `sort` twice
+  // quickly) landing after a newer request already replaced the list.
+  const browseRequestIdRef = useRef(0)
 
   const filterGames = useCallback((raw: MergedGame[]): MergedGame[] => {
     return dedupeByAppId(raw)
@@ -170,9 +173,11 @@ export default function StorePage() {
       setBrowseLoading(false)
       return
     }
+    const requestId = ++browseRequestIdRef.current
     setBrowseLoading(true)
     try {
       const resp = await listGames({ sort, limit: 60, offset: 0 })
+      if (requestId !== browseRequestIdRef.current) return // a newer request already won
       const games = resp.games ? filterGames(resp.games.map(gameSummaryToMerged)) : []
       loadOffsetRef.current = resp.games?.length ?? 0
       setHasMore((resp.games?.length ?? 0) > 0)
@@ -181,9 +186,10 @@ export default function StorePage() {
         _gamesCache = { games, timestamp: Date.now(), showAdult, sort }
       }
     } catch (err: any) {
+      if (requestId !== browseRequestIdRef.current) return
       showToast('error', `${t('store.failedLoad')}: ${parseError(err)}`)
     } finally {
-      setBrowseLoading(false)
+      if (requestId === browseRequestIdRef.current) setBrowseLoading(false)
     }
   }, [filterGames, showAdult, sort, showToast])
 
@@ -330,7 +336,8 @@ export default function StorePage() {
 
   const enqueueGame = useDownloadQueueStore((s) => s.enqueue)
 
-  const handleInstall = async (game: MergedGame) => {
+  // ── Handlers memoizados para evitar recrear props en cada render ──
+  const handleInstall = useCallback(async (game: MergedGame) => {
     const launcherInfo = getLauncherInfo(game.app_id)
     if (launcherInfo) {
       const message = t('store.incompatibleLauncher').replace('{launcher}', launcherInfo.launcher)
@@ -343,7 +350,7 @@ export default function StorePage() {
       return
     }
     enqueueGame({ appId: game.app_id, name: game.name || `App ${game.app_id}` })
-  }
+  }, [enqueueGame, getLauncherInfo, setConfirmDialog, t])
 
   // Auto-play hero carousel — advance every 6s, pause on hover
   useEffect(() => {
@@ -365,7 +372,11 @@ export default function StorePage() {
     }
   }, [heroPaused])
 
-  const cardProps = { onInstall: handleInstall, installing, onSelect: (g: MergedGame) => navigate(`/store/${g.app_id}`) }
+  // useMemo evita recrear este objeto en cada render (GameCard es memo, necesita props estables)
+  const cardProps = useMemo(
+    () => ({ onInstall: handleInstall, installing, onSelect: (g: MergedGame) => navigate(`/store/${g.app_id}`) }),
+    [handleInstall, installing, navigate],
+  )
   const showSearch = query.trim().length >= 2 && searchResults !== null
 
   usePageHeader(
@@ -451,7 +462,7 @@ export default function StorePage() {
               <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, rgba(9,9,11,0.92) 0%, rgba(9,9,11,0.55) 45%, transparent 80%)' }} />
               <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(9,9,11,0.7), transparent 45%)' }} />
               <div className="absolute inset-0 flex flex-col justify-center pl-14 pr-10" style={{ maxWidth: '620px' }}>
-                <span className="flex items-center gap-2 text-[11px] font-bold tracking-[0.1em] uppercase mb-2.5" style={{ color: '#3BB2F7' }}>
+                <span className="flex items-center gap-2 text-[11px] font-bold tracking-[0.1em] uppercase mb-2.5" style={{ color: 'var(--accent)' }}>
                   <Star className="w-3.5 h-3.5 fill-current" />
                   {g.tag}
                 </span>
@@ -463,7 +474,7 @@ export default function StorePage() {
                   <button
                     onClick={(e) => { e.stopPropagation(); handleInstall({ app_id: g.id, name: g.name, source: 'catalog' } as MergedGame) }}
                     className="flex items-center gap-2.5 px-[26px] py-3.5 rounded-xl text-sm font-bold text-white border-none cursor-pointer transition-all hover:brightness-110 hover:-translate-y-px"
-                    style={{ background: 'linear-gradient(135deg,#3BB2F7,#2A8FD1)', boxShadow: '0 8px 24px rgba(59,178,247,0.4)' }}
+                    style={{ background: 'linear-gradient(135deg, var(--accent), #0058c4)', boxShadow: '0 8px 24px rgba(59,178,247,0.4)' }}
                   >
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     {t('store.install')}
@@ -489,8 +500,8 @@ export default function StorePage() {
                 style={{
                   width: i === heroIndex ? '32px' : '12px',
                   height: '10px',
-                  background: i === heroIndex ? '#3BB2F7' : 'rgba(255,255,255,0.5)',
-                  boxShadow: i === heroIndex ? '0 0 12px rgba(59,178,247,0.6)' : 'none',
+                  background: i === heroIndex ? 'var(--accent)' : 'rgba(255,255,255,0.5)',
+                  boxShadow: i === heroIndex ? '0 0 12px rgba(0,120,242,0.6)' : 'none',
                 }}
               />
             ))}
@@ -550,10 +561,10 @@ export default function StorePage() {
                   onClick={() => setBrowseFilter(cat.id as CategoryId)}
                   className="flex items-center gap-2.5 h-11 px-4 rounded-xl text-sm font-medium transition-all duration-200"
                   style={{
-                    background: active ? 'rgba(59,178,247,0.2)' : 'rgba(255,255,255,0.04)',
-                    color: active ? '#3BB2F7' : '#a1a1aa',
-                    border: `1px solid ${active ? 'rgba(59,178,247,0.3)' : 'rgba(255,255,255,0.08)'}`,
-                    boxShadow: active ? '0 0 16px rgba(59,178,247,0.15)' : 'none',
+                    background: active ? 'rgba(0,120,242,0.2)' : 'rgba(255,255,255,0.04)',
+                    color: active ? 'var(--accent)' : '#a1a1aa',
+                    border: `1px solid ${active ? 'rgba(0,120,242,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                    boxShadow: active ? '0 0 16px rgba(0,120,242,0.15)' : 'none',
                   }}
                 >
                   <Icon className="w-5 h-5" />
@@ -595,7 +606,7 @@ export default function StorePage() {
               )}
               {loadingMore && (
                 <div className="flex items-center justify-center gap-3 py-6 text-text-dim">
-              <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#3BB2F7' }} />
+              <Loader2 className="w-8 h-8 animate-spin text-accent" />
               <span className="text-lg font-semibold">Cargando más juegos...</span>
                 </div>
               )}

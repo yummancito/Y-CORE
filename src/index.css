@@ -116,9 +116,9 @@
   --gradient: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
 
   /* Design tokens */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -186,9 +186,9 @@
   --gradient: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
 
   /* Design tokens */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -209,7 +209,7 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
+html, body {
   height: 100%;
   width: 100%;
   overflow: hidden;
@@ -217,11 +217,42 @@ html, body, #root {
 }
 
 body {
+  padding: 6px;
+  box-sizing: border-box;
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   background: transparent;
   color: var(--text-primary);
   user-select: none;
 }
+
+#root {
+  height: 100%;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-secondary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* ===== Mobile stream mode — remove desktop chrome ===== */
+/* When the mobile SPA mounts (MobileApp component), `mobile-active` is added
+   to <html>. This resets the Electron desktop styling (body padding, rounded
+   corners on #root, shadow) so the stream fills the entire screen edge-to-edge
+   on iPhone / Android browsers. */
+html.mobile-active body {
+  padding: 0 !important;
+}
+html.mobile-active #root {
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+
 
 @layer components {
   .btn-primary {

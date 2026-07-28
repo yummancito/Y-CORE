@@ -17,12 +17,11 @@ import {
   getSteamPublicKey,
   encryptWithSteamPublicKey,
   STEAM_RSA_CIPHERTEXT_BYTES,
-  steamModulusByteLength,
 } from '../../electron/modules/steampipe/steam-rsa'
 
 describe('steam-rsa — Steam public key shape', () => {
-  it('modulus byte length is 128 (1024-bit RSA)', () => {
-    expect(steamModulusByteLength()).toBe(128)
+  it('RSA ciphertext length is 128 bytes (1024-bit key)', () => {
+    expect(STEAM_RSA_CIPHERTEXT_BYTES).toBe(128)
   })
 
   it('ciphertext byte length constant is 128', () => {

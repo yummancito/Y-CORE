@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FolderOpen, Check, Loader2 } from 'lucide-react'
 import { useTourStore, type TourStep } from '../../stores/useTourStore'
@@ -95,6 +95,14 @@ function TourOverlayInner() {
   const [animDir, setAnimDir] = useState<'left' | 'right'>('right')
   const [lastStep, setLastStep] = useState(0)
   const navigate = useNavigate()
+  const location = useLocation()
+  // The mobile route (#/remote-mobile/...) is a stripped-down client-only
+  // surface — no TopNav, no library tabs, none of the selectors the tour
+  // bubbles anchor to. Auto-starting the desktop tour there crashes the
+  // ghost on missing data-tour targets AND is bad UX for a phone user who
+  // never opened the desktop app. Block the auto-start on this route; the
+  // user can still skip manually if they navigate into a desktop route.
+  const isMobileRoute = location.pathname.startsWith('/remote-mobile')
 
   useEffect(() => {
     if (!isOpen) return
@@ -178,6 +186,8 @@ function TourOverlayInner() {
   useEffect(() => {
     let cancelled = false
     const timer = setTimeout(() => {
+      // Mobile-route guard (see isMobileRoute declaration above).
+      if (cancelled || isMobileRoute) return
       const cfg = window.steamtools?.readConfig?.()
       Promise.resolve(cfg)
         .then((c: any) => {
@@ -203,7 +213,7 @@ function TourOverlayInner() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [start, log])
+  }, [start, log, isMobileRoute])
 
   const step = steps[currentStep]
   if (!isOpen || !step) return null

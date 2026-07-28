@@ -12,7 +12,6 @@ import {
   Camera,
   Globe,
   PlusCircle,
-  Activity,
   Users,
   ExternalLink,
   MessagesSquare,
@@ -21,11 +20,12 @@ import {
   FolderOpen,
   Check,
   RefreshCw,
-  Download,
-  Terminal,
+  Gamepad2,
+  Monitor,
+  Activity,
   X,
 } from 'lucide-react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Cpu, ShieldCheck, ShieldAlert, RotateCcw } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useToastStore } from '../stores/useToastStore'
@@ -33,10 +33,13 @@ import { useSettingsStore } from '../stores/useSettingsStore'
 import { usePageHeader } from '../components/layout/AppShell'
 import { Card } from '../components/ui/Card'
 import { CustomizationPanel } from '../components/settings/CustomizationPanel'
+import { RuntimeSettings } from '../components/gre/RuntimeSettings'
 import type { LogConfig } from '../domain/types'
 import { sendDiscordReport } from '../lib/discord-report'
+import { useDefenderFixStore } from '../stores/useDefenderFixStore'
+import { EmulatorDiagnosticsCard } from '../components/diagnostics/EmulatorDiagnosticsCard'
 
-type SettingsTab = 'account' | 'content' | 'logs' | 'personalization' | 'community'
+type SettingsTab = 'account' | 'content' | 'logs' | 'personalization' | 'community' | 'runtime'
 
 interface TabConfig {
   id: SettingsTab
@@ -49,6 +52,7 @@ const TABS: TabConfig[] = [
   { id: 'content', label: 'settings.tabContent', icon: Shield },
   { id: 'logs', label: 'settings.tabLogs', icon: ScrollText },
   { id: 'personalization', label: 'settings.tabPersonalization', icon: Palette },
+  { id: 'runtime', label: 'Runtimes', icon: Cpu },
   { id: 'community', label: 'settings.tabCommunity', icon: Users },
 ]
 
@@ -123,7 +127,9 @@ export default function SettingsPage() {
   const {
     showAdult, showTools, showAddGame, logsVisible, colorTheme, language,
     setShowAdult, setShowTools, setShowAddGame, setLogsVisible, setColorTheme, setLanguage, loadFromConfig,
-    installMethod, setInstallMethod, lastInstallFallbackReason, clearInstallFallbackReason,
+    /* Round-9 fix: launcherMode removed — Y-core no tiene modo alternativo */
+    killSteamBeforeLaunch,
+    setKillSteamBeforeLaunch,
   } = useSettingsStore()
   const [activeTab, setActiveTab] = useState<SettingsTab>('account')
   const [steamLogMonitor, setSteamLogMonitor] = useState(true)
@@ -409,134 +415,117 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          {/* Install method picker (H1.6) */}
+          {/* Install engine notice (V2-only): the picker is gone because every
+              install goes through the V2 download engine automatically. The
+              Launcher mode card below is the only install-related choice the
+              user retains. */}
+          <Card>
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/15 flex items-center justify-center">
+                  <Check className="w-5 h-5 text-accent" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-text-bright">Motor de instalación</h3>
+                  <p className="text-xs text-text-dim mt-0.5">
+                    Todas las descargas usan el motor V2 (SteamPipe directo, anónimo, sin abrir Steam).
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Round-9 fix: Launcher mode is now a single static card. Y-core owns 100% of launches. */}
           <Card>
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-accent/15 flex items-center justify-center">
-                  <Download className="w-5 h-5 text-accent" />
+                  <Gamepad2 className="w-5 h-5 text-accent" />
                 </div>
                 <div>
-                  <h3 className="text-base font-semibold text-text-bright">{t('installMethod.title')}</h3>
-                  <p className="text-xs text-text-dim mt-0.5">{t('installMethod.desc')}</p>
+                  <h3 className="text-base font-semibold text-text-bright">Modo de lanzamiento</h3>
+                  <p className="text-xs text-text-dim mt-0.5">Y-core es ahora TU Steam. Los juegos se inician siempre en modo nativo.</p>
                 </div>
               </div>
 
-              {/* Fallback banner (aparece si el último install cayó a cliente) */}
-              {lastInstallFallbackReason && (
-                <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-500/[0.08] border border-amber-500/30">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-amber-300">
-                      {t('installMethod.lastFallbackTitle')}
-                    </p>
-                    <p className="text-[11px] text-amber-200/80 mt-0.5 leading-relaxed">
-                      {t(`installMethod.fallbackReason.${lastInstallFallbackReason}` as 'installMethod.fallbackReason.steamcmd-not-available')}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void clearInstallFallbackReason()}
-                    className="p-1 rounded-md text-amber-400/60 hover:text-amber-300 hover:bg-amber-500/10 transition-colors shrink-0"
-                    aria-label={t('installMethod.dismissBanner')}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
+              <div className="flex items-center gap-3 p-3 rounded-xl border bg-accent/10 border-accent/50 shadow-[0_0_0_1px_rgba(115,115,255,0.15)]">
+                <span className="flex-none w-9 h-9 rounded-lg flex items-center justify-center bg-accent/25 text-accent">
+                  <Monitor className="w-5 h-5" />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-text-bright">Directo (Y-core nativo)</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/20 text-accent">
+                      siempre
+                    </span>
+                  </span>
+                  <span className="block text-[12px] text-text-dim mt-1 leading-relaxed">
+                    Steam no se abre nunca. La cadena <code className="font-mono text-[10px]">removeGameDrm → patchGameFolder → spawn</code> corre entera dentro de Y-core.
+                  </span>
+                </span>
+                <span className="flex-none mt-1 w-4 h-4 rounded-full border-2 border-accent flex items-center justify-center">
+                  <span className="w-2 h-2 rounded-full bg-accent" />
+                </span>
+              </div>
 
-              {/* 4 picker cards (radio role) */}
-              <div className="flex flex-col gap-2.5" role="radiogroup" aria-label={t('installMethod.ariaGroup')}>
-                {([
-                  {
-                    key: 'auto' as const,
-                    icon: Activity,
-                    titleKey: 'installMethod.auto.title',
-                    descKey: 'installMethod.auto.desc',
-                    tipKey: 'installMethod.auto.tip',
-                    recommended: true,
-                  },
-                  {
-                    key: 'steamcmd' as const,
-                    icon: Terminal,
-                    titleKey: 'installMethod.steamcmd.title',
-                    descKey: 'installMethod.steamcmd.desc',
-                    tipKey: 'installMethod.steamcmd.tip',
-                    recommended: false,
-                  },
-                  {
-                    key: 'steampipe' as const,
-                    icon: Download,
-                    titleKey: 'installMethod.steampipe.title',
-                    descKey: 'installMethod.steampipe.desc',
-                    tipKey: 'installMethod.steampipe.tip',
-                    recommended: false,
-                  },
-                  {
-                    key: 'steamclient' as const,
-                    icon: FolderOpen,
-                    titleKey: 'installMethod.steamclient.title',
-                    descKey: 'installMethod.steamclient.desc',
-                    tipKey: 'installMethod.steamclient.tip',
-                    recommended: false,
-                  },
-                ]).map((m) => {
-                  const Icon = m.icon
-                  const on = installMethod === m.key
-                  return (
-                    <button
-                      key={m.key}
-                      type="button"
-                      role="radio"
-                      aria-checked={on ? 'true' : 'false'}
-                          onClick={() => void setInstallMethod(m.key)}
-                      aria-label={t(m.tipKey)}
-                      className={[
-                        'text-left flex gap-3 p-3.5 rounded-xl border transition-all duration-150',
-                        on
-                          ? 'bg-accent/10 border-accent/50 shadow-[0_0_0_1px_rgba(115,115,255,0.15)]'
-                          : 'bg-white/[0.03] border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.05]',
-                      ].join(' ')}
-                    >
-                      <span
-                        className={[
-                          'flex-none w-9 h-9 rounded-lg flex items-center justify-center transition-colors',
-                          on ? 'bg-accent/25 text-accent' : 'bg-white/[0.06] text-text-secondary',
-                        ].join(' ')}
-                      >
-                        <Icon className="w-5 h-5" />
-                      </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-text-bright">{t(m.titleKey)}</span>
-                          {m.recommended && (
-                            <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/20 text-accent">
-                              {t('installMethod.recommended')}
-                            </span>
-                          )}
-                        </span>
-                        <span className="block text-[12px] text-text-dim mt-1 leading-relaxed">{t(m.descKey)}</span>
-                        {m.key === 'steamclient' && on && (
-                          <span className="flex items-center gap-1.5 text-[11px] text-amber-300/90 mt-2">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            {t('installMethod.steamclient.openSteamNote')}
-                          </span>
-                        )}
-                      </span>
-                      <span
-                        className={[
-                          'flex-none mt-1 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors',
-                          on ? 'border-accent' : 'border-white/[0.18]',
-                        ].join(' ')}
-                        aria-hidden="true"
-                      >
-                        {on && <span className="w-2 h-2 rounded-full bg-accent" />}
-                      </span>
-                    </button>
-                  )
-                })}
+              <div className="text-[11px] text-text-dim leading-relaxed p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+                <p className="font-semibold text-amber-400 mb-1">⚠ Si un juego requiere la URL Steam (Layer-4 / Denuvo / EAC / SecuROM)</p>
+                <p>Y-core emite un error accionable en /logs con el nombre exacto de la DLL que rompió el handshake. La ruta "Steam como plan B" ya no existe — instalá Steam Client si necesitás esos juegos, o esperá la detección automática de Layer-4 + telemetría post-launch (en roadmap; ver el card "Emulador nativo" más abajo).</p>
+              </div>
+
+              {/* Round-10: Steam autonomy toggle — togglear esta opción mata
+                 * Steam.exe + steamwebhelper.exe ANTES de cada launch nativo.
+                 * Cuando está activa, cada click en Jugar demuestra visualmente
+                 * que Y-core es independiente de Steam (Steam desaparece y el
+                 * juego sigue abriendo). Default false. */}
+              <div className="flex items-start gap-3 p-3.5 rounded-xl border bg-white/[0.02] border-white/[0.06]">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={killSteamBeforeLaunch}
+                  onClick={() => setKillSteamBeforeLaunch(!killSteamBeforeLaunch)}
+                  className={`flex-none relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                    killSteamBeforeLaunch ? 'bg-accent' : 'bg-white/[0.12]'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-200 ${
+                      killSteamBeforeLaunch ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-text-bright">
+                      Matar proceso de Steam antes de cada launch
+                    </span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300">
+                      diagnóstico
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-text-dim mt-1 leading-relaxed">
+                    Antes de continuar con <code className="font-mono text-[10px]">removeGameDrm → patchGameFolder → spawn</code>,
+                    hace <code className="font-mono text-[10px]">taskkill /IM steam.exe /F</code> + <code className="font-mono text-[10px]">steamwebhelper.exe</code>.
+                    Útil si ves Steam abrirse junto al juego y querés verificación visual de que Y-core es independiente.
+                  </p>
+                  <p className="text-[11px] text-text-dim/80 mt-1.5 leading-relaxed">
+                    Cuando lo activás, cada launch muestra un toast tipo <em>"Steam estaba activo y fue terminado antes del launch"</em>.
+                    Cuando lo desactivás y Steam estaba activo, el toast dice <em>"Steam estaba activo pero Y-core lanzó el juego nativamente igual"</em>.
+                    En ambos casos el juego abre desde Y-core. La diferencia es sólo cosmética / diagnóstica.
+                  </p>
+                </div>
               </div>
             </div>
+          </Card>
+
+          {/* Windows Defender DLL diagnostic with auto-fix */}
+          <Card>
+            <DefenderCard />
+          </Card>
+
+          {/* ycore_steam.dll diagnostics — Layer 1 API stub + Layer 3 Goldberg layout */}
+          <Card>
+            <EmulatorDiagnosticsCard />
           </Card>
         </div>
       )}
@@ -754,6 +743,19 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Runtime tab */}
+      {activeTab === 'runtime' && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-text-bright">Game Runtime Environment</h2>
+            <p className="text-xs text-text-dim mt-0.5">
+              Detect and manage Windows game runtimes, configure process monitoring, and auto-backup saves.
+            </p>
+          </div>
+          <RuntimeSettings />
+        </div>
+      )}
+
       {/* Community tab */}
       {activeTab === 'community' && (
         <div className="space-y-4">
@@ -868,3 +870,180 @@ export default function SettingsPage() {
     </div>
   )
 }
+
+// ── Windows Defender Diagnostic Card ────────────────────────────────────
+
+function DefenderCard() {
+  const { scanResult, lastFixResult, isScanning, isFixing, scan, runFix, clearFixResult } = useDefenderFixStore()
+  const { showToast } = useToastStore()
+
+  // Auto-scan on mount
+  useEffect(() => {
+    scan().catch(() => {})
+  }, [scan])
+
+  const handleScan = useCallback(async () => {
+    try {
+      await scan()
+      showToast('info', 'Escaneo completado')
+    } catch (err: any) {
+      showToast('error', 'Error al escanear: ' + (err?.message ?? 'desconocido'))
+    }
+  }, [scan, showToast])
+
+  const handleFix = useCallback(async () => {
+    try {
+      showToast('info', 'Ejecutando reparación de Windows Defender...')
+      const result = await runFix()
+      if (result.success) {
+        showToast('success', result.message)
+      } else {
+        showToast('error', result.message || 'La reparación no se completó')
+      }
+    } catch (err: any) {
+      showToast('error', 'Error al reparar: ' + (err?.message ?? 'desconocido'))
+    }
+  }, [runFix, showToast])
+
+  // Estado general
+  const allOk = scanResult && !scanResult.hasMissingExpected && !scanResult.hasEmptyDlls
+  const hasIssues = scanResult && (scanResult.hasMissingExpected || scanResult.hasEmptyDlls)
+
+  return (
+    <div className="space-y-4">
+      {/* Status indicator */}
+      <div className={`flex items-center gap-3 p-3 rounded-xl border ${
+        allOk
+          ? 'bg-green-500/[0.06] border-green-500/20'
+          : hasIssues
+            ? 'bg-red-500/[0.06] border-red-500/20'
+            : 'bg-white/[0.03] border-white/[0.06]'
+      }`}>
+        {allOk ? (
+          <>
+            <ShieldCheck className="w-5 h-5 text-green-400 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-green-400">Componentes nativos funcionando</p>
+              <p className="text-[11px] text-text-dim mt-0.5">
+                Todos los DLLs estan en su lugar. Windows Defender no esta bloqueando nada.
+              </p>
+            </div>
+          </>
+        ) : hasIssues ? (
+          <>
+            <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-red-400">DLLs bloqueados o faltantes</p>
+              <p className="text-[11px] text-text-dim mt-0.5">
+                Windows Defender puede haber puesto en cuarentena los DLLs nativos.
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <RefreshCw className="w-5 h-5 text-text-dim animate-pulse shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-text-secondary">Escaneando...</p>
+              <p className="text-[11px] text-text-dim mt-0.5">Verificando el estado de los componentes nativos.</p>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* DLL list (when scan completed) */}
+      {scanResult && scanResult.dlls.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">
+            DLLs escaneados ({scanResult.dlls.length})
+          </p>
+          {scanResult.dlls.map((dll, i) => (
+            <div
+              key={i}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
+                !dll.exists || dll.isEmpty
+                  ? 'bg-red-500/[0.05] text-red-300'
+                  : 'bg-green-500/[0.04] text-green-300'
+              }`}
+            >
+              {dll.exists && !dll.isEmpty ? (
+                <Check className="w-3.5 h-3.5 shrink-0" />
+              ) : (
+                <X className="w-3.5 h-3.5 shrink-0" />
+              )}
+              <span className="truncate flex-1">{dll.name}</span>
+              {dll.exists && !dll.isEmpty && (
+                <span className="text-text-dim">{((dll.size ?? 0) / 1024).toFixed(0)} KB</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Fix result message */}
+      {lastFixResult && (
+        <div className={`p-3 rounded-xl text-xs ${
+          lastFixResult.success
+            ? 'bg-green-500/[0.08] border border-green-500/20 text-green-300'
+            : 'bg-red-500/[0.08] border border-red-500/20 text-red-300'
+        }`}>
+          <p className="font-semibold mb-0.5">
+            {lastFixResult.success ? 'Reparación exitosa' : 'Reparación fallida'}
+          </p>
+          <p className="text-text-dim">{lastFixResult.message}</p>
+          {lastFixResult.restored && (
+            <p className="text-green-400 mt-1">
+              Archivos restaurados desde cuarentena. Reinicia Y-core para aplicar los cambios.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleScan}
+          disabled={isScanning}
+          className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50 transition-colors text-xs font-medium text-text-bright flex-1"
+        >
+          <RotateCcw className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+          {isScanning ? 'Escaneando...' : 'Escanear'}
+        </button>
+        {hasIssues && (
+          <button
+            onClick={handleFix}
+            disabled={isFixing}
+            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-50 transition-colors text-xs font-medium text-amber-300 border border-amber-500/30 flex-1"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isFixing ? 'animate-spin' : ''}`} />
+            {isFixing ? 'Reparando...' : 'Reparar Windows Defender'}
+          </button>
+        )}
+      </div>
+
+      {lastFixResult && (
+        <button
+          onClick={clearFixResult}
+          className="text-xs text-text-dim hover:text-text-secondary transition-colors"
+        >
+          Descartar mensaje
+        </button>
+      )}
+
+      {/* Tips */}
+      {hasIssues && (
+        <div className="text-[11px] text-text-dim leading-relaxed p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
+          <p className="font-semibold text-text-secondary mb-1">
+            Sugerencias:
+          </p>
+          <ul className="list-disc list-inside space-y-1">
+            <li>Ejecuta el boton "Reparar" arriba para agregar exclusiones automaticamente</li>
+            <li>Si no funciona, abre Windows Security &gt; Protection history &gt; Restaurar</li>
+            <li>Tambien puedes ejecutar manualmente: <code className="font-mono text-[10px]">scripts\add-defender-exclusion.bat</code></li>
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+

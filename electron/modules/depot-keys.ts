@@ -1,6 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 import { getSteamPath } from './steam-helpers'
+import { logger } from '../logger'
 
 export function injectDepotKeysIntoConfigVdf(
   depotKeys: { depotId: string; key: string }[]
@@ -19,94 +20,99 @@ export function injectDepotKeysIntoConfigVdf(
     let content = fs.readFileSync(vdfPath, 'utf-8')
     let added = 0
 
+    logger.info(`[depot-keys] Read config.vdf (${content.length} bytes)`, 'steam')
+
+    // Find existing depot IDs (with flexible whitespace matching)
     const existingKeys = new Set<string>()
-    const depotKeyRegex = /"(\d+)"\s*\{\s*\n\s*"DecryptionKey"\s*"([a-f0-9]+)"/g
+    const depotRegex = /"(\d+)"\s*\n\s*\{[\s\S]*?"DecryptionKey"/g
     let match
-    while ((match = depotKeyRegex.exec(content)) !== null) {
+    while ((match = depotRegex.exec(content)) !== null) {
       existingKeys.add(match[1])
     }
+    logger.info(`[depot-keys] Found ${existingKeys.size} existing depot keys`, 'steam')
 
-    const depotsMatch = content.match(/"depots"\s*\n\s*\{/)
-    if (!depotsMatch) {
-      // Depot section will be created
+    // Find the "depots" section
+    const depotsIndex = content.indexOf('"depots"')
+    logger.info(`[depot-keys] Depots section at index ${depotsIndex}`, 'steam')
+    if (depotsIndex === -1) {
+      return { success: false, added: 0, error: 'Cannot find depots section in config.vdf' }
+    }
 
-      const steamSectionMatch = content.match(/"Steam"\s*\n\s*\{/)
-      if (!steamSectionMatch) {
-        return { success: false, added: 0, error: 'Cannot find Steam section in config.vdf' }
-      }
+    // Find the opening brace of the depots section
+    let braceStart = content.indexOf('{', depotsIndex)
+    logger.info(`[depot-keys] Depots opening brace at ${braceStart}`, 'steam')
+    if (braceStart === -1) {
+      return { success: false, added: 0, error: 'Cannot find depots opening brace' }
+    }
 
-      let depotsContent = '\t\t\t\t\t"depots"\n\t\t\t\t\t{\n'
-      for (const { depotId, key } of depotKeys) {
-        depotsContent += `\t\t\t\t\t\t"${depotId}"\n\t\t\t\t\t\t{\n\t\t\t\t\t\t\t"DecryptionKey"\t\t"${key}"\n\t\t\t\t\t\t}\n`
-        added++
-      }
-      depotsContent += '\t\t\t\t\t}\n'
+    // Find the matching closing brace
+    let braceCount = 1
+    let pos = braceStart + 1
+    while (braceCount > 0 && pos < content.length) {
+      if (content[pos] === '{') braceCount++
+      else if (content[pos] === '}') braceCount--
+      pos++
+    }
 
-      const steamSectionStart = content.indexOf('"Steam"')
-      const steamBraceStart = content.indexOf('{', steamSectionStart)
-      if (steamBraceStart === -1) {
-        return { success: false, added: 0, error: 'Cannot find Steam section opening brace' }
-      }
+    if (braceCount !== 0) {
+      return { success: false, added: 0, error: 'Malformed depots section' }
+    }
 
-      const insertPos = content.indexOf('\n', steamBraceStart) + 1
-      content = content.slice(0, insertPos) + depotsContent + content.slice(insertPos)
-    } else {
-      const depotsStart = depotsMatch.index! + depotsMatch[0].length
+    const closingBracePos = pos - 1
+    logger.info(`[depot-keys] Depots closing brace at ${closingBracePos}`, 'steam')
 
-      let braceCount = 1
-      let pos = depotsStart
-      while (braceCount > 0 && pos < content.length) {
-        if (content[pos] === '{') braceCount++
-        if (content[pos] === '}') braceCount--
-        pos++
-      }
+    // Get indentation from existing entries (find first closing brace before depots end)
+    let indent = '\t\t\t\t\t'
+    const exampleMatch = content.match(/\n(\t+)"[\d]+"\s*\n\s*\{/)
+    if (exampleMatch && exampleMatch[1]) {
+      indent = exampleMatch[1] + '\t'
+    }
+    logger.info(`[depot-keys] Using indent: ${indent.length} tabs`, 'steam')
 
-      if (braceCount !== 0) {
-        return { success: false, added: 0, error: 'Malformed depots section in config.vdf' }
-      }
+    // Build new entries and handle updates
+    let newEntries = ''
+    for (const { depotId, key } of depotKeys) {
+      logger.info(`[depot-keys] Processing depot ${depotId}... exists=${existingKeys.has(depotId)}`, 'steam')
 
-      const closingBracePos = pos - 1
-
-      let lineStart = closingBracePos
-      while (lineStart > 0 && content[lineStart - 1] !== '\n') {
-        lineStart--
-      }
-
-      const depotsLineStart = content.lastIndexOf('\n', depotsMatch.index!) + 1
-      const depotsIndent = content.slice(depotsLineStart, depotsMatch.index!).match(/^\s*/)?.[0] || '\t\t\t\t\t'
-
-      let newEntries = ''
-      for (const { depotId, key } of depotKeys) {
-        if (!existingKeys.has(depotId)) {
-          newEntries += `${depotsIndent}\t"${depotId}"\n${depotsIndent}\t{\n${depotsIndent}\t\t"DecryptionKey"\t\t"${key}"\n${depotsIndent}\t}\n`
+      if (existingKeys.has(depotId)) {
+        // Depot already exists, REPLACE its key
+        const regex = new RegExp(
+          `("${depotId}"\\s*\\n\\s*\\{\\s*\\n\\s*"DecryptionKey"\\s*)"[a-f0-9]+"`,
+          'i'
+        )
+        if (regex.test(content)) {
+          logger.info(`[depot-keys] Updating existing depot ${depotId} with new key`, 'steam')
+          content = content.replace(regex, `$1"${key}"`)
           added++
-        } else {
-          const existingRegex = new RegExp(`"${depotId}"\\s*\\{\\s*\\n\\s*"DecryptionKey"\\s*"[a-f0-9]+"`)
-          if (existingRegex.test(content)) {
-            content = content.replace(
-              existingRegex,
-              `"${depotId}"\n${depotsIndent}\t{\n${depotsIndent}\t\t"DecryptionKey"\t\t"${key}"`
-            )
-            added++
-          }
         }
-      }
-
-      if (newEntries) {
-        content = content.slice(0, lineStart) + newEntries + content.slice(lineStart)
+      } else {
+        // Depot doesn't exist, add it
+        logger.info(`[depot-keys] Adding new depot ${depotId}`, 'steam')
+        newEntries += `\n${indent}"${depotId}"\n${indent}{\n${indent}\t"DecryptionKey"\t\t"${key}"\n${indent}}`
+        added++
       }
     }
 
+    logger.info(`[depot-keys] Total changes: ${added}`, 'steam')
+
+    // Insert new entries before the closing brace
+    if (newEntries) {
+      content = content.slice(0, closingBracePos) + newEntries + '\n' + content.slice(closingBracePos)
+    }
+
+    // Write if anything changed
     if (added > 0) {
       const backupPath = vdfPath + '.bak'
       fs.copyFileSync(vdfPath, backupPath)
       fs.writeFileSync(vdfPath, content, 'utf-8')
-      console.log(`[injectDepotKeys] Added ${added} depot keys to config.vdf`)
+      logger.info(`[depot-keys] Applied ${added} changes to config.vdf`, 'steam')
+    } else {
+      logger.info(`[depot-keys] No changes needed`, 'steam')
     }
 
     return { success: true, added }
   } catch (err: any) {
-    console.error('[injectDepotKeys] Error:', err.message)
+    logger.error(`[depot-keys] Error: ${err.message}`, 'steam')
     return { success: false, added: 0, error: err.message }
   }
 }

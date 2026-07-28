@@ -64,41 +64,35 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (this.state.hasError) {
       return (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#0a0a0f] text-white">
-          <div className="max-w-md rounded-xl border border-red-500/20 bg-[#13131a] p-8 text-center">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center" style={{ background: 'var(--bg-darker)' }}>
+          <div className="max-w-md rounded-xl p-8 text-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
             <div className="mb-4 text-5xl">⚠️</div>
-            <h1 className="mb-2 text-xl font-bold text-red-400">{t('errors.crash.title')}</h1>
-            <p className="mb-4 text-sm text-gray-400">
+            <h1 className="mb-2 text-xl font-bold" style={{ color: 'var(--red)' }}>{t('errors.crash.title')}</h1>
+            <p className="mb-4 text-sm" style={{ color: 'var(--text-dim)' }}>
               {t('errors.crash.desc')}
             </p>
             {this.state.error && (
-              <pre className="mb-4 max-h-32 overflow-auto rounded-lg bg-black/40 p-3 text-left text-xs text-gray-500">
+              <pre className="mb-4 max-h-32 overflow-auto rounded-lg p-3 text-left text-xs" style={{ background: 'var(--bg-darker)', color: 'var(--text-dim)' }}>
                 {this.state.error.message}
               </pre>
             )}
             <div className="flex flex-wrap items-center justify-center gap-2">
               <button
                 onClick={this.handleReload}
-                className="rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+                className="btn-primary px-6 py-2.5 text-sm"
               >
                 {t('errors.crash.reload')}
               </button>
               <button
                 onClick={this.handleCopy}
-                className="rounded-lg bg-white/10 px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors hover:bg-white/15"
+                className="btn-secondary px-4 py-2.5 text-sm"
               >
                 {t('errors.crash.copy')}
               </button>
               <button
                 onClick={this.handleReport}
                 disabled={this.state.reportStatus === 'sending' || this.state.reportStatus === 'sent'}
-                className={`rounded-lg px-4 py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${
-                  this.state.reportStatus === 'sent'
-                    ? 'bg-green-600/20 text-green-400'
-                    : this.state.reportStatus === 'failed'
-                      ? 'bg-red-600/20 text-red-400'
-                      : 'bg-white/10 text-gray-300 hover:bg-white/15'
-                }`}
+                className={`btn-ghost px-4 py-2.5 text-sm ${this.state.reportStatus === 'sent' ? 'text-green' : ''}`}
               >
                 {this.state.reportStatus === 'sending'
                   ? 'Enviando...'

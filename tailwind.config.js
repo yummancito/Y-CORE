@@ -87,6 +87,7 @@ export default {
         'bubble-up': 'bubbleUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
         'scale-in': 'scaleIn 0.2s ease-out',
         'spin-neu': 'spin 0.8s linear infinite',
+        'rotate-phone': 'rotatePhone 2s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: {
@@ -129,6 +130,12 @@ export default {
         },
         spin: {
           'to': { transform: 'rotate(360deg)' },
+        },
+        rotatePhone: {
+          '0%, 100%': { transform: 'rotate(0deg)' },
+          '25%': { transform: 'rotate(-90deg)' },
+          '50%': { transform: 'rotate(-90deg)' },
+          '75%': { transform: 'rotate(0deg)' },
         },
       },
     },

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { setLanguage as setI18nLanguage } from '../lib/i18n'
+import { configService } from '../services/config.service'
 
 export interface NavItemConfig {
   id: string
@@ -75,34 +76,26 @@ export const DEFAULT_CUSTOMIZATION: Customization = {
     { id: 'logs', visible: true, order: 6 },
     { id: 'settings', visible: true, order: 7 },
   ],
-}
+}// H1.3 — V2-only: no install method toggling. Every game install goes through
+// the V2 download engine (real anonymous SteamPipe CDN worker). The legacy
+// `installMethod`, `lastInstallFallbackReason`, and SteamCMD/Lua-client
+// branches are GONE; their types removed so any remaining callers fail loudly
+// at typecheck instead of silently misbehaving.
 
 /**
- * H1.3 — método preferido de instalación de juegos.
- *   - 'steamcmd'    → fuerza SteamCMD; si no está disponible, dispatcher cae a cliente.
- *   - 'steamclient' → solo cliente Lua (flujo legacy).
- *   - 'auto'        → SteamCMD si está disponible; sino cliente.
- */
-export type InstallMethod = 'steamcmd' | 'steamclient' | 'auto' | 'steampipe'
-
-/**
- * H1.4 — razón por la que el último install cayó a cliente. Persistido para que
- * SettingsPage pueda mostrar "El último intento con SteamCMD falló por: X"
- * y sugerir al usuario cambiar el método o reintentar manualmente.
+ * Modo de lanzamiento de juegos.
+ *   - 'native' → lanza el .exe directamente desde Y-core sin Steam.
  *
- * El array INSTALL_FALLBACK_REASONS es la fuente de verdad del runtime; el
- * tipo se deriva vía `typeof INSTALL_FALLBACK_REASONS[number]` para evitar
- * drift entre el enum y la validación en `loadFromConfig`.
+ * Round-9 fix: removido el valor 'steam' / la ruta shell.openExternal
+ * 'steam://rungameid/...'. Y-core owns 100% of game launches. Si un juego
+ * requiere nivel-4 (Denuvo/EAC), patchGameFolder + removeGameDrm pueden
+ * no alcanzar y la app retorna un error accionable en lugar de derivar
+ * a Steam. La UI sigue mostrando un único valor "Directo (sin Steam)".
+ * El campo persistence se conserva para migrar configs legacy (ver
+ * loadFromConfig): si el JSON tenía `launcherMode: 'steam'` se ignora y
+ * el store arranca fijo en 'native'.
  */
-export const INSTALL_FALLBACK_REASONS = [
-  'steamcmd-not-available',
-  'notAnonymous',
-  'stalled',
-  'bin-too-small',
-  'spawn-failed',
-] as const
-
-export type InstallFallbackReason = (typeof INSTALL_FALLBACK_REASONS)[number]
+export type LauncherMode = 'native'
 
 interface SettingsStore {
   showAdult: boolean
@@ -112,8 +105,16 @@ interface SettingsStore {
   colorTheme: string
   language: string
   customization: Customization
-  installMethod: InstallMethod
-  lastInstallFallbackReason: InstallFallbackReason | null
+  launcherMode: LauncherMode
+  /**
+   * Round-10: cuando true, cada launch nativo hace taskkill de steam.exe y
+   * steamwebhelper.exe ANTES de continuar con el chain removeGameDrm →
+   * patchGameFolder → spawn. Es una toggle de diagnóstico: le da al usuario
+   * visibilidad VERIFICABLE de que Y-core no depende de Steam para correr
+   * juegos — porque Steam desaparece y el juego sigue abriendo.
+   * Default false para no molestar a quien tiene Steam abierto a propósito.
+   */
+  killSteamBeforeLaunch: boolean
   setShowAdult: (v: boolean) => void
   setShowTools: (v: boolean) => void
   setShowAddGame: (v: boolean) => void
@@ -121,34 +122,26 @@ interface SettingsStore {
   setColorTheme: (v: string) => void
   setLanguage: (v: string) => void
   setCustomization: (partial: Partial<Customization>) => Promise<void>
-  setInstallMethod: (v: InstallMethod) => Promise<void>
-  setInstallFallbackReason: (reason: InstallFallbackReason | null) => Promise<void>
-  clearInstallFallbackReason: () => Promise<void>
+  setLauncherMode: (v: LauncherMode) => Promise<void>
+  setKillSteamBeforeLaunch: (v: boolean) => Promise<void>
   loadFromConfig: () => void
 }
 
 // ---------------------------------------------------------------------------
 // Race-safe persistence
 // ---------------------------------------------------------------------------
-// setInstallMethod y setInstallFallbackReason pueden dispararse consecutivamente
-// durante un fallback (e.g. accept un SteamCMD failure → dispatcher cae a
-// steamclient + notifica el motivo). Si cada uno hace read-mutate-write
-// independientemente, el segundo read puede ver una versión obsoleta del
-// config (sin el campo del primero) y pisar lo escrito.
-//
-// Solución: encadenar TODAS las writes por un módulo-level pendingWrite.
-// Cada setter hace `pendingWrite.then(...).catch(...)` y re-asigna
-// pendingWrite a su propia promesa. Independientemente de cuántos setters
-// disparen en el mismo tick, se ejecutan en serie preservando todas las
-// actualizaciones.
+// Encadenamos TODAS las writes via pendingWrite. Cualquier setter dispara
+// read-mutate-write sobre la config — sin la cadena perderíamos writes
+// concurrentes (e.g. cuando el usuario arrastra un color picker a la vez
+// que cambia el idioma).
 
 let pendingWrite: Promise<void> = Promise.resolve()
 
 async function writeConfigSerialized(updates: Record<string, unknown>): Promise<void> {
   const myWrite = pendingWrite.then(async () => {
     try {
-      const existingConfig = (await window.steamtools?.readConfig?.()) as Record<string, unknown> | null
-      await window.steamtools?.writeConfig?.({
+      const existingConfig = await configService.read()
+      await configService.write({
         ...(existingConfig || {}),
         ...updates,
       })
@@ -156,10 +149,7 @@ async function writeConfigSerialized(updates: Record<string, unknown>): Promise<
       // Non-Electron tests / CLI: bridge no disponible, no persistimos.
     }
   })
-  // Chain the NEXT write after mine (sin importar el éxito de este).
   pendingWrite = myWrite.catch(() => {})
-  // El caller no ve mis errores (puede chainear la suya), pero await myWrite
-  // por API contract.
   await myWrite.catch(() => {})
 }
 
@@ -171,9 +161,15 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   colorTheme: 'ct-y-core',
   language: 'es',
   customization: DEFAULT_CUSTOMIZATION,
-  // H1.3 — default 'auto' para no romper usuarios que ya usan Y-core.
-  installMethod: 'auto' as InstallMethod,
-  lastInstallFallbackReason: null,
+  // Default: 'native' — lanzar juegos directamente sin Steam (única opción
+  // expuesta; el campo se mantiene para el legacy config que pueda tener ya
+  // guardado el valor 'steam').
+  // Round-9 fix: literal-singleton. El único valor válido es 'native'.
+  launcherMode: 'native' as LauncherMode,
+  // Round-10: default false. La toggle vive en Settings → Steam Integration.
+  // Yi-core nativo siempre lanza; este flag SOLO mata Steam.exe antes para
+  // que el user pueda verificar con sus ojos que no hay dependencia.
+  killSteamBeforeLaunch: false,
 
   setShowAdult: (v) => set({ showAdult: v }),
   setShowTools: (v) => set({ showTools: v }),
@@ -197,31 +193,21 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     await writeConfigSerialized({ customization: merged })
   },
 
-  // H1.3: setter de método. Limpia el fallback reason si lo había (el
-  // operador está retomando el control).
-  setInstallMethod: async (v: InstallMethod) => {
-    set({ installMethod: v, lastInstallFallbackReason: null })
-    await writeConfigSerialized({
-      installMethod: v,
-      lastInstallFallbackReason: null,
-    })
+  // Round-9 fix: setLauncherMode se mantiene en el type por back-compat
+  // pero se vuelve no-op—— no hay más estado que cambiar. Si una parte
+  // legacy del renderer todavía lo llama, simplemente no persiste nada.
+  setLauncherMode: async (_v: LauncherMode) => {
+    /* no-op: Y-core ya no tiene modo alternativo */
   },
 
-  // H1.4: store-side para que el processor notifique "fallé por X" sin que
-  // el processor toque directamente el bridge de config.
-  setInstallFallbackReason: async (reason: InstallFallbackReason | null) => {
-    set({ lastInstallFallbackReason: reason })
-    await writeConfigSerialized({ lastInstallFallbackReason: reason })
-  },
-
-  clearInstallFallbackReason: async () => {
-    set({ lastInstallFallbackReason: null })
-    await writeConfigSerialized({ lastInstallFallbackReason: null })
+  setKillSteamBeforeLaunch: async (v: boolean) => {
+    set({ killSteamBeforeLaunch: v })
+    await writeConfigSerialized({ killSteamBeforeLaunch: v })
   },
 
   loadFromConfig: () => {
     try {
-      window.steamtools?.readConfig?.().then((cfg) => {
+      configService.read().then((cfg) => {
         if (cfg) {
           const c = cfg as any
           if (c.showAdult !== undefined) set({ showAdult: c.showAdult })
@@ -234,18 +220,42 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
             set({ language: c.language })
           }
 
-          // H1.3 — hydra installMethod desde config. Valores fuera del enum caen al default sin efecto.
-          if (c.installMethod === 'steamcmd' || c.installMethod === 'steamclient' || c.installMethod === 'auto' || c.installMethod === 'steampipe') {
-            set({ installMethod: c.installMethod })
-          }
+          // V1-only fields: silently ignored. Old configs may contain
+          // installMethod / lastInstallFallbackReason / installFallbackReason;
+          // we don't read them because V2 doesn't honor those knobs.
+          void c.installMethod
+          void c.lastInstallFallbackReason
+          void c.installFallbackReason
 
-          // H1.4 — hydra lastInstallFallbackReason si está presente y válido. Usa
-          // el array derivable del tipo para no duplicar el enum.
-          if (
-            c.lastInstallFallbackReason &&
-            (INSTALL_FALLBACK_REASONS as readonly string[]).includes(c.lastInstallFallbackReason)
-          ) {
-            set({ lastInstallFallbackReason: c.lastInstallFallbackReason as InstallFallbackReason })
+          // Round-9 fix: el único valor válido es 'native'. Cualquier
+          // 'steam' legacy en configs.json se descarta silenciosamente y
+          // el store queda en 'native'. (Antes hacía set con 'steam' si
+          // lo encontraba — obsoleto.)
+          if (c.launcherMode === 'native') {
+            set({ launcherMode: 'native' })
+          }
+          void c.launcherMode // referenced via 'native' branch above; ts-ignored
+
+          // Round-10 (auto-enable for fresh installs): the user explicitly
+          // reported "games still launch via Steam" — so for users whose
+          // disk config has never set killSteamBeforeLaunch, we default to
+          // TRUE on first read. Power users can disable the toggle in
+          // Settings → Steam Integration. The previous default of `false`
+          // ignored the most common false positive (Steam was already alive
+          // when the user clicked Jugar) — making the user's complaint
+          // appear unaddressed even after the patches landed.
+          //
+          // Behavior:
+          //   disk has true/false   → honor it (no override)
+          //   disk is missing key   → auto-enable, persist `true`, fire toast on first launch
+          if (typeof c.killSteamBeforeLaunch === 'boolean') {
+            set({ killSteamBeforeLaunch: c.killSteamBeforeLaunch })
+          } else {
+            set({ killSteamBeforeLaunch: true })
+            // Fire-and-forget persist so a subsequent load finds `true` set.
+            // Errors swallowed because the user already opted in by default
+            // and we'll re-attempt on next launch.
+            writeConfigSerialized({ killSteamBeforeLaunch: true }).catch(() => {})
           }
 
           if (c.customization) {
@@ -266,3 +276,82 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     }
   },
 }))
+
+
+
+// ============================================================================
+// Round-11.5 — auto-sync killSteamBeforeLaunch to main-process flips.
+// ============================================================================
+
+// Idempotency guard so HMR / multi-import does not stack listeners.
+const _round11Subscribed = new Set<string>()
+function subscribeAppEventOnce(event: string, handler: (payload: any) => void): void {
+  if (_round11Subscribed.has(event)) return
+  _round11Subscribed.add(event)
+  if (typeof window === "undefined") return
+  const tools = (window as any).steamtools
+  if (!tools?.onAppEvent) return
+  try { tools.onAppEvent(event, handler) } catch { /* never crash UI */ }
+}
+
+if (typeof window !== "undefined" && (window as any).steamtools?.onAppEvent) {
+  // 1. Steam alive at startup → main flipped killSteamBeforeLaunch false→true.
+  subscribeAppEventOnce("app:autoKillReactivated", () => {
+    try {
+      useSettingsStore.getState().setKillSteamBeforeLaunch(true)
+    } catch { /* never crash UI */ }
+  })
+
+  // 2. Silent auto-build at startup completed (or failed). Surface via toast.
+  // Lazy-require useToastStore so we never break the store module load.
+  subscribeAppEventOnce("app:autoBuildFinished", (payload: any) => {
+    try {
+      // Dynamic import to avoid circular deps + ensure toast store ready.
+      void import("../stores/useToastStore").then((mod: any) => {
+        const showToast = mod?.useToastStore?.getState?.()?.showToast
+        if (typeof showToast !== "function") return
+        if (payload?.success) {
+          showToast("success", `Emulador compilado en ${payload.durationMs ?? "?"}ms. Reiniciá Y-core para tomar el DLL nuevo.`)
+        } else {
+          showToast("error", `Emulador no se compiló: ${payload?.error ?? "error desconocido"}. Instalá cmake 3.20+ y Visual Studio Build Tools 2022.`)
+        }
+      }).catch(() => { /* silent */ })
+    } catch { /* never crash UI */ }
+  })
+
+  // 3. Round-12.5: auto-install of cmake finished (success OR failure).
+  // On success: short "Instalando dependencias…" toast since the build
+  // chain fires next and produces its own toast. On failure: persistent
+  // error with manual-install instructions.
+  subscribeAppEventOnce("app:installToolchain:finished", (payload: any) => {
+    try {
+      void import("../stores/useToastStore").then((mod: any) => {
+        const showToast = mod?.useToastStore?.getState?.()?.showToast
+        if (typeof showToast !== "function") return
+        if (payload?.success) {
+          const secs = Math.round((payload?.durationMs ?? 0) / 1000)
+          showToast("info", `cmake instalado vía ${payload.installedFrom ?? "auto-install"} (${secs}s). Compilando emulador…`)
+        } else {
+          showToast(
+            "error",
+            `No se pudo instalar cmake automáticamente. ${payload?.error ?? "Error desconocido"}. Instalá manualmente desde cmake.org/download (marcá "Add to PATH") y reiniciá Y-core.`,
+          )
+        }
+      }).catch(() => { /* silent */ })
+    } catch { /* never crash UI */ }
+  })
+
+  // 4. Round-12.5: live install progress — already streamed by main-process
+  // logger to the /logs page via its own IPC (electron/logger.ts → log:entry).
+  // We intentionally do NOT pipe from renderer to avoid double-logging and
+  // to avoid coupling renderer stores to circular deps. Console.debug keeps
+  // the line available for devtools only — no UI toast (would be spammy).
+  subscribeAppEventOnce("app:installToolchain:progress", (payload: any) => {
+    try {
+      const line = payload?.line
+      if (typeof line !== "string" || !line) return
+      // eslint-disable-next-line no-console
+      console.debug("[toolchain-install]", line)
+    } catch { /* never crash UI */ }
+  })
+}

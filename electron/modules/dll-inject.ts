@@ -116,6 +116,7 @@ function restoreOrDelete(file: string): void {
 function removeHookDlls(steamPath: string): void {
   const candidates = [
     path.join(steamPath, 'YCoreTool.dll'),
+    path.join(steamPath, 'OpenSteamTool.dll'),
     path.join(steamPath, 'steamtools_hook.dll'),
     path.join(steamPath, 'dwmapi.dll'),
     path.join(steamPath, 'xinput1_4.dll'),

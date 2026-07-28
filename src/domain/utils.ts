@@ -15,13 +15,6 @@ export function getCoverUrl(appId: string): string {
   return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/library_600x900.jpg`
 }
 
-const COVER_CACHE_VERSION = 1
-
-export function addCoverCacheBuster(url: string): string {
-  if (url.includes('?')) return `${url}&v=${COVER_CACHE_VERSION}`
-  return `${url}?v=${COVER_CACHE_VERSION}`
-}
-
 export function getCoverFallbackUrls(appId: string): string[] {
   if (!appId || !/^\d+$/.test(appId)) return []
   // Diverse CDN hosts + image variants for maximum resilience.

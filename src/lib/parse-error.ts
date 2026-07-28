@@ -32,25 +32,6 @@ export function parseError(
   return fromString(typeof err === 'string' ? err : '', fmt, fallbackKey)
 }
 
-/**
- * Variante: además del mensaje localized devuelve el detalle técnico crudo
- * para ser mostrado en "Ver detalles técnicos" del reporte (Discord) o en
- * logs. Nunca muestra el detalle al usuario directamente.
- */
-export function parseErrorWithDetail(
-  err: string | Error | null | undefined,
-  fallbackKey = 'errors.generic',
-): { message: string; technical: string | null } {
-  if (err instanceof Error) {
-    const msg = err.message?.trim() ?? ''
-    if (!msg) return { message: t(fallbackKey), technical: null }
-    return resolveFromString(msg, fallbackKey)
-  }
-  const raw = typeof err === 'string' ? err.trim() : ''
-  if (!raw) return { message: t(fallbackKey), technical: null }
-  return resolveFromString(raw, fallbackKey)
-}
-
 // ---- internals ----
 
 function fromString(
@@ -68,20 +49,6 @@ function fromString(
   const mapped = translateError(trimmed)
   if (mapped) return fmt(mapped)
   return fmt(fallbackKey)
-}
-
-function resolveFromString(
-  raw: string,
-  fallbackKey: string,
-): { message: string; technical: string | null } {
-  if (isI18nKey(raw)) return { message: t(raw), technical: null }
-  if (raw.startsWith('{')) {
-    const env = tryParseEnvelope(raw)
-    if (env) return { message: tf(env.k, env.p), technical: env.t || null }
-  }
-  const mapped = translateError(raw)
-  if (mapped) return { message: t(mapped), technical: raw }
-  return { message: t('errors.generic'), technical: raw }
 }
 
 function tryParseEnvelope(s: string): { k: string; p: Record<string, string | number>; t?: string } | null {

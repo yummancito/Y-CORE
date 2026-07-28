@@ -1,14 +1,23 @@
 import { useEffect, lazy, Suspense } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { AppShell } from './components/layout/AppShell'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { ToastContainer } from './components/ui/Toast'
-import { UpdateNotification } from './components/ui/UpdateNotification'
-import { SteamErrorModal } from './components/ui/SteamErrorModal'
-import { SignaturePendingModal } from './components/ui/SignaturePendingModal'
-import { CommandPalette } from './components/CommandPalette'
-import { TourOverlay } from './components/ui/TourOverlay'
+import { ErrorBoundary } from './components/ErrorBoundary'
+// InstallProgressDockMount and the small modals stay eager (or lazy if the chunk
+// can be skipped most of the time). To shrink the initial main bundle, lazy-load
+// the heavy overlays that are NOT visible at first paint.
+// We always render them inside <Suspense fallback={null}> — they should return
+// null themselves when their store state says "closed", so the chunk is fetched
+// only after first paint for true cold start.
 import { InstallProgressDockMount } from './components/install-progress-dock'
+// React.lazy requires modules with a `default` export. The components below use
+// named exports, so we shape the dynamic import to expose a default.
+const UpdateNotification = lazy(() => import('./components/ui/UpdateNotification').then((m) => ({ default: m.UpdateNotification })))
+const SteamErrorModal = lazy(() => import('./components/ui/SteamErrorModal').then((m) => ({ default: m.SteamErrorModal })))
+const SignaturePendingModal = lazy(() => import('./components/ui/SignaturePendingModal').then((m) => ({ default: m.SignaturePendingModal })))
+const CommandPalette = lazy(() => import('./components/CommandPalette').then((m) => ({ default: m.CommandPalette })))
+const TourOverlay = lazy(() => import('./components/ui/TourOverlay').then((m) => ({ default: m.TourOverlay })))
 import { useCommandPaletteStore } from './stores/useCommandPaletteStore'
 import { useSteamErrorStore } from './stores/useSteamErrorStore'
 
@@ -22,6 +31,21 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const OnlineFixPage = lazy(() => import('./pages/OnlineFixPage'))
 const DrmRemoverPage = lazy(() => import('./pages/DrmRemoverPage'))
 const DownloadsPage = lazy(() => import('./pages/DownloadsPage'))
+const RemotePlayPage = lazy(() => import('./pages/RemotePlayPage'))
+// MobileApp is rendered when the URL hash starts with `#/remote-mobile`.
+// Loaded lazily so the desktop app bundle stays the same size; only when the
+// user opens the dedicated mobile route does the code-split chunk download.
+const MobileApp = lazy(() => import('./mobile').then((m) => ({ default: m.MobileApp })))
+
+// GameDetailPage keeps per-game state (notes, launch profile, saves, stats
+// panels) that must reset when navigating between two games. React Router
+// reuses the same component instance across param changes on the same
+// route, so without a param-derived `key` here those child panels kept
+// showing/writing data for the previously viewed game.
+function GameDetailPageKeyed() {
+  const { appId } = useParams()
+  return <GameDetailPage key={appId} />
+}
 
 function PageLoader() {
   return (
@@ -34,25 +58,54 @@ function PageLoader() {
 function AppRoutes() {
   return (
     <AppShell>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route path="/" element={<LibraryPage />} />
-          <Route path="/store" element={<StorePage />} />
-          <Route path="/store/:appId" element={<GameDetailPage />} />
-          <Route path="/add-game" element={<AddGame />} />
-          <Route path="/import-game" element={<ImportGame />} />
-          <Route path="/logs" element={<LogsPage />} />
-          <Route path="/online-fix" element={<OnlineFixPage />} />
-          <Route path="/drm-remover" element={<DrmRemoverPage />} />
-          <Route path="/downloads" element={<DownloadsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-        </Routes>
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* Redirect root to library */}
+            <Route path="/" element={<Navigate to="/library" replace />} />
+            <Route path="/library" element={
+              <ErrorBoundary><LibraryPage /></ErrorBoundary>
+            } />
+            <Route path="/store" element={
+              <ErrorBoundary><StorePage /></ErrorBoundary>
+            } />
+            <Route path="/store/:appId" element={
+              <ErrorBoundary><GameDetailPageKeyed /></ErrorBoundary>
+            } />
+            <Route path="/add-game" element={
+              <ErrorBoundary><AddGame /></ErrorBoundary>
+            } />
+            <Route path="/import-game" element={
+              <ErrorBoundary><ImportGame /></ErrorBoundary>
+            } />
+            <Route path="/logs" element={
+              <ErrorBoundary><LogsPage /></ErrorBoundary>
+            } />
+            <Route path="/online-fix" element={
+              <ErrorBoundary><OnlineFixPage /></ErrorBoundary>
+            } />
+            <Route path="/drm-remover" element={
+              <ErrorBoundary><DrmRemoverPage /></ErrorBoundary>
+            } />
+            <Route path="/downloads" element={
+              <ErrorBoundary><DownloadsPage /></ErrorBoundary>
+            } />
+            <Route path="/remote-play" element={
+              <ErrorBoundary><RemotePlayPage /></ErrorBoundary>
+            } />
+            <Route path="/settings" element={
+              <ErrorBoundary><SettingsPage /></ErrorBoundary>
+            } />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </AppShell>
   )
 }
 
 export default function App() {
+  // Startup timing marker — visible in LogConsole
+  window.steamtools?.addLog?.({ level: 'DEBUG', message: '[STARTUP] [A] App render' }).catch(() => {})
   const { toggle: toggleCommandPalette } = useCommandPaletteStore()
   const { open: openSteamError } = useSteamErrorStore()
 
@@ -79,8 +132,16 @@ export default function App() {
   }, [toggleCommandPalette])
 
   return (
-    <>
+    <ErrorBoundary>
       <Routes>
+        {/* Mobile-only route. Skips the full app shell, ProtectedRoute, and
+            the lazy-loaded electron-side bundles. Window.steamtools is
+            shimmed by browser-bridge.ts on first mount. */}
+        <Route path="/remote-mobile/*" element={
+          <Suspense fallback={<PageLoader />}>
+            <MobileApp />
+          </Suspense>
+        } />
         <Route path="/*" element={
           <ProtectedRoute>
             <AppRoutes />
@@ -88,12 +149,14 @@ export default function App() {
         } />
       </Routes>
       <ToastContainer />
-      <UpdateNotification />
-      <SteamErrorModal />
-      <SignaturePendingModal />
-      <CommandPalette />
-      <TourOverlay />
       <InstallProgressDockMount />
-    </>
+      <Suspense fallback={null}>
+        <UpdateNotification />
+        <SteamErrorModal />
+        <SignaturePendingModal />
+        <CommandPalette />
+        <TourOverlay />
+      </Suspense>
+    </ErrorBoundary>
   )
 }

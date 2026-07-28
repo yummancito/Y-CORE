@@ -1,123 +1,93 @@
+// ============================================================================
 // src/components/method-badge.tsx
+// ----------------------------------------------------------------------------
+// V2-only download state pill. Replaces the V1 method-badge that depended on
+// `InstallMethod` ('steamcmd'|'steamclient'|'auto'|'steampipe') and
+// `SteamCmdState` ('queued'|'downloading'|'complete'|...).
 //
-// Pequeño chip reutilizable que refleja installMethod + state activo del job.
-// Se monta en 2 superfícies:
-//   - LibraryPage cards (top-right del cover image).
-//   - GameDetailPage header (junto al Install button).
-//
-// Variantes:
-//   • method="steamcmd"   + state=idle        → "SteamCMD"     green
-//   • method="steamcmd"   + state=active/stalled → stale "Descargando"/"Estancado" amber
-//   • method="steamcmd"   + state=complete    → "Completado"   muted green
-//   • method="steamcmd"   + state=failed      → "Falló"        red
-//   • method="steamclient" → "Steam"          blue
-//   • method="auto"      → "Auto"            neutral
-//
-// Estilado con Tailwind + tokens del proyecto (--accent, surface-1, etc).
-//
-// El botón es clickeable y emite onClick — el caller decide qué hacer
-// (normalmente navega a /downloads). Por defecto es no-op.
+// V2 has a single engine so there is no "method" to choose between; the only
+// thing worth surfacing on a card is the live download status. This component
+// is intentionally minimal: an idle appId hides the badge entirely so cards
+// stay clean; an active/failed task shows a colored pill with the V2 state.
+// ============================================================================
 
-import { t } from '../lib/i18n'
-import type { InstallMethod } from '../stores/useSettingsStore'
-import type { SteamCmdState } from '../stores/useSteamCmdJobsStore'
+import type { DownloadState } from '../stores/useDownloadEngineV3Store'
 
 export interface MethodBadgeProps {
-  method: InstallMethod
-  /** Estado del job SteamCMD si hay uno activo. Sin active job: undefined. */
-  liveState?: SteamCmdState
+  /** V2 engine state for this appId. undefined = no active job, hide badge. */
+  liveState?: DownloadState
   size?: 'sm' | 'md'
   onClick?: () => void
   className?: string
-  /** Tip para hover accesible (describe el método). */
+  /** Tooltip text. Defaults to a description of the live state. */
   title?: string
 }
 
-type Tuple = { label: string; classes: string; title: string }
+const ACTIVE_STATES: ReadonlySet<DownloadState> = new Set([
+  'connecting', 'preparing', 'downloading', 'verifying',
+])
 
-function tupleFor(
-  method: InstallMethod,
-  liveState: SteamCmdState | undefined,
-  explicitTitle?: string
-): Tuple {
-  if (liveState === 'stalled') {
+interface Tuple {
+  label: string
+  classes: string
+  title: string
+}
+
+function tupleFor(state: DownloadState | undefined): Tuple | null {
+  if (!state || state === 'queued' || state === 'paused') return null
+  if (state === 'completed') {
     return {
-      label: t('installDock.pill.stalled'),
-      classes: 'text-amber-300 bg-amber-500/15 border-amber-500/40',
-      title: explicitTitle ?? t('installDock.pill.stalledTip'),
+      label: 'Completado',
+      classes: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/40',
+      title: 'V2: descarga completa',
     }
   }
-  if (liveState === 'failed') {
+  if (state === 'failed' || state === 'cancelled') {
     return {
-      label: t('installDock.pill.failed'),
+      label: state === 'cancelled' ? 'Cancelado' : 'Falló',
       classes: 'text-red-300 bg-red-500/15 border-red-500/40',
-      title: explicitTitle ?? t('installDock.pill.failedTip'),
+      title: 'V2: descarga falló o fue cancelada',
     }
   }
-  if (liveState === 'complete') {
+  if (state === 'stalled') {
     return {
-      label: t('installDock.pill.complete'),
-      classes: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/40',
-      title: explicitTitle ?? t('installDock.pill.completeTip'),
+      label: 'Estancado',
+      classes: 'text-amber-300 bg-amber-500/15 border-amber-500/40',
+      title: 'V2: descarga sin avance (retry en curso)',
     }
   }
-  if (liveState === 'downloading' || liveState === 'verifying' || liveState === 'preallocating' ||
-      liveState === 'allocating' || liveState === 'preparing') {
+  if (ACTIVE_STATES.has(state)) {
     return {
-      label: t('installDock.pill.downloading'),
+      label: 'Descargando',
       classes: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/40',
-      title: explicitTitle ?? t('installDock.pill.downloadingTip'),
+      title: 'V2: descarga en curso',
     }
   }
-
-  switch (method) {
-    case 'steamcmd':
-      return {
-        label: 'SteamCMD',
-        classes: 'text-emerald-300 bg-emerald-500/15 border-emerald-500/40',
-        title: explicitTitle ?? t('installDock.badge.steamcmdTip'),
-      }
-    case 'steamclient':
-      return {
-        label: 'Steam',
-        classes: 'text-sky-300 bg-sky-500/15 border-sky-500/40',
-        title: explicitTitle ?? t('installDock.badge.steamclientTip'),
-      }
-    case 'auto':
-    default:
-      return {
-        label: t('installDock.badge.auto'),
-        classes: 'text-text-secondary bg-white/[0.06] border-white/[0.10]',
-        title: explicitTitle ?? t('installDock.badge.autoTip'),
-      }
-  }
+  return null
 }
 
 export function MethodBadge({
-  method,
   liveState,
   size = 'sm',
   onClick,
   className = '',
   title,
 }: MethodBadgeProps) {
-  const tpl = tupleFor(method, liveState, title)
+  const tpl = tupleFor(liveState)
+  if (!tpl) return null
+
   const padding = size === 'md' ? 'px-3 py-1 text-[11px]' : 'px-2.5 py-[3px] text-[10px]'
   const Tag = (onClick ? 'button' : 'span') as 'button' | 'span'
-  // Pulse cuando hay un job activo en uno de los estados de descarga real.
-  // Excluimos 'stalled' deliberadamente: stalled+jittering se confunde con
-  // "trabajando" cuando en realidad el job está parado. Para stalled usamos
-  // el color ámbar del pill, que ya comunica claramente el problema.
-  const pulse = liveState === 'downloading' || liveState === 'verifying' ||
-    liveState === 'preallocating' || liveState === 'allocating'
-      ? 'animate-pulse'
-      : ''
+  // Pulse during active states so the user can spot in-progress downloads at a
+  // glance. 'stalled' deliberately excluded — stalled should look paused, not
+  // jitter around like it's actually moving bytes.
+  const pulse = ACTIVE_STATES.has(liveState!) && liveState !== 'stalled' ? 'animate-pulse' : ''
 
   return (
     <Tag
       type={onClick ? 'button' : undefined}
       onClick={onClick}
-      title={tpl.title}
+      title={title ?? tpl.title}
       className={[
         'inline-flex items-center gap-1 rounded-full border font-semibold tracking-wide uppercase',
         'backdrop-blur-md whitespace-nowrap select-none',
@@ -128,7 +98,7 @@ export function MethodBadge({
         onClick ? 'cursor-pointer hover:scale-105 active:scale-95' : '',
         className,
       ].join(' ')}
-      aria-label={tpl.title}
+      aria-label={title ?? tpl.title}
     >
       {tpl.label}
     </Tag>

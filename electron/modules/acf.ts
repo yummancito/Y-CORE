@@ -160,6 +160,11 @@ export function buildAppManifestAcf(
     if (entry.size) totalSize += parseInt(entry.size)
   }
 
+  const installedDepotsBlock = depotEntries
+    .filter(e => !depotIdsWithKeys || depotIdsWithKeys.has(e.depotId))
+    .map(e => `\t\t"${e.depotId}"\n\t\t{\n\t\t\t"manifest"\t\t"${e.manifestId}"\n\t\t\t"size"\t\t"${e.size || '0'}"\n\t\t}`)
+    .join('\n')
+
   const sharedDepotsBlock = Object.entries(sharedDepots)
     .map(([depotId, parentAppId]) => `\t\t"${depotId}"\t\t"${parentAppId}"`)
     .join('\n')
@@ -181,7 +186,7 @@ export function buildAppManifestAcf(
 \t"UpdateResult"\t\t"0"
 \t"BytesToDownload"\t\t"${totalSize}"
 \t"BytesDownloaded"\t\t"0"
-\t"BytesToStage"\t\t"0"
+\t"BytesToStage"\t\t"${totalSize}"
 \t"BytesStaged"\t\t"0"
 \t"TargetBuildID"\t\t"0"
 \t"AutoUpdateBehavior"\t\t"0"
@@ -189,6 +194,7 @@ export function buildAppManifestAcf(
 \t"ScheduledAutoUpdate"\t\t"0"
 \t"InstalledDepots"
 \t{
+${installedDepotsBlock}
 \t}
 \t"SharedDepots"
 \t{
