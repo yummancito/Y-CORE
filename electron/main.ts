@@ -224,18 +224,17 @@ app.whenReady().then(async () => {
   console.log('[STARTUP] [M] app.whenReady() started')
 
   // Auto-update OpenSteamTool DLLs (non-blocking, runs in background)
-  // TODO: Fix compilation error in opensteamtool-updater.ts
-  // (async () => {
-  //   try {
-  //     const { checkAndUpdateOpenSteamTool } = await import('./modules/opensteamtool-updater')
-  //     const result = await checkAndUpdateOpenSteamTool()
-  //     if (result.updated) {
-  //       logger.info(`OpenSteamTool updated to ${result.version}`, 'updater')
-  //     }
-  //   } catch (err: any) {
-  //     logger.warn(`Failed to check OpenSteamTool updates: ${err.message}`, 'updater')
-  //   }
-  // })()
+  ;(async () => {
+    try {
+      const { checkAndUpdateOpenSteamTool } = await import('./modules/opensteamtool-updater')
+      const result = await checkAndUpdateOpenSteamTool()
+      if (result.updated) {
+        logger.info(`OpenSteamTool updated to ${result.version}`, 'updater')
+      }
+    } catch (err: any) {
+      logger.warn(`Failed to check OpenSteamTool updates: ${err.message}`, 'updater')
+    }
+  })()
 
   // Install permission handler here — NOT at module-top. In this Electron
   // version session.defaultSession is only safe to receive after app is
