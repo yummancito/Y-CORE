@@ -93,6 +93,11 @@ apps/
 
 # Native DLLs and injection logic (private)
 native/
+# Exception: YCoreTool configuration is tracked for IPC spec download
+!native/opensteamtool/
+native/opensteamtool/*.dll
+native/opensteamtool/*.exe
+!native/opensteamtool/ycoretool.toml
 electron/modules/signature-cache.ts
 electron/modules/signature-report.ts
 electron/modules/store-ipc.ts
