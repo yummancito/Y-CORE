@@ -53,6 +53,29 @@ export default function DrmRemoverPage() {
     if (games.length === 0) return
     games.forEach((game) => {
       setDrmStates((prev) => ({ ...prev, [game.appId]: { status: 'idle' } }))
+
+      // Try new detection API first
+      window.steamtools?.detectDrm?.(game.appId).then((result: any) => {
+        if (result?.detected && result?.drmTypes?.length > 0) {
+          const drm = result.drmTypes[0]
+          const riskColorMap: Record<string, string> = {
+            'safe': 'green',
+            'moderate': 'yellow',
+            'risky': 'red',
+          }
+          setDrmStates((prev) => ({
+            ...prev,
+            [game.appId]: {
+              status: 'idle',
+              message: `${drm.type} (${drm.confidence}% confidence)`,
+              drmType: drm.type,
+              riskLevel: riskColorMap[drm.riskLevel] || 'yellow',
+            }
+          }))
+        }
+      }).catch((e) => console.warn(`[DRM] detectDrm for ${game.appId} failed:`, e))
+
+      // Fallback to legacy status check
       window.steamtools?.checkDrmStatus?.(game.appId).then((result: any) => {
         if (result?.status === 'drm-removed') {
           setDrmStates((prev) => ({ ...prev, [game.appId]: { status: 'already-removed', message: result.message } }))
@@ -77,19 +100,21 @@ export default function DrmRemoverPage() {
       const result = await window.steamtools.removeDrm(appId)
       if (result.success) {
         if (result.hadDrm) {
-          setDrmStates((prev) => ({ ...prev, [appId]: { status: 'success', message: result.message } }))
+          setDrmStates((prev) => ({ ...prev, [appId]: { status: 'success', message: t('drm.success') } }))
           showToast('success', `${t('drm.success')} — ${displayName}`)
         } else {
-          setDrmStates((prev) => ({ ...prev, [appId]: { status: 'no-drm', message: result.message } }))
+          setDrmStates((prev) => ({ ...prev, [appId]: { status: 'no-drm', message: t('drm.noDrm') } }))
           showToast('info', `${t('drm.noDrm')} — ${displayName}`)
         }
       } else {
-        setDrmStates((prev) => ({ ...prev, [appId]: { status: 'error', message: result.message } }))
-        showToast('error', `${t('drm.error')} — ${result.message}`)
+        const errorMessage = (result as any).errorKey ? t((result as any).errorKey) : result.message
+        setDrmStates((prev) => ({ ...prev, [appId]: { status: 'error', message: errorMessage } }))
+        showToast('error', `${t('drm.error')} — ${errorMessage}`)
       }
     } catch (err: any) {
-      setDrmStates((prev) => ({ ...prev, [appId]: { status: 'error', message: err.message } }))
-      showToast('error', `${t('drm.error')} — ${err.message}`)
+      const errorMessage = err.message || t('drm.error')
+      setDrmStates((prev) => ({ ...prev, [appId]: { status: 'error', message: errorMessage } }))
+      showToast('error', `${t('drm.error')} — ${errorMessage}`)
     }
   }
 
@@ -101,6 +126,26 @@ export default function DrmRemoverPage() {
     const state = drmStates[appId]
     if (!state || state.status === 'idle') return null
 
+    const drmType = (state as any).drmType
+    const riskLevel = (state as any).riskLevel
+
+    // DRM type badge
+    const drmBadge = drmType && (
+      <div
+        className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+          riskLevel === 'critical'
+            ? 'bg-red-500/20 text-red-400'
+            : riskLevel === 'high'
+            ? 'bg-orange-500/20 text-orange-400'
+            : riskLevel === 'medium'
+            ? 'bg-yellow-500/20 text-yellow-400'
+            : 'bg-green-500/20 text-green-400'
+        }`}
+      >
+        {drmType}
+      </div>
+    )
+
     switch (state.status) {
       case 'processing':
         return (
@@ -111,7 +156,7 @@ export default function DrmRemoverPage() {
         )
       case 'success':
       case 'already-removed':
-        return (
+        return drmBadge || (
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-medium">
             <CheckCircle2 className="w-3.5 h-3.5" />
             {t('drm.alreadyRemoved')}
@@ -132,7 +177,7 @@ export default function DrmRemoverPage() {
           </div>
         )
       default:
-        return null
+        return drmBadge
     }
   }
 

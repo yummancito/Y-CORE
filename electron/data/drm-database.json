@@ -1,0 +1,187 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2026-07-31T10:00:00Z",
+  "drmTypes": [
+    {
+      "id": "steamstub",
+      "name": "SteamStub DRM",
+      "category": "stub",
+      "publisher": "Valve",
+      "estimatedGames": 5000,
+      "riskLevel": "low",
+      "supportedRemovalMethod": "steamless",
+      "signatures": [
+        {
+          "type": "peHeader",
+          "patterns": ["SteamStub", ".bind section", "UPX signature"],
+          "description": "SteamStub marker in PE header or .bind section"
+        },
+        {
+          "type": "signature",
+          "patterns": ["SteamStub"],
+          "description": "Direct SteamStub string in binary"
+        }
+      ],
+      "removalNotes": "Uses Steamless CLI tool for unpacking. Low risk, preserves functionality.",
+      "backupRequired": true,
+      "reversible": true
+    },
+    {
+      "id": "ceg",
+      "name": "CEG (Games for Windows - LIVE)",
+      "category": "licensing",
+      "publisher": "Microsoft",
+      "estimatedGames": 300,
+      "riskLevel": "low",
+      "supportedRemovalMethod": "sidecarRemoval",
+      "signatures": [
+        {
+          "type": "file",
+          "patterns": [".DRM", ".DRM64"],
+          "description": "CEG sidecar files in game directory"
+        },
+        {
+          "type": "import",
+          "patterns": ["CEGUI.dll"],
+          "description": "CEGUI.dll import in PE header"
+        }
+      ],
+      "removalNotes": "Removes .DRM/.DRM64 sidecar files and patches CEGUI imports. Low risk.",
+      "backupRequired": true,
+      "reversible": true
+    },
+    {
+      "id": "denuvo",
+      "name": "Denuvo Anti-Tamper",
+      "category": "anti-tamper",
+      "publisher": "Irdeto/Denuvo",
+      "estimatedGames": 2000,
+      "riskLevel": "critical",
+      "supportedRemovalMethod": "none",
+      "signatures": [
+        {
+          "type": "section",
+          "patterns": [".text section size", "virtualization markers"],
+          "description": "Denuvo virtualizes code sections"
+        },
+        {
+          "type": "behavior",
+          "patterns": ["license check", "tamper detection"],
+          "description": "Runtime license and tamper detection"
+        }
+      ],
+      "removalNotes": "Denuvo removal is extremely complex and often illegal. Detection-only.",
+      "backupRequired": false,
+      "reversible": false,
+      "detectionOnly": true
+    },
+    {
+      "id": "securom",
+      "name": "SecuROM",
+      "category": "licensing",
+      "publisher": "Sony",
+      "estimatedGames": 1500,
+      "riskLevel": "high",
+      "supportedRemovalMethod": "none",
+      "signatures": [
+        {
+          "type": "file",
+          "patterns": ["__MACOSX", "SecuROM data"],
+          "description": "SecuROM resource files"
+        },
+        {
+          "type": "import",
+          "patterns": ["secdrv.sys", "syscheck.exe"],
+          "description": "SecuROM driver/checker imports"
+        }
+      ],
+      "removalNotes": "SecuROM is a legacy DRM system. Detection-only for informational purposes.",
+      "backupRequired": false,
+      "reversible": false,
+      "detectionOnly": true
+    },
+    {
+      "id": "safedisc",
+      "name": "SafeDisc",
+      "category": "licensing",
+      "publisher": "Macrovision",
+      "estimatedGames": 1000,
+      "riskLevel": "high",
+      "supportedRemovalMethod": "none",
+      "signatures": [
+        {
+          "type": "section",
+          "patterns": [".safedisc", "SafeDisc header"],
+          "description": "SafeDisc section in PE"
+        }
+      ],
+      "removalNotes": "Legacy DRM system. Detection-only.",
+      "backupRequired": false,
+      "reversible": false,
+      "detectionOnly": true
+    },
+    {
+      "id": "cegsecurom",
+      "name": "CEG + SecuROM",
+      "category": "hybrid",
+      "publisher": "Microsoft/Sony",
+      "estimatedGames": 150,
+      "riskLevel": "high",
+      "supportedRemovalMethod": "partial",
+      "signatures": [
+        {
+          "type": "combined",
+          "patterns": ["CEGUI.dll", "secdrv.sys"],
+          "description": "Both CEG and SecuROM present"
+        }
+      ],
+      "removalNotes": "Can remove CEG component only. SecuROM requires other methods.",
+      "backupRequired": true,
+      "reversible": true
+    }
+  ],
+  "gameExamples": {
+    "steamstub": [
+      { "name": "Half-Life 2", "appId": "220", "year": 2004 },
+      { "name": "Portal", "appId": "400", "year": 2007 },
+      { "name": "The Elder Scrolls V: Skyrim", "appId": "72850", "year": 2011 }
+    ],
+    "ceg": [
+      { "name": "Gears of War", "appId": "21130", "year": 2006 },
+      { "name": "Fallout 3", "appId": "22370", "year": 2008 },
+      { "name": "Mass Effect", "appId": "17460", "year": 2007 }
+    ],
+    "denuvo": [
+      { "name": "Resident Evil Village", "appId": "1196590", "year": 2021 },
+      { "name": "Hitman 3", "appId": "1659040", "year": 2021 },
+      { "name": "Monster Hunter: World", "appId": "582010", "year": 2018 }
+    ],
+    "securom": [
+      { "name": "The Sims 3", "appId": "226750", "year": 2009 },
+      { "name": "SimCity 5", "appId": "225340", "year": 2013 }
+    ]
+  },
+  "removalMethods": {
+    "steamless": {
+      "name": "Steamless CLI",
+      "type": "external_tool",
+      "supported": true,
+      "requires": ["Steamless.CLI.exe"],
+      "description": "Uses Steamless unpacker to remove SteamStub DRM"
+    },
+    "sidecarRemoval": {
+      "name": "Sidecar File Removal",
+      "type": "file_deletion",
+      "supported": true,
+      "requires": [],
+      "description": "Removes .DRM and .DRM64 sidecar files and patches imports"
+    },
+    "none": {
+      "name": "Detection Only",
+      "type": "detection_only",
+      "supported": false,
+      "requires": [],
+      "description": "This DRM type cannot be automatically removed"
+    }
+  }
+}

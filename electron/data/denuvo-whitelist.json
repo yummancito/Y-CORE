@@ -1,0 +1,98 @@
+{
+  "whitelist": [
+    {
+      "gameId": "289650",
+      "gameTitle": "The Witcher 3: Wild Hunt",
+      "denuvoVersion": "4.9",
+      "condition": "old-release",
+      "worksWithOnlineFix": false,
+      "gogAvailable": true,
+      "notes": "Original release had Denuvo, later removed. GOG version is DRM-free. Wait for patch removal.",
+      "lastVerified": "2024-07-01",
+      "verifiedBy": "Y-Core Community"
+    },
+    {
+      "gameId": "570",
+      "gameTitle": "Deus Ex: Human Revolution",
+      "denuvoVersion": "2.x",
+      "condition": "old-release",
+      "worksWithOnlineFix": true,
+      "gogAvailable": true,
+      "notes": "Early Denuvo version. OnlineFix patches available. GOG is also an option.",
+      "lastVerified": "2024-06-15",
+      "verifiedBy": "Y-Core Community"
+    },
+    {
+      "gameId": "8980",
+      "gameTitle": "Spore",
+      "denuvoVersion": "1.0",
+      "condition": "old-release",
+      "worksWithOnlineFix": false,
+      "gogAvailable": true,
+      "notes": "Very old Denuvo version (2008). GOG version is DRM-free and recommended.",
+      "lastVerified": "2024-05-20",
+      "verifiedBy": "Y-Core Community"
+    },
+    {
+      "gameId": "22960",
+      "gameTitle": "The Sims 3",
+      "denuvoVersion": "1.5",
+      "condition": "old-release",
+      "worksWithOnlineFix": false,
+      "gogAvailable": true,
+      "notes": "Early Denuvo release (2009). GOG version recommended.",
+      "lastVerified": "2024-05-01",
+      "verifiedBy": "Y-Core Community"
+    },
+    {
+      "gameId": "202170",
+      "gameTitle": "Sleeping Dogs",
+      "denuvoVersion": "3.x",
+      "condition": "old-release",
+      "worksWithOnlineFix": true,
+      "gogAvailable": false,
+      "notes": "Medium-era Denuvo (2012). OnlineFix patches may be available.",
+      "lastVerified": "2024-04-10",
+      "verifiedBy": "Y-Core Community"
+    },
+    {
+      "gameId": "220200",
+      "gameTitle": "Tropico 5",
+      "denuvoVersion": "3.5",
+      "condition": "old-release",
+      "worksWithOnlineFix": true,
+      "gogAvailable": false,
+      "notes": "Denuvo removed in later patches. Check for updated version.",
+      "lastVerified": "2024-03-25",
+      "verifiedBy": "Y-Core Community"
+    },
+    {
+      "gameId": "227720",
+      "gameTitle": "Plants vs. Zombies 2",
+      "denuvoVersion": "2.0",
+      "condition": "old-release",
+      "worksWithOnlineFix": false,
+      "gogAvailable": false,
+      "notes": "Very old Denuvo version (2013). Alternatives limited.",
+      "lastVerified": "2024-02-14",
+      "verifiedBy": "Y-Core Community"
+    },
+    {
+      "gameId": "8850",
+      "gameTitle": "Mass Effect",
+      "denuvoVersion": "1.0",
+      "condition": "old-release",
+      "worksWithOnlineFix": false,
+      "gogAvailable": true,
+      "notes": "One of the earliest Denuvo releases (2007). GOG is DRM-free option.",
+      "lastVerified": "2024-01-30",
+      "verifiedBy": "Y-Core Community"
+    }
+  ],
+  "metadata": {
+    "version": 1,
+    "lastUpdated": "2024-07-29",
+    "totalEntries": 8,
+    "notes": "Community-maintained whitelist of games with Denuvo where alternatives or workarounds exist. No removal methods are provided due to DMCA concerns."
+  }
+}

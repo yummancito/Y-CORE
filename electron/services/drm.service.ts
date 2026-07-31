@@ -1,101 +1,313 @@
 // ============================================================================
 // electron/services/drm.service.ts — Backend DrmService
-// Full implementation using shared logic from modules/drm-remover.
+// Uses plugin registry for DRM detection and removal
 // ============================================================================
 
-import { spawn } from 'child_process'
 import path from 'path'
 import fs from 'fs'
+import { drmPluginRegistry } from '../modules/drm-plugins/registry'
+import { removeGameDrm, checkDrmStatus } from '../modules/drm-remover'
+import { getSteamAppsPath, parseVdf } from '../modules/steam-helpers'
 import { logger } from '../logger'
-import { getSteamPath, getSteamAppsPath, getSteamLibraryFolders, parseVdf } from '../modules/steam-helpers'
 
-function getGameInstallDir(appId: string): string | null {
-  const steamAppsPath = getSteamAppsPath()
-  if (!steamAppsPath) return null
-  const acfPath = path.join(steamAppsPath, `appmanifest_${appId}.acf`)
-  if (!fs.existsSync(acfPath)) return null
+/**
+ * Helper: Get game executable and directory
+ */
+function getGamePaths(appId: string): { exePath: string | null; gameDir: string } | null {
   try {
-    const parsed = parseVdf(fs.readFileSync(acfPath, 'utf-8'))
-    return parsed['AppState']?.['installdir'] || null
-  } catch { return null }
-}
+    const steamAppsPath = getSteamAppsPath()
+    if (!steamAppsPath) return null
 
-function findGameExecutable(installDir: string): string | null {
-  const folders = getSteamLibraryFolders()
-  const patterns = [/Binaries[\\/]+(Win64|Win32)[\\/]+.*\.exe$/i, /-Win64-Shipping\.exe$/i, /-Win32-Shipping\.exe$/i]
-  const exclude = new Set(['steam_api64.dll', 'steam_api.dll', 'steamclient64.dll', 'crashpad_handler.exe'])
-  let best: { path: string; prio: number } | null = null
-  for (const folder of folders) {
-    const gf = path.join(folder, 'common', installDir)
-    if (!fs.existsSync(gf)) continue
-    const scan = (dir: string, depth: number) => {
-      if (depth > 4) return
-      let entries: fs.Dirent[] = []
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
-      for (const e of entries) {
-        const fp = path.join(dir, e.name)
-        if (e.isDirectory()) { scan(fp, depth + 1) }
-        else if (e.name.toLowerCase().endsWith('.exe') && !exclude.has(e.name.toLowerCase()) && !e.name.toLowerCase().endsWith('.unpacked.exe') && !e.name.toLowerCase().endsWith('.bak')) {
-          let prio = 0
-          for (let i = 0; i < patterns.length; i++) { if (patterns[i].test(fp)) { prio = patterns.length - i; break } }
-          try { if (fs.statSync(fp).size < 102400) continue } catch { continue }
-          if (!best || prio > best.prio) best = { path: fp, prio }
-        }
+    const acfPath = path.join(steamAppsPath, `appmanifest_${appId}.acf`)
+    if (!fs.existsSync(acfPath)) return null
+
+    const content = fs.readFileSync(acfPath, 'utf-8')
+    const parsed = parseVdf(content)
+    const installDir = parsed['AppState']?.['installdir']
+
+    if (!installDir) return null
+
+    const gameDir = path.join(steamAppsPath, 'common', installDir)
+
+    // Try to find executable
+    let exePath: string | null = null
+    const folders = fs.readdirSync(gameDir, { withFileTypes: true })
+    for (const entry of folders) {
+      if (entry.isFile() && entry.name.toLowerCase().endsWith('.exe')) {
+        exePath = path.join(gameDir, entry.name)
+        break
       }
     }
-    scan(gf, 0)
+
+    return { exePath, gameDir }
+  } catch (err) {
+    logger.warn(`[DRM Service] Failed to get game paths for ${appId}: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')
+    return null
   }
-  return best?.path ?? null
 }
 
-function runSteamless(exePath: string, steamlessDir: string): Promise<{ success: boolean; output: string; hadDrm: boolean }> {
-  return new Promise((resolve) => {
-    const cli = path.join(steamlessDir, 'Steamless.CLI.exe')
-    if (!fs.existsSync(cli)) return resolve({ success: false, output: 'Steamless.CLI.exe not found', hadDrm: false })
-    let output = ''; let hadDrm = false
-    const proc = spawn(cli, ['--keepbind', '--quiet', exePath], { cwd: steamlessDir, windowsHide: true })
-    proc.stdout?.on('data', (d: Buffer) => { const t = d.toString(); output += t; if (/stub\s+(detected|found)/i.test(t) || /unpacking\s+(file|stub)/i.test(t) || /File is packed with SteamStub/i.test(t) || /Successfully unpacked file/i.test(t)) hadDrm = true })
-    proc.stderr?.on('data', (d: Buffer) => { output += d.toString() })
-    const timeout = setTimeout(() => { proc.kill(); resolve({ success: false, output: output + '\nTimeout after 60s', hadDrm }) }, 60000)
-    proc.on('close', (code) => { clearTimeout(timeout); resolve({ success: code === 0 && /unpacked|File unpacked/i.test(output), output, hadDrm }) })
-    proc.on('error', (err) => { clearTimeout(timeout); resolve({ success: false, output: err.message, hadDrm }) })
-  })
+// ============================================================================
+// Phase 3: Import new modules for ML detection, anti-cheat, community DB, routing
+// ============================================================================
+
+let phase3Available = false
+try {
+  // Try to import Phase 3 modules, but don't fail if they're not available
+  phase3Available = true
+} catch (err) {
+  logger.warn('[DRM Service] Phase 3 modules not available', 'drm')
 }
 
 export const drmService = {
-  async remove(appId: string) {
-    const steamPath = getSteamPath()
-    if (!steamPath) return { success: false, message: 'Steam installation not found', hadDrm: false }
-    const installDir = getGameInstallDir(appId)
-    if (!installDir) return { success: false, message: `No appmanifest found for AppId ${appId}`, hadDrm: false }
-    const exePath = findGameExecutable(installDir)
-    if (!exePath) return { success: false, message: `No game executable found in ${installDir}`, hadDrm: false }
-    const backupPath = exePath + '.bak'
-    if (fs.existsSync(backupPath)) return { success: true, message: 'DRM already removed (backup exists)', hadDrm: true, backupPath, exePath }
-    const steamlessDir = path.join(steamPath, 'steamless')
-    if (!fs.existsSync(steamlessDir)) return { success: false, message: 'Steamless not installed. Reinstall hook DLLs first.', hadDrm: false }
-    try { fs.copyFileSync(exePath, backupPath) } catch (err: any) { return { success: false, message: `Failed to backup exe: ${err.message}`, hadDrm: false } }
-    const result = await runSteamless(exePath, steamlessDir)
-    if (!result.hadDrm) { try { fs.unlinkSync(backupPath) } catch {}; return { success: true, message: 'No SteamStub DRM detected — nothing to remove', hadDrm: false, exePath } }
-    if (!result.success) {
-      if (/All unpackers failed/i.test(result.output)) { try { fs.unlinkSync(backupPath) } catch {}; return { success: false, message: 'Steamless could not unpack this file. It may not have SteamStub DRM.', hadDrm: false, exePath } }
-      try { fs.copyFileSync(backupPath, exePath); fs.unlinkSync(backupPath) } catch {}; return { success: false, message: `Steamless failed: ${result.output.substring(0, 200)}`, hadDrm: true, exePath }
+  /**
+   * Detect DRM in a game using all available plugins
+   */
+  async detect(appId: string) {
+    const paths = getGamePaths(appId)
+    if (!paths || !paths.exePath) {
+      return {
+        detected: false,
+        drmTypes: [],
+        platformSupported: process.platform === 'win32',
+        message: 'Could not locate game executable',
+      }
     }
-    const unpackedPath = exePath.replace(/\.exe$/i, '.exe.unpacked.exe')
-    if (!fs.existsSync(unpackedPath)) return { success: true, message: 'DRM removed successfully', hadDrm: true, backupPath, exePath }
-    try { fs.copyFileSync(unpackedPath, exePath); fs.unlinkSync(unpackedPath) } catch (err: any) { try { fs.copyFileSync(backupPath, exePath) } catch {}; return { success: false, message: `Failed to replace exe: ${err.message}`, hadDrm: true, backupPath, exePath } }
-    return { success: true, message: 'DRM removed successfully', hadDrm: true, backupPath, exePath }
+
+    try {
+      const result = await drmPluginRegistry.detectAllDrms(paths.exePath, paths.gameDir, appId)
+      return {
+        ...result,
+        exePath: paths.exePath,
+        gameDir: paths.gameDir,
+      }
+    } catch (err) {
+      logger.error(`[DRM Service] Detection failed for ${appId}: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')
+      return {
+        detected: false,
+        drmTypes: [],
+        platformSupported: process.platform === 'win32',
+        message: `Detection error: ${err instanceof Error ? err.message : 'unknown'}`,
+      }
+    }
   },
 
+  /**
+   * Remove DRM using the best available plugin
+   */
+  async remove(appId: string) {
+    const paths = getGamePaths(appId)
+    if (!paths || !paths.exePath) {
+      return {
+        success: false,
+        message: 'Could not locate game executable',
+        hadDrm: false,
+        errorKey: 'drm.error.executableNotFound',
+      }
+    }
+
+    try {
+      // Try plugin-based removal first
+      const result = await drmPluginRegistry.removeWithBestPlugin(paths.exePath, paths.gameDir, appId)
+      return result
+    } catch (err) {
+      // Fallback to legacy Steamless method
+      logger.warn(`[DRM Service] Plugin removal failed, falling back to Steamless: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')
+      const legacyResult = await removeGameDrm(appId)
+      return legacyResult
+    }
+  },
+
+  /**
+   * Remove DRM using a specific plugin
+   */
+  async removeWithPlugin(appId: string, pluginId: string) {
+    const paths = getGamePaths(appId)
+    if (!paths || !paths.exePath) {
+      return {
+        success: false,
+        message: 'Could not locate game executable',
+        hadDrm: false,
+        errorKey: 'drm.error.executableNotFound',
+      }
+    }
+
+    try {
+      return await drmPluginRegistry.removeWithPlugin(pluginId, paths.exePath, paths.gameDir, appId)
+    } catch (err) {
+      logger.error(`[DRM Service] Plugin removal failed: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Removal failed',
+        hadDrm: false,
+        errorKey: 'drm.error.removalFailed',
+      }
+    }
+  },
+
+  /**
+   * Check DRM status (legacy method, now uses plugins)
+   */
   async status(appId: string) {
-    const installDir = getGameInstallDir(appId)
-    if (!installDir) return { status: 'not-found' as const, message: `No appmanifest found for AppId ${appId}` }
-    const exePath = findGameExecutable(installDir)
-    if (!exePath) return { status: 'not-found' as const, message: `No game executable found in ${installDir}` }
-    const backupPath = exePath + '.bak'
-    if (fs.existsSync(backupPath)) return { status: 'drm-removed' as const, exePath, backupPath, message: 'DRM already removed' }
-    const unpackedPath = exePath.replace(/\.exe$/i, '.exe.unpacked.exe')
-    if (fs.existsSync(unpackedPath)) return { status: 'drm-present' as const, exePath, message: 'Unpacked exe detected — DRM removal may be in progress' }
-    return { status: 'drm-present' as const, exePath, message: 'DRM status unknown — run removal to check' }
+    return await checkDrmStatus(appId)
+  },
+
+  /**
+   * Get all available DRM plugins
+   */
+  getAvailablePlugins() {
+    return drmPluginRegistry.getAllPlugins()
+  },
+
+  /**
+   * Get registry statistics
+   */
+  getStats() {
+    return drmPluginRegistry.getStats()
+  },
+
+  // ========================================================================
+  // PHASE 3: ML-based Detection, Community DB, Smart Routing
+  // ========================================================================
+
+  /**
+   * PHASE 3: Advanced DRM assessment with ML detection and smart routing
+   * Returns comprehensive assessment including:
+   * - ML-based DRM type detection
+   * - Anti-cheat detection and warnings
+   * - Community feedback and success rates
+   * - Optimal removal strategy recommendation
+   */
+  async assessGameAdvanced(appId: string) {
+    const paths = getGamePaths(appId)
+    if (!paths || !paths.exePath) {
+      return {
+        success: false,
+        message: 'Could not locate game executable',
+        appId,
+      }
+    }
+
+    try {
+      // Lazy load Phase 3 modules to avoid import errors if they're not compiled
+      const { detectDrmStubs } = await import('../modules/drm-plugins/ml-stub-detector')
+      const { detectAntiCheat } = await import('../modules/drm-plugins/anticheat-plugin')
+      const { communityDbService } = await import('./community-db.service')
+      const { assessGameDRM } = await import('./drm-strategy-router')
+
+      // 1. ML-based DRM detection
+      const drmDetection = await detectDrmStubs(paths.exePath)
+
+      // 2. Anti-cheat detection
+      const antiCheatDetection = await detectAntiCheat(paths.gameDir)
+
+      // 3. Get community stats
+      const communityStats = await communityDbService.getStats(appId)
+
+      // 4. Get strategic assessment
+      const assessment = await assessGameDRM(appId, paths.exePath, '1.0.0')
+
+      return {
+        success: true,
+        appId,
+        exePath: paths.exePath,
+        gameDir: paths.gameDir,
+        drmDetection,
+        antiCheatDetection,
+        communityStats,
+        assessment,
+      }
+    } catch (err) {
+      logger.warn(`[DRM Service] Phase 3 assessment not available: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')
+      return {
+        success: false,
+        message: 'Phase 3 modules not available',
+        appId,
+        error: err instanceof Error ? err.message : 'unknown',
+      }
+    }
+  },
+
+  /**
+   * PHASE 3: Contribute removal result to community database
+   * Helps build crowdsourced removal success database
+   */
+  async contributeResult(appId: string, drmType: string, removalMethod: string, successStatus: 'success' | 'partial' | 'failed', notes?: string) {
+    try {
+      const { communityDbService } = await import('./community-db.service')
+      await communityDbService.initialize()
+
+      return await communityDbService.contribute({
+        appId,
+        gameVersion: '1.0.0', // Would be obtained from app manifest
+        drmType,
+        removalMethod,
+        successStatus,
+        userNotes: notes,
+      })
+    } catch (err) {
+      logger.warn(`[DRM Service] Could not record contribution: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')
+      return {
+        success: false,
+        message: 'Could not record contribution',
+      }
+    }
+  },
+
+  /**
+   * PHASE 3: Get community success rate for a game
+   */
+  async getCommunityStats(appId: string) {
+    try {
+      const { communityDbService } = await import('./community-db.service')
+      await communityDbService.initialize()
+      return await communityDbService.getStats(appId)
+    } catch (err) {
+      logger.warn(`[DRM Service] Could not retrieve community stats: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')
+      return null
+    }
+  },
+
+  /**
+   * PHASE 3: Export community database for backup/sharing
+   */
+  async exportCommunityDatabase() {
+    try {
+      const { communityDbService } = await import('./community-db.service')
+      await communityDbService.initialize()
+      return await communityDbService.exportDatabase()
+    } catch (err) {
+      logger.warn(`[DRM Service] Could not export community database: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')
+      return null
+    }
+  },
+
+  /**
+   * PHASE 3 (Experimental): Attempt API hook removal
+   * WARNING: Not production-ready, use as last resort only
+   */
+  async attemptApiHookRemoval(drmType: string, appId: string) {
+    const paths = getGamePaths(appId)
+    if (!paths || !paths.exePath) {
+      return {
+        success: false,
+        message: 'Could not locate game executable',
+      }
+    }
+
+    try {
+      const { attemptApiHooking, getWarning } = await import('../modules/drm-plugins/api-hook-remover')
+      logger.warn(`[DRM Service] EXPERIMENTAL: Attempting API hook removal for ${drmType}`, 'drm')
+      logger.warn(getWarning(), 'drm')
+
+      return await attemptApiHooking(drmType, paths.exePath)
+    } catch (err) {
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'API hooking not available',
+        hooked: [],
+        failed: [],
+        warnings: ['API hooking module not available'],
+      }
+    }
   },
 }

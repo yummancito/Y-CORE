@@ -157,8 +157,11 @@ contextBridge.exposeInMainWorld('steamtools', {
   detectOnlineFix: (appId: string) => ipcRenderer.invoke('onlinefix:detect', { appId }),
 
   // ── DRM Remover ────────────────────────────────────────────────────────
+  detectDrm: (appId: string) => ipcRenderer.invoke('drm:detect', appId),
   removeDrm: (appId: string) => ipcRenderer.invoke('drm:remove', appId),
+  removeWithPlugin: (appId: string, pluginId: string) => ipcRenderer.invoke('drm:remove-with-plugin', appId, pluginId),
   checkDrmStatus: (appId: string) => ipcRenderer.invoke('drm:status', appId),
+  getDrmPlugins: () => ipcRenderer.invoke('drm:plugins'),
 
   // ── Steam Log Monitor ──────────────────────────────────────────────────
   onSteamError: (callback: (error: { type: string; message: string; solution: string; rawLine: string }) => void) => {
