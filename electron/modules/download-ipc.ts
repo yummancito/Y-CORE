@@ -47,67 +47,78 @@ export function registerDownloadHandlers(): void {
   registerWorkers(engine)
 
   // ── Crear tarea ──
-  ipcMain.handle('download:createTask', async (_event, opts: {
-    appId: string
-    name: string
-    source?: DownloadSource
-    priority?: number
-    installDir?: string
-    depotKeys?: { depotId: string; key: string }[]
-    manifestFiles?: { depotId: string; manifestId: string }[]
-    directUrl?: string
-    localPath?: string
-    maxRetries?: number
-    prereqTaskId?: string
-  }) => {
+  ipcMain.handle('download:createTask', async (_event, opts?: any) => {
     try {
+      // ERROR #7 FIX: Validate inputs upfront (synchronously) before any async
+      if (!opts || typeof opts !== 'object') {
+        return { success: false, error: 'opts must be a non-null object' }
+      }
+      if (typeof opts.appId !== 'string' || !opts.appId.trim()) {
+        return { success: false, error: 'appId is required and must be a non-empty string' }
+      }
+      if (typeof opts.name !== 'string' || !opts.name.trim()) {
+        return { success: false, error: 'name is required and must be a non-empty string' }
+      }
+
       const task = engine.createTask({
-        appId: opts.appId,
-        name: opts.name,
+        appId: opts.appId.trim(),
+        name: opts.name.trim(),
         source: opts.source,
-        priority: opts.priority ?? DownloadPriority.NORMAL,
+        priority: typeof opts.priority === 'number' ? opts.priority : DownloadPriority.NORMAL,
         installDir: opts.installDir,
-        depotKeys: opts.depotKeys,
-        manifestFiles: opts.manifestFiles,
-        directUrl: opts.directUrl,
-        localPath: opts.localPath,
-        maxRetries: opts.maxRetries,
-        prereqTaskId: opts.prereqTaskId,
+        depotKeys: Array.isArray(opts.depotKeys) ? opts.depotKeys : undefined,
+        manifestFiles: Array.isArray(opts.manifestFiles) ? opts.manifestFiles : undefined,
+        directUrl: typeof opts.directUrl === 'string' ? opts.directUrl : undefined,
+        localPath: typeof opts.localPath === 'string' ? opts.localPath : undefined,
+        maxRetries: typeof opts.maxRetries === 'number' ? opts.maxRetries : undefined,
+        prereqTaskId: typeof opts.prereqTaskId === 'string' ? opts.prereqTaskId : undefined,
       })
       return { success: true, task }
     } catch (err: any) {
       logger.error(`[download-ipc] createTask failed: ${err.message}`, 'download-ipc')
-      return { success: false, error: err.message }
+      return { success: false, error: err.message || 'Unknown error', code: err.code }
     }
   })
 
   // ── Iniciar tarea ──
-  ipcMain.handle('download:startTask', async (_event, taskId: string) => {
+  ipcMain.handle('download:startTask', async (_event, taskId?: any) => {
     try {
-      const ok = await engine.startTask(taskId)
+      // ERROR #7 FIX: Validate inputs upfront
+      if (typeof taskId !== 'string' || !taskId.trim()) {
+        return { success: false, error: 'taskId is required and must be a non-empty string' }
+      }
+      const ok = await engine.startTask(taskId.trim())
       return { success: ok }
     } catch (err: any) {
-      return { success: false, error: err.message }
+      return { success: false, error: err.message || 'Unknown error' }
     }
   })
 
   // ── Pausar tarea ──
-  ipcMain.handle('download:pauseTask', async (_event, taskId: string) => {
+  ipcMain.handle('download:pauseTask', async (_event, taskId?: any) => {
     try {
-      const ok = engine.pauseTask(taskId)
+      // ERROR #7 FIX: Validate inputs upfront
+      if (typeof taskId !== 'string' || !taskId.trim()) {
+        return { success: false, error: 'taskId is required and must be a non-empty string' }
+      }
+      const ok = engine.pauseTask(taskId.trim())
       return { success: ok }
     } catch (err: any) {
-      return { success: false, error: err.message }
+      return { success: false, error: err.message || 'Unknown error' }
     }
   })
 
   // ── Cancelar tarea ──
-  ipcMain.handle('download:cancelTask', async (_event, taskId: string) => {
+  ipcMain.handle('download:cancelTask', async (_event, taskId?: any) => {
     try {
-      const ok = engine.cancelTask(taskId)
+      // ERROR #7 FIX: Validate inputs upfront
+      if (typeof taskId !== 'string' || !taskId.trim()) {
+        return { success: false, error: 'taskId is required and must be a non-empty string' }
+      }
+      const ok = engine.cancelTask(taskId.trim())
       return { success: ok }
     } catch (err: any) {
-      return { success: false, error: err.message }
+      return { success: false, error: err.message || 'Unknown error' }
     }
   })
 

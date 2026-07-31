@@ -24,26 +24,42 @@ import fs from 'fs'
 import os from 'os'
 import { logger } from './logger'
 
-// Load OpenSteamTool DLLs
-const loadDlls = () => {
+// Load OpenSteamTool DLLs - Fix #1: Cross-platform support with graceful degradation
+const loadDlls = async () => {
   try {
+    // Only attempt DLL loading on Windows
+    if (process.platform !== 'win32') {
+      logger.info('OpenSteamTool DLL loading skipped on non-Windows platform', 'dll')
+      return
+    }
+
     const dllPath = path.join(__dirname, 'dll')
-    if (process.platform === 'win32' && fs.existsSync(dllPath)) {
-      process.env.PATH = `${dllPath};${process.env.PATH}`
-      try {
-        const nativeBind = require('./dll/OpenSteamTool.node')
-        if (nativeBind) {
-          logger.info('OpenSteamTool native bindings loaded successfully', 'dll')
-        }
-      } catch (_nodeErr) {
-        // Fallback: if .node doesn't exist, just ensure PATH is set for child processes
-        if (fs.existsSync(path.join(dllPath, 'OpenSteamTool.dll'))) {
-          logger.info('OpenSteamTool DLLs available in PATH (lazy-loaded by child processes)', 'dll')
-        }
+    if (!fs.existsSync(dllPath)) {
+      logger.warn('DLL directory not found, mod injection may be unavailable', 'dll')
+      return
+    }
+
+    // Add DLL directory to PATH for child processes
+    const currentPath = process.env.PATH ?? ''
+    const separator = process.platform === 'win32' ? ';' : ':'
+    process.env.PATH = `${dllPath}${separator}${currentPath}`
+
+    try {
+      const nativeBind = require('./dll/OpenSteamTool.node')
+      if (nativeBind) {
+        logger.info('OpenSteamTool native bindings loaded successfully', 'dll')
+      }
+    } catch (_nodeErr) {
+      // Fallback: if .node doesn't exist, just ensure PATH is set for child processes
+      if (fs.existsSync(path.join(dllPath, 'OpenSteamTool.dll'))) {
+        logger.info('OpenSteamTool DLLs available in PATH (lazy-loaded by child processes)', 'dll')
       }
     }
   } catch (err: any) {
-    logger.warn(`Componentes de soporte de Steam no pudieron cargarse (la app sigue funcionando en modo limitado). Detalle: ${err?.message ?? 'sin detalle'}`, 'dll')
+    logger.warn(
+      `Steam support components could not be loaded (app will continue in limited mode). Details: ${err?.message ?? 'no details'}`,
+      'dll'
+    )
   }
 }
 loadDlls()
@@ -67,9 +83,14 @@ import { registerConfigHandlers } from './modules/config'
 import { registerStoreImageHandlers } from './modules/store-images'
 import { registerOnlineFixHandlers } from './modules/onlinefix'
 import { registerDrmHandlers } from './modules/drm-remover'
+import { registerDrmPluginHandlers, cleanupDrmPlugins } from './modules/drm-plugins-handler'
 import { registerSteamLogWatcherHandlers, startSteamLogWatcher, stopSteamLogWatcher } from './modules/steam-log-watcher'
 import { cleanupStaleNativeVersions, getNativeDiagnostics } from './modules/ycore-native'
 import { registerYcoreErrorHandlers } from './handlers/ycore-error-ipc'
+import { registerRemotePlayHandlers } from './handlers/remote-play.handler'
+import { registerCloudSyncHandlers } from './handlers/cloud-sync'
+import { registerOnlineHandlers } from './handlers/online.handler'
+import { registerApiProxyHandlers } from './handlers/api-proxy.handler'
 import {
   startSteamCmdInstall,
   cancelSteamCmdInstall,
@@ -141,6 +162,10 @@ function registerAllServices(): void {
   registry.register('plugin', pluginService)
   registry.register('remotePlay', remotePlayService)
   registry.register('inputInjection', inputInjectionService)
+  registry.register('presence', presenceService)
+  registry.register('wsSignaling', wsSignalingService)
+  registry.register('cloudSignaling', cloudSignalingService)
+  registry.register('steamDownload', steamDownloadService)
 }
 
 // ============================================
@@ -155,12 +180,20 @@ function registerAllServices(): void {
 // Discord RPC watcher, steam log watcher), por lo que beforeExit no dispara
 // de forma confiable cuando el usuario minimiza a la bandeja y luego sale.
 // ---------------------------------------------------------------------------
-app.on('will-quit', () => {
+app.on('will-quit', async () => {
   try {
     cleanupStaleNativeVersions(app.getVersion())
   } catch (err) {
     logger.warn(
       `[native-cleanup] will-quit failed: ${(err as Error)?.message ?? err}`,
+      'main'
+    )
+  }
+  try {
+    await cleanupDrmPlugins()
+  } catch (err) {
+    logger.warn(
+      `[drm-plugins-cleanup] will-quit failed: ${(err as Error)?.message ?? err}`,
       'main'
     )
   }
@@ -216,12 +249,15 @@ if (!gotTheLock) {
   app.quit()
 }
 
-if (gotTheLock) {
-// Load persisted username on startup
-loadUsername()
+// ERROR #9 FIX: Declare at module scope so before-quit can access it
+let autoBuildAbortController: AbortController | null = null
 
-app.whenReady().then(async () => {
-  console.log('[STARTUP] [M] app.whenReady() started')
+if (gotTheLock) {
+  // Load persisted username on startup
+  loadUsername()
+
+  app.whenReady().then(async () => {
+    console.log('[STARTUP] [M] app.whenReady() started')
 
   // Auto-update OpenSteamTool DLLs (non-blocking, runs in background)
   // TODO: Fix compilation error in opensteamtool-updater.ts
@@ -286,8 +322,10 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
 
   // ── Register Service Layer (gateway + all services) BEFORE IPC handlers ───
+  // ERROR #1 FIX: Register services FIRST before creating windows or setting up handlers
   registerAllServices()
   registerGatewayRouter()
+
 
   // ── Browser Mobile Bridge (WebSocket) ──────────────────────────────────────
   // Mobile web clients (iPhone / iPad / test browser) reach the host via two
@@ -325,7 +363,7 @@ app.whenReady().then(async () => {
     remotePlay: new Set([
       'getSettings', 'updateSettings', 'getStatus',
       'connectToHost', 'disconnect',
-      'sendSignal', // WebRTC signaling (offer / answer / ice / request)
+      'sendSignal', 'broadcastSignal', // WebRTC signaling (offer / answer / ice / request)
       'getMobileConnectToken', 'resolveMobileToken', // QR mobile auto-connect
       'launchFromMobile', // Mobile taps a game → host starts + launches + auto-captures
     ]),
@@ -351,6 +389,8 @@ app.whenReady().then(async () => {
     ]),
   }
   const browserSignalClients = new Map<WsSocket, Set<string>>()
+  const connectionTimeouts = new Map<WsSocket, NodeJS.Timeout>()
+  const STALE_CONNECTION_TIMEOUT_MS = 60000  // 60s idle = stale (ERROR #10 FIX)
 
   // Lookup the registered service object backing the allow-list above.
   // Hard-coded (instead of registry introspection) so adding a new
@@ -385,7 +425,21 @@ app.whenReady().then(async () => {
     sendToBrowserClient(ws, { type: 'ready', session })
     logger.info(`[BrowserBridge] signaling client connected session=${session}`, 'remote-play')
 
+    // ERROR #10 FIX: Set idle timeout for stale connections
+    function resetIdleTimeout() {
+      if (connectionTimeouts.has(ws)) {
+        clearTimeout(connectionTimeouts.get(ws)!)
+      }
+      const timeout = setTimeout(() => {
+        logger.warn(`[BrowserBridge] Client ${session} idle timeout, closing`, 'remote-play')
+        ws.close(1000, 'idle-timeout')
+      }, STALE_CONNECTION_TIMEOUT_MS)
+      connectionTimeouts.set(ws, timeout)
+    }
+    resetIdleTimeout()
+
     ws.on('message', async (raw) => {
+      resetIdleTimeout()  // Reset on activity
       try {
         const msg = JSON.parse(raw.toString())
         if (msg.type === 'subscribe' && typeof msg.event === 'string') {
@@ -424,13 +478,46 @@ app.whenReady().then(async () => {
     })
 
     ws.on('close', () => {
+      // ERROR #10 FIX: Clean up on close
       browserSignalClients.delete(ws)
+      if (connectionTimeouts.has(ws)) {
+        clearTimeout(connectionTimeouts.get(ws)!)
+        connectionTimeouts.delete(ws)
+      }
       logger.info('[BrowserBridge] signaling client disconnected', 'remote-play')
     })
     ws.on('error', (err: Error) => {
       logger.warn(`[BrowserBridge] signaling ws error: ${err.message}`, 'remote-play')
+
+      // ERROR #10 FIX: Clean up on error (not just on close)
+      try {
+        browserSignalClients.delete(ws)
+        if (connectionTimeouts.has(ws)) {
+          clearTimeout(connectionTimeouts.get(ws)!)
+          connectionTimeouts.delete(ws)
+        }
+        ws.close(1011, 'server-error')
+      } catch {}
     })
   })
+
+  // ERROR #10 FIX: Periodic cleanup of orphaned connections
+  setInterval(() => {
+    let orphanedCount = 0
+    for (const [ws, subs] of browserSignalClients.entries()) {
+      if (ws.readyState === ws.CLOSED || ws.readyState === ws.CLOSING) {
+        browserSignalClients.delete(ws)
+        if (connectionTimeouts.has(ws)) {
+          clearTimeout(connectionTimeouts.get(ws)!)
+          connectionTimeouts.delete(ws)
+        }
+        orphanedCount++
+      }
+    }
+    if (orphanedCount > 0) {
+      logger.warn(`[BrowserBridge] Cleaned up ${orphanedCount} orphaned connections`, 'remote-play')
+    }
+  }, 30000)  // Run every 30s
   logger.info(`[BrowserBridge] signaling WS listening on ${BROWSER_SIGNAL_PORT}`, 'remote-play')
 
   const browserInputWss = new WebSocketServer({ port: BROWSER_INPUT_PORT })
@@ -455,72 +542,89 @@ app.whenReady().then(async () => {
   logger.info(`[BrowserBridge] input WS listening on ${BROWSER_INPUT_PORT}`, 'remote-play')
 
   // ── Wire Remote Play signaling events to renderer ────────────────────────
-  remotePlayService.setOnSignalCallback((signal, from) => {
-    for (const win of BrowserWindow.getAllWindows()) {
+  // ERROR #6 FIX: Only register callbacks once, prevent duplicate listeners
+  let remotePlayCallbacksRegistered = false
+
+  if (!remotePlayCallbacksRegistered) {
+    remotePlayService.setOnSignalCallback((signal, from) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          if (!win.isDestroyed()) {
+            win.webContents.send('remotePlay:signal', { ...signal, from })
+          }
+        } catch {}
+      }
+      // Parallel push to browser-side mobile clients subscribed to LAN signals.
+      broadcastBrowserEvent('remotePlay:signal', { ...signal, from })
+    })
+
+    // ── Wire the mobile-bridge broadcaster so `broadcastSignal` reaches WS clients ─
+    // HostRemotePlayAuto + the LAN HostTab now use `broadcastSignal(signal)` for
+    // outbound offer/answer/ICE instead of the broken `sendSignal(host, port)`
+    // (which only opened a fresh throwaway TCP that was destroyed after write,
+    // so no peer ever received the host's responses). The fan-out reaches every
+    // BrowserWindow, the live LAN signalingClientSocket, AND the WS bridge.
+    remotePlayService.setMobileBridgeBroadcaster((event, data) => {
+      broadcastBrowserEvent(event, data)
+    })
+
+    // ── Wire Y-Core Cloud signaling events to renderer ───────────────────
+    remotePlayService.setOnCloudSignalCallback((signal) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          if (!win.isDestroyed()) {
+            win.webContents.send('remotePlay:wsSignal', signal)
+          }
+        } catch {}
+      }
+      broadcastBrowserEvent('remotePlay:wsSignal', signal)
+    })
+
+    remotePlayService.setOnCloudConnectionRequestCallback((request) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          if (!win.isDestroyed()) {
+            win.webContents.send('remotePlay:connectionRequest', request)
+          }
+        } catch {}
+      }
+    })
+
+    // ── Wire WebSocket signaling (WAN) events to renderer ────────────────────
+    wsSignalingService.setOnSignalCallback((signal) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          if (!win.isDestroyed()) {
+            win.webContents.send('remotePlay:wsSignal', signal)
+          }
+        } catch {}
+      }
+      broadcastBrowserEvent('remotePlay:wsSignal', signal)
+    })
+
+    // ── Wire cloud signaling input commands to InputInjectionService ─────────
+    cloudSignalingService.setOnInputCommandCallback((command) => {
       try {
-        win.webContents.send('remotePlay:signal', { ...signal, from })
-      } catch {}
-    }
-    // Parallel push to browser-side mobile clients subscribed to LAN signals.
-    broadcastBrowserEvent('remotePlay:signal', { ...signal, from })
-  })
+        inputInjectionService.processCommand(command)
+      } catch (err: any) {
+        logger.error(`[main] inputInjection failed: ${err?.message}`, 'native')
+      }
+    })
 
-  // ── Wire the mobile-bridge broadcaster so `broadcastSignal` reaches WS clients ─
-  // HostRemotePlayAuto + the LAN HostTab now use `broadcastSignal(signal)` for
-  // outbound offer/answer/ICE instead of the broken `sendSignal(host, port)`
-  // (which only opened a fresh throwaway TCP that was destroyed after write,
-  // so no peer ever received the host's responses). The fan-out reaches every
-  // BrowserWindow, the live LAN signalingClientSocket, AND the WS bridge.
-  remotePlayService.setMobileBridgeBroadcaster((event, data) => {
-    broadcastBrowserEvent(event, data)
-  })
+    // ── Wire presence connection request events to renderer ──────────────────
+    presenceService.setOnConnectionRequestCallback((request) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          if (!win.isDestroyed()) {
+            win.webContents.send('remotePlay:connectionRequest', request)
+          }
+        } catch {}
+      }
+      broadcastBrowserEvent('remotePlay:connectionRequest', request)
+    })
 
-  // ── Wire Y-Core Cloud signaling events to renderer ───────────────────────
-  remotePlayService.setOnCloudSignalCallback((signal) => {
-    for (const win of BrowserWindow.getAllWindows()) {
-      try {
-        win.webContents.send('remotePlay:wsSignal', signal)
-      } catch {}
-    }
-    broadcastBrowserEvent('remotePlay:wsSignal', signal)
-  })
-
-  remotePlayService.setOnCloudConnectionRequestCallback((request) => {
-    for (const win of BrowserWindow.getAllWindows()) {
-      try {
-        win.webContents.send('remotePlay:connectionRequest', request)
-      } catch {}
-    }
-  })
-
-  // ── Wire WebSocket signaling (WAN) events to renderer ────────────────────
-  wsSignalingService.setOnSignalCallback((signal) => {
-    for (const win of BrowserWindow.getAllWindows()) {
-      try {
-        win.webContents.send('remotePlay:wsSignal', signal)
-      } catch {}
-    }
-    broadcastBrowserEvent('remotePlay:wsSignal', signal)
-  })
-
-  // ── Wire cloud signaling input commands to InputInjectionService ─────────
-  cloudSignalingService.setOnInputCommandCallback((command) => {
-    try {
-      inputInjectionService.processCommand(command)
-    } catch (err: any) {
-      logger.error(`[main] inputInjection failed: ${err?.message}`, 'native')
-    }
-  })
-
-  // ── Wire presence connection request events to renderer ──────────────────
-  presenceService.setOnConnectionRequestCallback((request) => {
-    for (const win of BrowserWindow.getAllWindows()) {
-      try {
-        win.webContents.send('remotePlay:connectionRequest', request)
-      } catch {}
-    }
-    broadcastBrowserEvent('remotePlay:connectionRequest', request)
-  })
+    remotePlayCallbacksRegistered = true
+  }
 
   // Register modular IPC handlers BEFORE creating windows
   // to prevent race conditions where the renderer calls handlers
@@ -529,6 +633,7 @@ app.whenReady().then(async () => {
   registerConfigHandlers()
   registerOnlineFixHandlers(() => { invalidateGamesCache() })
   registerDrmHandlers()
+  registerDrmPluginHandlers()
   registerSteamLogWatcherHandlers()
   registerStoreImageHandlers()
   registerAuthHandlers({ showMainWindow, createLoginWindow })
@@ -536,6 +641,10 @@ app.whenReady().then(async () => {
   registerSteamHandlers()
   registerDownloadHandlers()
   registerYcoreErrorHandlers()
+  registerRemotePlayHandlers()
+  registerCloudSyncHandlers()
+  registerOnlineHandlers()
+  registerApiProxyHandlers()
 
   // Diagnóstico de DLLs vs Windows Defender — disponible para el renderer
   ipcMain.handle('app:defenderCheck', () => {
@@ -751,21 +860,65 @@ app.whenReady().then(async () => {
       // de nuestro root (defensa en profundidad del contextBridge).
       // Si el renderer omite installDir, default = ${userData}/Library/${appId}.
       const libraryRoot = path.resolve(app.getPath('userData'), 'Library')
+
+      // ERROR #11 FIX: Strengthen path validation with fs.realpathSync()
       const requested = opts.installDir
         ? path.resolve(opts.installDir)
         : path.join(libraryRoot, String(opts.appId))
-      if (requested !== libraryRoot && !requested.startsWith(libraryRoot + path.sep)) {
+
+      // Resolve real path (follows symlinks)
+      let realRequested: string
+      try {
+        realRequested = fs.realpathSync(requested)
+      } catch (err: any) {
+        if (err.code === 'ENOENT') {
+          // Path doesn't exist yet (OK, we'll create it)
+          // But ensure parent is in library root
+          const parent = path.dirname(requested)
+          let realParent: string
+          try {
+            realParent = fs.realpathSync(parent)
+          } catch {
+            realParent = path.resolve(parent)
+          }
+          if (!realParent.startsWith(libraryRoot + path.sep) && realParent !== libraryRoot) {
+            logger.warn(`[steamcmd] installDir outside library: ${requested} → ${realParent}`, 'steamcmd')
+            return {
+              success: false,
+              error: `installDir fuera de library root`,
+              errorKey: 'errors.steamcmd.installDirCreateFailed',
+            }
+          }
+          realRequested = requested  // Will be created inside library
+        } else {
+          throw err
+        }
+      }
+
+      // Validate real path is within library root
+      if (!realRequested.startsWith(libraryRoot + path.sep) && realRequested !== libraryRoot) {
         logger.warn(
-          `[steamcmd] installDir fuera de library root: ${requested} (appId=${opts.appId})`,
+          `[steamcmd] installDir escapes library root: requested=${requested}, real=${realRequested}`,
           'steamcmd',
         )
         return {
           success: false,
-          error: `installDir fuera de library root: ${requested}`,
+          error: `installDir fuera de library root (real path: ${realRequested})`,
           errorKey: 'errors.steamcmd.installDirCreateFailed',
         }
       }
-      return await startSteamCmdInstall({ ...opts, installDir: requested })
+
+      // Additional: check that requested path contains no suspicious patterns
+      if (realRequested.includes('..') || requested.includes('..')) {
+        logger.warn(`[steamcmd] Relative path detected: ${requested}`, 'steamcmd')
+        return {
+          success: false,
+          error: `installDir no puede contener ..`,
+          errorKey: 'errors.steamcmd.installDirCreateFailed',
+        }
+      }
+
+      return await startSteamCmdInstall({ ...opts, installDir: realRequested })
     } catch (err: any) {
       logger.error(
         `[steamcmd] start appId=${opts?.appId} falló: ${err?.message ?? err}`,
@@ -864,18 +1017,20 @@ app.whenReady().then(async () => {
   // No bloquea el arranque: la app arranca con cliente legacy mientras SteamCMD
   // descarga en background. El operador también puede disparar manualmente con
   // `ycore fetch-steamcmd` desde Settings o CLI.
+  // ERROR #8 FIX: Chain .catch() on both import and fetchSteamCmd promises
   if (!isSteamCmdAvailable()) {
     setImmediate(() => {
-      void import('./modules/steamcmd-fetcher').then(({ fetchSteamCmd }) =>
-        fetchSteamCmd({}).catch((err: unknown) => {
+      import('./modules/steamcmd-fetcher')
+        .then(({ fetchSteamCmd }) => {
+          return fetchSteamCmd({})
+        })
+        .catch((err: unknown) => {
+          const msg = err instanceof Error ? err.message : String(err)
           logger.warn(
-            `[auto-fetch-steamcmd] falló (best-effort): ${
-              err instanceof Error ? err.message : String(err)
-            }. El operador puede disparar 'ycore fetch-steamcmd' manualmente.`,
+            `[auto-fetch-steamcmd] falló (best-effort): ${msg}. El operador puede disparar 'ycore fetch-steamcmd' manualmente.`,
             'steamcmd',
           )
-        }),
-      )
+        })
     })
   }
 
@@ -904,6 +1059,7 @@ app.whenReady().then(async () => {
   })()
 
   if (!isLocalSteamEmulatorAvailable()) {
+    autoBuildAbortController = new AbortController()
     setImmediate(async () => {
       try {
         // Round-12.5: chain auto-install → auto-build so the user can launch
@@ -916,26 +1072,38 @@ app.whenReady().then(async () => {
           logger.info('[emulator] cmake missing at startup — kicking off auto-install (3 tiers: winget → choco → direct MSI)…', 'emulator')
           const instResult = await tryInstallCmake({
             onProgress: (line) => {
+              // ERROR #9 FIX: Check if abort was signaled
+              if (autoBuildAbortController?.signal.aborted) {
+                logger.info('[emulator] auto-install cancelled (app quitting)', 'emulator')
+                return
+              }
               for (const win of BrowserWindow.getAllWindows()) {
-                try { win.webContents.send('app:installToolchain:progress', { line }) } catch {}
+                try {
+                  if (!win.isDestroyed()) {
+                    win.webContents.send('app:installToolchain:progress', { line })
+                  }
+                } catch {}
               }
             },
           })
           // Always broadcast the final result so the renderer shows a toast.
           for (const win of BrowserWindow.getAllWindows()) {
             try {
-              win.webContents.send('app:installToolchain:finished', {
-                success: instResult.success,
-                installedFrom: instResult.installedFrom,
-                durationMs: instResult.durationMs,
-                error: instResult.error,
-                skippedTiers: instResult.skippedTiers,
-                cmakePathAfter: instResult.cmakePathAfter,
-              })
+              if (!win.isDestroyed()) {
+                win.webContents.send('app:installToolchain:finished', {
+                  success: instResult.success,
+                  installedFrom: instResult.installedFrom,
+                  durationMs: instResult.durationMs,
+                  error: instResult.error,
+                  skippedTiers: instResult.skippedTiers,
+                  cmakePathAfter: instResult.cmakePathAfter,
+                })
+              }
             } catch {}
           }
           if (!instResult.success) {
             logger.warn(`[emulator] auto-install FAILED: ${instResult.error}`, 'emulator')
+            autoBuildAbortController = null
             return
           }
           logger.info(
@@ -944,24 +1112,48 @@ app.whenReady().then(async () => {
           )
         }
 
+        // ERROR #9 FIX: Check if abort was signaled before proceeding
+        if (autoBuildAbortController?.signal.aborted) {
+          logger.info('[emulator] auto-build cancelled (app quitting)', 'emulator')
+          autoBuildAbortController = null
+          return
+        }
+
         const result = await tryAutoBuildOnce()
-        if (!result) return // DLL already present
+        if (!result) {
+          autoBuildAbortController = null
+          return // DLL already present
+        }
         if (result.success) {
           logger.info(
             `[emulator] auto-build OK in ${result.durationMs}ms — DLL=${result.dllPath} (${result.dllSizeBytes}B). NOTE: koffi keeps the prior load handle in this process; restart Y-core to bind the freshly-built code.`,
             'emulator',
           )
           for (const win of BrowserWindow.getAllWindows()) {
-            try { win.webContents.send('app:autoBuildFinished', { success: true, dllPath: result.dllPath, durationMs: result.durationMs }) } catch {}
+            try {
+              if (!win.isDestroyed()) {
+                win.webContents.send('app:autoBuildFinished', { success: true, dllPath: result.dllPath, durationMs: result.durationMs })
+              }
+            } catch {}
           }
         } else {
           logger.warn(`[emulator] auto-build FAILED: ${result.error} (exit=${result.exitCode})`, 'emulator')
           for (const win of BrowserWindow.getAllWindows()) {
-            try { win.webContents.send('app:autoBuildFinished', { success: false, error: result.error, exitCode: result.exitCode }) } catch {}
+            try {
+              if (!win.isDestroyed()) {
+                win.webContents.send('app:autoBuildFinished', { success: false, error: result.error, exitCode: result.exitCode })
+              }
+            } catch {}
           }
         }
       } catch (err: any) {
-        logger.warn(`[emulator] auto-setup crash: ${err?.message ?? err}`, 'emulator')
+        if (err?.name === 'AbortError') {
+          logger.info('[emulator] auto-setup aborted (app quitting)', 'emulator')
+        } else {
+          logger.warn(`[emulator] auto-setup crash: ${err?.message ?? err}`, 'emulator')
+        }
+      } finally {
+        autoBuildAbortController = null
       }
     })
   }
@@ -1103,11 +1295,20 @@ app.whenReady().then(async () => {
       // Otherwise the NSIS installer hangs waiting for the file handle, and the
       // relaunched app collides with the previous single-instance lock.
       try {
-        BrowserWindow.getAllWindows().forEach((w) => {
-          w.removeAllListeners('close')
-          w.destroy()
-        })
-      } catch {}
+        const windows = BrowserWindow.getAllWindows()
+        // ERROR #13 FIX: Check isDestroyed() before operating on windows
+        for (const w of windows) {
+          if (w.isDestroyed()) continue
+          try {
+            w.removeAllListeners('close')
+            w.destroy()
+          } catch (err: any) {
+            logger.warn(`Failed to destroy window: ${err?.message}`, 'updater')
+          }
+        }
+      } catch (err: any) {
+        logger.warn(`Failed to destroy all windows: ${err?.message}`, 'updater')
+      }
       if (state.tray) {
         try { state.tray.destroy() } catch {}
       }
@@ -1148,13 +1349,18 @@ app.whenReady().then(async () => {
               downloaded += chunk.length
               if (totalSize > 0) {
                 const percent = (downloaded / totalSize) * 100
-                for (const win of BrowserWindow.getAllWindows()) {
-                  try { win.webContents.send('update-progress', {
-                    percent,
-                    transferred: downloaded,
-                    total: totalSize,
-                    bytesPerSecond: 0,
-                  }) } catch {}
+                // ERROR #13 FIX: Check isDestroyed() before sending to windows
+                const windows = BrowserWindow.getAllWindows()
+                for (const win of windows) {
+                  if (win.isDestroyed()) continue
+                  try {
+                    win.webContents.send('update-progress', {
+                      percent,
+                      transferred: downloaded,
+                      total: totalSize,
+                      bytesPerSecond: 0,
+                    })
+                  } catch {}
                 }
               }
             })
@@ -1163,8 +1369,13 @@ app.whenReady().then(async () => {
             file.on('finish', () => {
               file.close()
               logger.info(`Update downloaded to ${installerPath}`, 'updater')
-              for (const win of BrowserWindow.getAllWindows()) {
-                try { win.webContents.send('update-downloaded', { version: 'manual' }) } catch {}
+              // ERROR #13 FIX: Check isDestroyed() before sending to windows
+              const windows = BrowserWindow.getAllWindows()
+              for (const win of windows) {
+                if (win.isDestroyed()) continue
+                try {
+                  win.webContents.send('update-downloaded', { version: 'manual' })
+                } catch {}
               }
               resolve({ path: installerPath })
             })
@@ -1219,8 +1430,15 @@ app.whenReady().then(async () => {
 })
 }
 
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
   setIsQuitting(true)
+
+  // ERROR #9 FIX: Cancel auto-build if in progress
+  if (autoBuildAbortController) {
+    autoBuildAbortController.abort()
+    autoBuildAbortController = null
+  }
+
   saveUsername()
   // Cerrar jobs SteamCMD ANTES de los watchers: si SteamCMD tiene un child
   // activo, su muerte emite un último evento FAILED al renderer mientras

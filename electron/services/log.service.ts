@@ -3,11 +3,11 @@
 // ============================================================================
 
 import { dialog } from 'electron'
-import { logger } from '../logger'
+import { logger, type LogLevel } from '../logger'
 import { state } from '../state'
 
 export const logService = {
-  async getEntries(filter?: { level?: string; search?: string; limit?: number; source?: string }) {
+  async getEntries(filter?: { level?: LogLevel; search?: string; limit?: number }) {
     return logger.getEntries(filter)
   },
 

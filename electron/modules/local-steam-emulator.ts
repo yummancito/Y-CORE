@@ -374,7 +374,7 @@ export function patchGameFolder(
     try {
       const settingsDir = path.join(gameFolder, 'steam_settings')
       fs.mkdirSync(settingsDir, { recursive: true })
-      const dropIfMissing = (name, contents) => {
+      const dropIfMissing = (name: string, contents: string) => {
         const p = path.join(settingsDir, name)
         if (!fs.existsSync(p)) fs.writeFileSync(p, contents, 'utf-8')
       }

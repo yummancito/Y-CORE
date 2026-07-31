@@ -12,6 +12,21 @@ import type {
   LogEntry,
   LogConfig,
 } from '../../src/domain/types'
+import type {
+  ModInfo,
+  ModSearchQuery,
+  ModSearchResult,
+  ModInstallOptions,
+  ModInstallResult,
+  ModUninstallOptions,
+  ModUninstallResult,
+  ModToggleResult,
+  ModScanResult,
+  BackupInfo,
+  ModStatistics,
+  ModQueryResult,
+  CacheStats,
+} from './mod-types'
 
 // ── Config Service ─────────────────────────────────────────────────────────
 
@@ -159,6 +174,151 @@ export interface OnlineFixServiceContract {
   generate(appId: string): Promise<{ success: boolean; error?: string }>
   remove(appId: string): Promise<{ success: boolean; error?: string }>
   detect(appId: string): Promise<{ detected: boolean; error?: string }>
+}
+
+// ── Network Config (for Online Fix P2P) ────────────────────────────────────
+
+export interface NetworkConfig {
+  p2pEnabled: boolean
+  relayServerUrl: string
+  localLanOnly: boolean
+  connectionTimeout: number
+  maxRetries: number
+  connectionPoolSize: number
+}
+
+export interface LaunchContext {
+  appId: string
+  gameName: string
+  gameDir: string
+  onlineFixEnabled: boolean
+  p2pConfig: NetworkConfig
+  startTime: number
+  dllsPatchedAt: number | null
+}
+
+export interface ExitMetrics {
+  appId: string
+  processId: number | null
+  duration: number
+  p2pConnectionsEstablished: number
+  p2pConnectionsFailed: number
+  bytesTransferred: number
+  disconnectReason: string | null
+  crashDetected: boolean
+}
+
+// ── Game Launch Integration Service ────────────────────────────────────────
+
+export interface GameLaunchIntegrationServiceContract {
+  'game:prepare-launch': (appId: string, gameName: string) => Promise<{
+    success: boolean
+    error?: string
+    context?: LaunchContext
+    warnings: string[]
+  }>
+  'game:on-exit': (data: { appId: string; processId: number | null; exitCode: number | null; crashed: boolean }) => Promise<{
+    success: boolean
+    error?: string
+    metrics?: ExitMetrics
+  }>
+  'game:get-launch-context': (appId: string) => Promise<{
+    success: boolean
+    error?: string
+    context?: LaunchContext
+  }>
+  'game:check-online-fix': (appId: string) => Promise<{
+    success: boolean
+    error?: string
+    detected: boolean
+    dllsValid: boolean
+    missingDlls: string[]
+  }>
+  'game:get-exit-metrics': (appId: string) => Promise<{
+    success: boolean
+    error?: string
+    metrics?: ExitMetrics
+  }>
+}
+
+// ── Connection Error & Recovery ────────────────────────────────────────────
+
+export interface ConnectionError {
+  appId: string
+  timestamp: number
+  type: 'p2p_connect' | 'relay_connect' | 'handshake' | 'peer_discovery' | 'unknown'
+  message: string
+  retriable: boolean
+  attemptCount: number
+}
+
+export interface RecoveryState {
+  appId: string
+  connected: boolean
+  connectionMode: 'p2p' | 'relay' | 'lan' | 'offline' | 'disabled'
+  lastError: ConnectionError | null
+  attemptCount: number
+  failureCount: number
+  lastSuccessfulConnection: number | null
+  degradationLevel: 'healthy' | 'degraded' | 'critical' | 'disabled'
+}
+
+export interface RecoveryConfig {
+  autoRetryEnabled: boolean
+  maxRetries: number
+  initialRetryDelay: number
+  maxRetryDelay: number
+  exponentialBackoffFactor: number
+  degradationThreshold: number
+  autoDisableThreshold: number
+  notifyOnDegradation: boolean
+  lanFallbackEnabled: boolean
+}
+
+// ── Online Recovery Service ────────────────────────────────────────────────
+
+export interface OnlineRecoveryServiceContract {
+  'recovery:report-error': (appId: string, errorMessage: string) => Promise<{
+    success: boolean
+    error?: string
+    action?: any
+  }>
+  'recovery:report-success': (appId: string, connectionMode: string) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  'recovery:get-state': (appId: string) => Promise<{
+    success: boolean
+    error?: string
+    state?: RecoveryState
+  }>
+  'recovery:get-error-history': (appId: string) => Promise<{
+    success: boolean
+    error?: string
+    errors?: ConnectionError[]
+  }>
+  'recovery:enable-lan-mode': (appId: string) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  'recovery:disable-online-fix': (appId: string, reason: string) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  'recovery:reset-state': (appId: string) => Promise<{
+    success: boolean
+    error?: string
+  }>
+  'recovery:get-config': () => Promise<{
+    success: boolean
+    error?: string
+    config?: RecoveryConfig
+  }>
+  'recovery:update-config': (partial: Partial<RecoveryConfig>) => Promise<{
+    success: boolean
+    error?: string
+    config?: RecoveryConfig
+  }>
 }
 
 // ── DRM Service ────────────────────────────────────────────────────────────
@@ -504,6 +664,37 @@ export interface PluginServiceContract {
   executePluginCommand(pluginId: string, commandId: string, args?: unknown[]): Promise<unknown>
 }
 
+// ── Mods Service ──────────────────────────────────────────────────────────
+
+export interface ModsServiceContract {
+  // Search & Discovery
+  searchCatalog(query: ModSearchQuery): Promise<{ success: boolean; data?: ModSearchResult; error?: string }>
+  getDetails(fileId: string): Promise<{ success: boolean; data?: ModInfo; error?: string }>
+  listInstalled(gameAppId: string): Promise<{ success: boolean; data?: ModInfo[]; error?: string }>
+
+  // Installation
+  install(modDetails: any, options: ModInstallOptions): Promise<{ success: boolean; data?: ModInstallResult; error?: string }>
+  uninstall(options: ModUninstallOptions): Promise<{ success: boolean; data?: ModUninstallResult; error?: string }>
+  enable(modId: string): Promise<{ success: boolean; error?: string }>
+  disable(modId: string): Promise<{ success: boolean; error?: string }>
+  cancelInstall(modId: string): Promise<{ success: boolean; error?: string }>
+
+  // Security & Maintenance
+  scanMalware(options: any): Promise<{ success: boolean; data?: ModScanResult; error?: string }>
+  getBackups(modId: string): Promise<{ success: boolean; data?: BackupInfo[]; error?: string }>
+  restoreBackup(payload: { backupId: string; modId: string; installPath: string }): Promise<{ success: boolean; error?: string }>
+  checkConflicts(gameAppId: string): Promise<{ success: boolean; data?: any; error?: string }>
+
+  // Query & Statistics
+  searchInstalled(query: string, gameAppId?: string): Promise<{ success: boolean; data?: ModInfo[]; error?: string }>
+  queryMods(gameAppId: string, filters?: any): Promise<{ success: boolean; data?: ModQueryResult; error?: string }>
+  getStatistics(gameAppId: string): Promise<{ success: boolean; data?: ModStatistics; error?: string }>
+  getCacheStats(): Promise<{ success: boolean; data?: CacheStats; error?: string }>
+
+  // Cache Management
+  clearCache(): Promise<{ success: boolean; error?: string }>
+}
+
 // ── Maintenance Service ────────────────────────────────────────────────────
 
 export interface MaintenanceServiceContract {
@@ -591,6 +782,7 @@ export interface ServiceContracts {
   saveManager: SaveManagerServiceContract
   gameProcess: GameProcessServiceContract
   maintenance: MaintenanceServiceContract
+  mods: ModsServiceContract
   plugin: PluginServiceContract
   remotePlay: RemotePlayServiceContract
   inputInjection: InputInjectionServiceContract
@@ -611,6 +803,13 @@ export type ServiceEvents = {
   'update-downloaded': { version?: string }
   'update-error': { message: string }
   'steamcmd:progress': any
+  'mods:install-progress': any
+  'mods:installed': ModInstallResult
+  'mods:uninstalled': ModUninstallResult
+  'mods:enabled': ModToggleResult
+  'mods:disabled': ModToggleResult
+  'mods:scan-complete': ModScanResult
+  'mods:conflict-detected': any
   /** WebRTC signaling message received from remote host/client (LAN) */
   'remotePlay:signal': SignalPayload & { from: string; port: number }
   /** WebSocket signaling message received via server relay (WAN) */
@@ -626,4 +825,14 @@ export type ServiceEvents = {
    * stream arrives without the desktop user opening Remote Play first.
    */
   'remotePlay:mobileLaunch': { appId: string; sessionId: string }
+  /** Game exit event with metrics and cleanup */
+  'game:exit-event': { appId: string; processId: number | null; exitCode: number | null; metrics: ExitMetrics }
+  /** Online Fix recovery action recommended */
+  'recovery:action-recommended': { appId: string; action: string; message?: string }
+  /** Recovery retry ready */
+  'recovery:retry-ready': { appId: string }
+  /** Connection mode changed */
+  'recovery:mode-changed': { appId: string; mode: 'p2p' | 'relay' | 'lan' | 'disabled'; message: string }
+  /** Online Fix disabled due to repeated failures */
+  'recovery:disabled': { appId: string; reason: string; message: string }
 }

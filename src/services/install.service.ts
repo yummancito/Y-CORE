@@ -15,6 +15,12 @@
 import { extractMissingDepotIds, buildDepotboxLinks } from '../lib/parse-error'
 import { t } from '../lib/i18n'
 import { downloadService } from './download.service'
+import {
+  installGame,
+  reportDownloaded,
+  getJobStatus,
+  fetchDepotKeysFromApi,
+} from '../lib/y-core-api'
 
 // ── Utility: render error strings with depotbox deep-links ────────────────
 
@@ -198,9 +204,6 @@ async function createGoldSrcInstall(opts: {
 
     if (!opts.isPrereqInstalled) {
       // 1. Resolver HL1 manifest/keys vía Y-core API /install (NO descarga).
-      // Importamos dinámicamente igual que el resto del archivo para
-      // mantener el patrón y evitar ciclos de import en tests.
-      const { installGame } = await import('../lib/y-core-api')
       const hl1Install = await installGame(hl1AppId)
       if (hl1Install.status !== 'ready' || !hl1Install.game) {
         return { success: false, error: `Half-Life prerequisite (appId=${hl1AppId}) could not be resolved: status=${hl1Install.status}` }
@@ -282,23 +285,19 @@ export const installService = {
   // ── V2 API surface ──────────────────────────────────────────────────
   async reportDownloaded(appId: string): Promise<void> {
     try {
-      const { reportDownloaded } = await import('../lib/y-core-api')
       await reportDownloaded(appId)
     } catch { /* silent */ }
   },
 
   async getJobStatus(jobId: string): Promise<any> {
-    const { getJobStatus } = await import('../lib/y-core-api')
     return getJobStatus(jobId)
   },
 
   async installGameFromApi(appId: string): Promise<any> {
-    const { installGame } = await import('../lib/y-core-api')
     return installGame(appId)
   },
 
   async fetchDepotKeysFromApi(appId: string): Promise<{ depot_id: string; key: string }[]> {
-    const { fetchDepotKeysFromApi } = await import('../lib/y-core-api')
     return fetchDepotKeysFromApi(appId)
   },
 }

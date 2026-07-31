@@ -10,6 +10,7 @@ import { SignJWT, jwtVerify } from 'jose'
 import { createSecretKey, type KeyObject } from 'node:crypto'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { Env } from '../config/env.js'
+import { getSecretManager } from '../config/secrets.js'
 
 export interface JwtPayload {
   sub: string
@@ -39,7 +40,8 @@ function toJwtPayload(payload: Record<string, unknown>): JwtPayload {
 }
 
 export const registerJwtPlugin = fp(async (app: FastifyInstance, opts: { env: Env }) => {
-  const secretKey: KeyObject = createSecretKey(Buffer.from(opts.env.JWT_SECRET, 'utf-8'))
+  const secretManager = getSecretManager()
+  const secretKey: KeyObject = createSecretKey(Buffer.from(secretManager.getSecret(), 'utf-8'))
 
   async function sign(payload: JwtPayload): Promise<string> {
     return new SignJWT({ ...payload })
@@ -51,8 +53,27 @@ export const registerJwtPlugin = fp(async (app: FastifyInstance, opts: { env: En
   }
 
   async function verify(token: string): Promise<JwtPayload> {
-    const { payload } = await jwtVerify(token, secretKey)
-    return toJwtPayload(payload as Record<string, unknown>)
+    // Try with current secret first, then previous (if in grace period)
+    const secrets = secretManager.getSecretsForVerification()
+    let payload: JwtPayload | null = null
+    let lastError: Error | null = null
+
+    for (const secret of secrets) {
+      try {
+        const secretKeyForVerify: KeyObject = createSecretKey(Buffer.from(secret, 'utf-8'))
+        const result = await jwtVerify(token, secretKeyForVerify)
+        payload = toJwtPayload(result.payload as Record<string, unknown>)
+        break
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
+      }
+    }
+
+    if (!payload) {
+      throw lastError || new Error('Token verification failed')
+    }
+
+    return payload
   }
 
   app.decorate('signJwt', sign)

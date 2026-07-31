@@ -14,6 +14,7 @@
 // ============================================================================
 
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -27,6 +28,8 @@ import {
   Minus,
   Maximize2,
   X,
+  Cloud,
+  Package,
 } from 'lucide-react'
 import { Logo } from '../Logo'
 import { useAuthStore } from '../../stores/useAuthStore'
@@ -78,6 +81,9 @@ export function TopNav() {
   const navigate = useNavigate()
   const location = useLocation()
   const username = useAuthStore((s) => s.username)
+
+  // Cloud sync state
+  const [isSyncing, setIsSyncing] = useState(false)
 
   // Functional icon row state (each onClick does something real).
   const supportChatOpen = useSupportChatStore((s) => s.open)
@@ -133,6 +139,36 @@ export function TopNav() {
    */
   const handleOpenErrors = () => {
     if (steamError) setSteamErrorOpen(true)
+  }
+
+  /**
+   * ☁️ Sync library with cloud — IPC call with toast feedback
+   */
+  const handleCloudSync = async () => {
+    if (isSyncing) return
+
+    setIsSyncing(true)
+    try {
+      const result = await (window as any).ipcRenderer?.invoke?.('cloud:sync-library')
+
+      if (result?.success) {
+        // Show success toast
+        const message = result.message || 'Librería sincronizada correctamente'
+        console.log(`[Cloud Sync] ${message}`)
+        // Toast would be called here if notification system is available
+        // e.g., toast.success(message)
+      } else {
+        const error = result?.error || 'Error al sincronizar'
+        console.error(`[Cloud Sync] ${error}`)
+        // e.g., toast.error(error)
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Error desconocido'
+      console.error(`[Cloud Sync] ${errorMsg}`)
+      // e.g., toast.error(`Error al sincronizar: ${errorMsg}`)
+    } finally {
+      setIsSyncing(false)
+    }
   }
 
   return (
@@ -210,6 +246,20 @@ export function TopNav() {
             aria-label="Open AI chat"
           >
             <MessageCircle className="w-[14px] h-[14px]" strokeWidth={2.2} />
+          </button>
+
+          {/* ☁️ Cloud Sync — sync library to cloud */}
+          <button
+            className={`${iconBtnBase} ${isSyncing ? 'text-[var(--accent)] animate-spin' : ''}`}
+            onClick={handleCloudSync}
+            disabled={isSyncing}
+            title={isSyncing ? 'Sincronizando...' : 'Sincronizar librería'}
+            aria-label="Sync library to cloud"
+          >
+            <Cloud
+              className={`w-[14px] h-[14px] ${isSyncing ? 'animate-spin' : ''}`}
+              strokeWidth={2.2}
+            />
           </button>
 
           {/* 🔔 Steam errors — opens the modal the App already mounts */}

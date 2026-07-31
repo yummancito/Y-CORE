@@ -17,6 +17,10 @@ import type { Env } from '../config/env.js'
 import { errorHandler } from '../middleware/errorHandler.js'
 import { registerJwtPlugin } from '../plugins/jwt.js'
 import { registerSecurityPlugin } from '../plugins/security.js'
+import { registerHttpsRedirectPlugin } from '../middleware/https-redirect.js'
+import { initializeSecretManager, validateSecrets } from '../config/secrets.js'
+import { AuditService } from '../services/audit.service.js'
+import { CleanupJobManager } from '../jobs/cleanup.jobs.js'
 
 // Module routes
 import { authRoutes } from '../modules/auth/auth.routes.js'
@@ -33,6 +37,8 @@ declare module 'fastify' {
     env: Env
     wsClients: Map<string, Set<WebSocket>>
     hostWsClients: Map<string, Set<WebSocket>>
+    auditService: AuditService
+    cleanupJobManager: CleanupJobManager
   }
   interface FastifyRequest {
     userId?: string
@@ -41,6 +47,22 @@ declare module 'fastify' {
 }
 
 export async function buildApp(opts: { env: Env }) {
+  // ── Validate secrets on startup ──
+  const secretValidation = validateSecrets()
+  if (!secretValidation.valid) {
+    console.error('❌ Security validation failed:')
+    for (const error of secretValidation.errors) {
+      console.error(`  - ${error}`)
+    }
+    process.exit(1)
+  }
+  for (const warning of secretValidation.warnings) {
+    console.warn(`⚠️  ${warning}`)
+  }
+
+  // ── Initialize secret manager ──
+  initializeSecretManager(opts.env.JWT_SECRET)
+
   const app = Fastify({
     logger: {
       level: opts.env.NODE_ENV === 'production' ? 'info' : 'debug',
@@ -60,11 +82,17 @@ export async function buildApp(opts: { env: Env }) {
     },
   })
 
+  // ── Initialize services ──
+  const auditService = new AuditService(prisma)
+  const cleanupJobManager = new CleanupJobManager(prisma, auditService)
+
   app.decorate('prisma', prisma)
   app.decorate('redis', redis)
   app.decorate('env', opts.env)
   app.decorate('wsClients', new Map<string, Set<WebSocket>>())
   app.decorate('hostWsClients', new Map<string, Set<WebSocket>>())
+  app.decorate('auditService', auditService)
+  app.decorate('cleanupJobManager', cleanupJobManager)
 
   // ── Error handler ──
   app.setErrorHandler(errorHandler)
@@ -72,6 +100,7 @@ export async function buildApp(opts: { env: Env }) {
   // ── Plugins ──
   await app.register(sensible)
   await registerSecurityPlugin(app, opts)
+  await registerHttpsRedirectPlugin(app, opts)
   await registerJwtPlugin(app, opts)
 
   // ── Swagger ──
@@ -107,9 +136,13 @@ export async function buildApp(opts: { env: Env }) {
   // ── WebSocket ──
   registerWsHandler(app)
 
+  // ── Start cleanup jobs ──
+  cleanupJobManager.startAll()
+
   // ── Graceful shutdown ──
   const shutdown = async () => {
     stopWsHandler()
+    cleanupJobManager.stopAll()
     await prisma.$disconnect()
     redis.disconnect()
   }

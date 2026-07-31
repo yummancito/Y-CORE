@@ -9,6 +9,7 @@
 export type DownloadSource =
   | 'steam-native' // Steam client nativo (recomendado)
   | 'steamcmd'     // SteamCMD fork
+  | 'steampipe'    // Steampipe (decryption tool)
   | 'api_proxy'    // Y-core API proxy
   | 'direct'       // Direct HTTP download
   | 'torrent'      // BitTorrent

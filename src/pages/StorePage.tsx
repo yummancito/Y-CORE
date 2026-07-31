@@ -94,6 +94,7 @@ export default function StorePage() {
   const [allGames, setAllGames] = useState<MergedGame[]>([])
   const [browseFilter, setBrowseFilter] = useState<CategoryId>('all')
   const [browseLoading, setBrowseLoading] = useState(true)
+  const [browseError, setBrowseError] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
@@ -171,10 +172,12 @@ export default function StorePage() {
     if (cache && Date.now() - cache.timestamp < GAMES_CACHE_TTL && cache.showAdult === showAdult && cache.sort === sort) {
       setAllGames(cache.games)
       setBrowseLoading(false)
+      setBrowseError(null)
       return
     }
     const requestId = ++browseRequestIdRef.current
     setBrowseLoading(true)
+    setBrowseError(null)
     try {
       const resp = await listGames({ sort, limit: 60, offset: 0 })
       if (requestId !== browseRequestIdRef.current) return // a newer request already won
@@ -182,12 +185,15 @@ export default function StorePage() {
       loadOffsetRef.current = resp.games?.length ?? 0
       setHasMore((resp.games?.length ?? 0) > 0)
       setAllGames(games)
+      setBrowseError(null)
       if (games.length > 0) {
         _gamesCache = { games, timestamp: Date.now(), showAdult, sort }
       }
     } catch (err: any) {
       if (requestId !== browseRequestIdRef.current) return
-      showToast('error', `${t('store.failedLoad')}: ${parseError(err)}`)
+      const errorMsg = parseError(err)
+      setBrowseError(errorMsg)
+      showToast('error', `${t('store.failedLoad')}: ${errorMsg}`)
     } finally {
       if (requestId === browseRequestIdRef.current) setBrowseLoading(false)
     }
@@ -208,6 +214,8 @@ export default function StorePage() {
           _gamesCache = { games: merged, timestamp: Date.now(), showAdult, sort }
           return merged
         })
+        // Incrementally render more items (virtual scroll)
+        setVisibleCount(prev => prev + 20)
       }
     } catch (err: any) {
       showToast('error', `${t('store.failedLoad')}: ${parseError(err)}`)
@@ -229,35 +237,43 @@ export default function StorePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showAdult, sort])
 
-  // Infinite scroll via IntersectionObserver + scroll fallback
-  // loadingMore in deps ensures observer reconnects after sentinel remounts
+  // Infinite scroll with robust scroll listener (primary) + IntersectionObserver fallback
   useEffect(() => {
-    const el = sentinelRef.current
-    if (!el || !hasMore) return
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          loadMoreGames()
-        }
-      },
-      { rootMargin: '400px' }
-    )
-    observer.observe(el)
+    if (!hasMore) return
 
-    // Scroll fallback: if the observer gets stale, a scroll near bottom still triggers load
     const main = document.querySelector('main')
-    const onScroll = () => {
-      if (!main || !hasMore || loadingMoreRef.current) return
-      const nearBottom = main.scrollTop + main.clientHeight >= main.scrollHeight - 400
-      if (nearBottom) loadMoreGames()
+    if (!main) return
+
+    let scrollTimeout: NodeJS.Timeout | null = null
+
+    const checkNearBottom = () => {
+      if (loadingMoreRef.current || !hasMore) return
+      const scrollTop = main.scrollTop
+      const clientHeight = main.clientHeight
+      const scrollHeight = main.scrollHeight
+      // Trigger load when within 600px of bottom (more aggressive than before)
+      const nearBottom = scrollTop + clientHeight >= scrollHeight - 600
+      if (nearBottom) {
+        loadMoreGames()
+      }
     }
-    if (main) main.addEventListener('scroll', onScroll, { passive: true })
+
+    const onScroll = () => {
+      // Debounce scroll checks to 200ms to avoid excessive calls
+      if (scrollTimeout) clearTimeout(scrollTimeout)
+      scrollTimeout = setTimeout(checkNearBottom, 200)
+    }
+
+    // Immediate check in case user is already at bottom
+    checkNearBottom()
+
+    main.addEventListener('scroll', onScroll, { passive: true })
 
     return () => {
-      observer.disconnect()
-      if (main) main.removeEventListener('scroll', onScroll)
+      if (scrollTimeout) clearTimeout(scrollTimeout)
+      main.removeEventListener('scroll', onScroll)
     }
-  }, [hasMore, loadMoreGames, loadingMore])
+  }, [hasMore, loadMoreGames])
 
   const browseFilteredGames = useMemo(() => {
     const filtered = showAdult ? allGames : allGames.filter(g => getPrimaryCategoryForGame(g) !== 'nsfw')
@@ -274,6 +290,10 @@ export default function StorePage() {
     if (hideInstalled) games = games.filter(g => !installedAppIds.has(g.app_id))
     return games
   }, [browseFilteredGames, hideInstalled, installedAppIds])
+
+  // Virtual scroll: only render visible items to avoid lag
+  const [visibleCount, setVisibleCount] = useState(40)
+  const browseRenderGames = useMemo(() => browseVisibleGames.slice(0, visibleCount), [browseVisibleGames, visibleCount])
 
   const searchAbortRef = useRef<AbortController | null>(null)
   const doSearch = useCallback(async (q: string) => {
@@ -574,32 +594,29 @@ export default function StorePage() {
             })}
           </div>
 
+          {browseError && (
+            <div className="flex items-start gap-3 p-4 rounded-xl border border-red-500/30 bg-red-500/10 backdrop-blur-sm">
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-400">{t('store.failedLoad')}</p>
+                <p className="text-xs text-red-300/80 mt-1">{browseError}</p>
+              </div>
+              <button
+                onClick={() => loadInitialGames()}
+                className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 border border-red-500/30 hover:border-red-500/50 hover:bg-red-500/10 transition-colors whitespace-nowrap"
+              >
+                {t('errors.retry')}
+              </button>
+            </div>
+          )}
+
           {browseVisibleGames.length > 0 && (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
-                {browseVisibleGames.map((g, idx) => {
-                  if (!animStylesRef.current[g.app_id]) {
-                    const animCounter = Object.keys(animStylesRef.current).length
-                    const relativeIdx = animCounter % 60
-                    // Initial batch (first 60): full staggered animation
-                    // Scroll-loaded (60+): fast appearance, almost instant
-                    const isInitialBatch = animCounter < 60
-                    animStylesRef.current[g.app_id] = isInitialBatch
-                      ? {
-                          animation: `card-shoot 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both`,
-                          animationDelay: `${Math.min(relativeIdx, 20) * 0.08}s`,
-                        }
-                      : {
-                          animation: `card-shoot 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) both`,
-                          animationDelay: `${Math.min(relativeIdx, 6) * 0.03}s`,
-                        }
-                  }
-                  return (
-                    <div key={g.app_id} style={animStylesRef.current[g.app_id]}>
-                      <GameCard game={g} src={getDefaultGameImageUrl(g)} isInstalled={installedAppIds.has(g.app_id)} {...cardProps} />
-                    </div>
-                  )
-                })}
+                {browseRenderGames.map((g) => (
+                  <div key={g.app_id} className="animate-fade-in">
+                    <GameCard game={g} src={getDefaultGameImageUrl(g)} isInstalled={installedAppIds.has(g.app_id)} {...cardProps} />
+                  </div>
+                ))}
               </div>
               {hasMore && (
                 <div ref={sentinelRef} className="h-4" />

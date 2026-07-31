@@ -65,6 +65,7 @@ const defaultSettings: RemotePlaySettings = {
 }
 
 let currentSettings: RemotePlaySettings = { ...defaultSettings }
+let lanModeEnabled = false
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -491,6 +492,20 @@ export function sendSignalRemote(signal: SignalPayload): void {
 }
 
 /**
+ * Broadcast a signaling message to all connected clients.
+ * This is the unified broadcast endpoint for both host and client scenarios.
+ */
+export async function broadcastSignal(signal: SignalPayload): Promise<void> {
+  try {
+    sendSignalViaTcp(signal)
+    logger.info('[RemotePlay] Signal broadcasted', 'remote-play')
+  } catch (err: any) {
+    logger.warn(`[RemotePlay] Broadcast signal error: ${err.message}`, 'remote-play')
+    throw err
+  }
+}
+
+/**
  * Send a signaling message to a specific host:port via new TCP connection.
  * Used by the client to initiate signaling with a discovered host.
  */
@@ -556,7 +571,7 @@ function cleanupExpiredMobileTokens(): void {
   }
 }
 
-interface MobileConnectTokenPublic {
+export interface MobileConnectTokenPublic {
   token: string
   url: string
   expiresAt: number
@@ -638,6 +653,54 @@ export function revokeMobileTokens(): void {
   const count = mobileTokens.size
   mobileTokens.clear()
   logger.info(`[RemotePlay] Revoked ${count} mobile tokens`, 'remote-play')
+}
+
+// ── LAN Mode ──────────────────────────────────────────────────────────────
+
+// FIX #2: Remote Play LAN Mode — disable cloud signaling, use LAN discovery only
+export async function enableLANMode(): Promise<{ success: boolean; status: string; peers: RemotePlaySession[] }> {
+  try {
+    lanModeEnabled = true
+    logger.info('[RemotePlay] LAN mode enabled — cloud signaling disabled', 'remote-play')
+
+    // Discover available LAN peers
+    const peers = await discoverHosts(5000)
+
+    return {
+      success: true,
+      status: 'LAN mode active',
+      peers: peers || [],
+    }
+  } catch (err: any) {
+    logger.error(`[RemotePlay] Enable LAN mode failed: ${err.message}`, 'remote-play')
+    return {
+      success: false,
+      status: `LAN mode failed: ${err?.message}`,
+      peers: [],
+    }
+  }
+}
+
+export async function disableLANMode(): Promise<{ success: boolean; status: string }> {
+  try {
+    lanModeEnabled = false
+    logger.info('[RemotePlay] LAN mode disabled — cloud signaling enabled', 'remote-play')
+
+    return {
+      success: true,
+      status: 'LAN mode disabled',
+    }
+  } catch (err: any) {
+    logger.error(`[RemotePlay] Disable LAN mode failed: ${err.message}`, 'remote-play')
+    return {
+      success: false,
+      status: `Disable LAN mode failed: ${err?.message}`,
+    }
+  }
+}
+
+export function isLANModeEnabled(): boolean {
+  return lanModeEnabled
 }
 
 // ── Cleanup ───────────────────────────────────────────────────────────────

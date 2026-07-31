@@ -158,17 +158,30 @@ export const useDownloadEngineStore = create<DownloadEngineStore>((set, get) => 
       // Engine may not be available (non-Electron context)
     }
 
-    // Subscribe to IPC events
+    // Subscribe to IPC events with smart batching to reduce re-renders
+    let progressBatch: Record<string, any> = {}
+    let progressTimer: NodeJS.Timeout | null = null
+
+    const flushProgressBatch = () => {
+      if (Object.keys(progressBatch).length === 0) return
+      const state = get()
+      const taskMap = new Map(state.tasks.map(t => [t.id, t]))
+      for (const [taskId, payload] of Object.entries(progressBatch)) {
+        const task = taskMap.get(taskId)
+        if (task) {
+          taskMap.set(taskId, { ...task, ...payload, lastUpdatedAt: Date.now() })
+        }
+      }
+      set({ tasks: Array.from(taskMap.values()) })
+      progressBatch = {}
+      progressTimer = null
+    }
+
     _unsubs.push(
       subscribeToEvent('download:progress', (payload: any) => {
-        const state = get()
-        set({
-          tasks: state.tasks.map((t) =>
-            t.id === payload.taskId
-              ? { ...t, ...payload, lastUpdatedAt: Date.now() }
-              : t,
-          ),
-        })
+        progressBatch[payload.taskId] = payload
+        if (progressTimer) clearTimeout(progressTimer)
+        progressTimer = setTimeout(flushProgressBatch, 500)
       }),
     )
 

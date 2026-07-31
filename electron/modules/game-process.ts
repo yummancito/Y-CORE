@@ -11,8 +11,9 @@
 import { spawn, type ChildProcess } from 'child_process'
 import path from 'path'
 import fs from 'fs'
-import { app } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { logger } from '../logger'
+import { integrateExitCleanup, getLaunchContext } from './game-launch-integration'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -199,9 +200,38 @@ export function launchGameFromDir(
     },
   }
 
-  proc.on('exit', managed.onExit)
+  proc.on('exit', (code) => {
+    // Call Online Fix cleanup if applicable
+    const launchContext = getLaunchContext(appId)
+    if (launchContext) {
+      const metrics = integrateExitCleanup(appId, proc.pid ?? null, code ?? null, false)
+      logger.info(
+        `[GameProcess] Online Fix cleanup completed for ${appId}: ` +
+        `p2p_conns=${metrics.p2pConnectionsEstablished}, bytes=${metrics.bytesTransferred}`,
+        'gameproc'
+      )
+
+      // Notify renderer about game exit with metrics
+      const windows = BrowserWindow.getAllWindows()
+      for (const win of windows) {
+        win.webContents.send('game:exit-event', {
+          appId,
+          processId: proc.pid,
+          exitCode: code,
+          metrics,
+        })
+      }
+    }
+    managed.onExit(code)
+  })
+
   proc.on('error', (err) => {
     logger.error(`[GameProcess] ${gameName} (${appId}) error: ${err.message}`, 'gameproc')
+    // Call exit cleanup with crash flag
+    const launchContext = getLaunchContext(appId)
+    if (launchContext) {
+      integrateExitCleanup(appId, proc.pid ?? null, null, true)
+    }
     managed.onExit(null)
   })
 
@@ -270,9 +300,38 @@ export function launchGame(
     },
   }
 
-  proc.on('exit', managed.onExit)
+  proc.on('exit', (code) => {
+    // Call Online Fix cleanup if applicable
+    const launchContext = getLaunchContext(appId)
+    if (launchContext) {
+      const metrics = integrateExitCleanup(appId, proc.pid ?? null, code ?? null, false)
+      logger.info(
+        `[GameProcess] Online Fix cleanup completed for ${appId}: ` +
+        `p2p_conns=${metrics.p2pConnectionsEstablished}, bytes=${metrics.bytesTransferred}`,
+        'gameproc'
+      )
+
+      // Notify renderer about game exit
+      const windows = BrowserWindow.getAllWindows()
+      for (const win of windows) {
+        win.webContents.send('game:exit-event', {
+          appId,
+          processId: proc.pid,
+          exitCode: code,
+          metrics,
+        })
+      }
+    }
+    managed.onExit(code)
+  })
+
   proc.on('error', (err) => {
     logger.error(`[GameProcess] ${appId} error: ${err.message}`, 'gameproc')
+    // Call exit cleanup with crash flag
+    const launchContext = getLaunchContext(appId)
+    if (launchContext) {
+      integrateExitCleanup(appId, proc.pid ?? null, null, true)
+    }
     managed.onExit(null)
   })
 

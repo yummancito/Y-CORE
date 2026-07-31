@@ -332,7 +332,8 @@ export async function executePluginCommand(
     throw new Error(`Plugin not loaded: ${pluginId}`)
   }
 
-  const handler = plugin.exports?.commands?.[commandId]
+  const commands = plugin.exports?.commands as Record<string, unknown> | undefined
+  const handler = commands?.[commandId]
   if (typeof handler !== 'function') {
     throw new Error(`Command not found: ${pluginId}.${commandId}`)
   }

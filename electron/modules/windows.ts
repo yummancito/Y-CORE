@@ -144,7 +144,7 @@ export function createLoginWindow(): void {
     }
   })
 
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173/'
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5174/'
   if (process.env.VITE_DEV_SERVER_URL || !app.isPackaged) {
     win.loadURL(`${devServerUrl}#/login`)
   } else {
@@ -246,7 +246,7 @@ export function createWindow(): void {
     win.webContents.openDevTools({ mode: 'detach' })
   }
 
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173/'
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5174/'
   if (process.env.VITE_DEV_SERVER_URL || !app.isPackaged) {
     console.log('[STARTUP] [4] Main window loading Vite dev server URL')
     win.loadURL(devServerUrl)
@@ -262,11 +262,11 @@ export function createWindow(): void {
   const csp = isDev
     ? [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:5173",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:5174",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self' http://localhost:5173 ws://localhost:5173 http://localhost:3000 https://y-core-render-api-rxwd.onrender.com https://store.steampowered.com",
+        "connect-src 'self' http://localhost:5174 ws://localhost:5174 http://localhost:3000 https://y-core-render-api-rxwd.onrender.com https://store.steampowered.com",
         "media-src 'self' https:",
       ].join('; ')
     : [

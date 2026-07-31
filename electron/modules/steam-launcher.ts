@@ -3,12 +3,17 @@
 // ============================================================================
 // Detecta Steam, lo lanza silenciosamente, monitorea descargas en tiempo real
 // leyendo ACF y archivos. Sin UI de Steam visible para el usuario.
+// Fix #6: Cross-platform process management
 
-import { spawn, exec } from 'child_process'
+import { spawn, exec, execFile } from 'child_process'
+import { promisify } from 'util'
 import path from 'path'
 import fs from 'fs'
 import { logger } from '../logger'
 import { getSteamPath, getSteamAppsPath } from './steam-helpers'
+import { ProcessManager } from './platform-abstraction'
+
+const execFileAsync = promisify(execFile)
 
 export interface SteamDownloadProgress {
   appId: string
@@ -42,6 +47,7 @@ export function detectSteamPath(): string | null {
 
 /**
  * Lanza Steam silenciosamente para descargar un juego
+ * Fix #6: Cross-platform Steam launch
  */
 export async function launchSteamForDownload(appId: string): Promise<boolean> {
   try {
@@ -51,23 +57,34 @@ export async function launchSteamForDownload(appId: string): Promise<boolean> {
       return false
     }
 
-    // Matar Steam si ya está corriendo
+    // Kill Steam if already running (platform-specific)
     try {
-      exec('taskkill /IM steam.exe /F')
-    } catch {}
+      await ProcessManager.killProcessByName('steam.exe', true)
+    } catch (err: any) {
+      logger.debug(`[steam-launcher] Failed to kill Steam (may not be running): ${err.message}`, 'steam')
+    }
 
-    // Lanzar Steam silenciosamente con comando de app
-    const steamExe = path.join(steamPath, 'steam.exe')
-    const args = [
-      '-silent',
-      '-no-cef-sandbox',
-      `-applaunch ${appId}`,
-    ]
+    // Launch Steam silently with app command
+    let steamExe: string
+    let args: string[]
+
+    if (process.platform === 'win32') {
+      steamExe = path.join(steamPath, 'steam.exe')
+      args = ['-silent', '-no-cef-sandbox', `-applaunch ${appId}`]
+    } else if (process.platform === 'darwin') {
+      // macOS: Use open command
+      steamExe = 'open'
+      args = ['-a', 'Steam', '--args', `-applaunch ${appId}`]
+    } else {
+      // Linux: Direct steam binary
+      steamExe = path.join(steamPath, 'steam')
+      args = [`-applaunch ${appId}`]
+    }
 
     steamProcess = spawn(steamExe, args, {
       detached: false,
       stdio: 'ignore',
-      windowsHide: true,
+      windowsHide: process.platform === 'win32',
     })
 
     logger.info(`[steam-launcher] Steam launched for app ${appId}`, 'steam')

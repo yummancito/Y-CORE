@@ -13,6 +13,17 @@ const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'https://y-core-render-ap
 
 let cachedUsername: string | null = null
 
+// Simple in-memory cache for listGames to avoid duplicate requests
+const gameListCache = new Map<string, { data: any; timestamp: number }>()
+const GAME_LIST_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+function getCacheKey(params?: { sort?: string; limit?: number; offset?: number }): string {
+  const sort = params?.sort || 'name'
+  const limit = params?.limit || 120
+  const offset = params?.offset || 0
+  return `${sort}:${limit}:${offset}`
+}
+
 export function setUsername(username: string | null): void {
   cachedUsername = username
 }
@@ -53,7 +64,29 @@ async function apiFetch<T>(
   const timeout = setTimeout(() => controller.abort(), 60000) // Increased timeout to 60s
 
   try {
-    const resp = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: controller.signal })
+    // Use IPC proxy to avoid CORS issues in Electron
+    let resp: any
+    if ((window as any).steamtools?.invoke) {
+      try {
+        const proxyResult = await (window as any).steamtools.invoke('api:fetch', `${API_BASE}${path}`, { headers })
+        if (!proxyResult.success) {
+          const env = JSON.stringify({
+            k: 'errors.api.httpRequest',
+            p: { status: proxyResult.status || 0, details: proxyResult.error || '' },
+            t: proxyResult.error || 'API Error',
+          })
+          throw new Error(env)
+        }
+        clearTimeout(timeout)
+        return proxyResult.data as T
+      } catch (proxyErr) {
+        // Fallback to direct fetch if proxy fails
+        console.debug('API Proxy failed, falling back to direct fetch', proxyErr)
+      }
+    }
+
+    // Fallback to direct fetch
+    resp = await fetch(`${API_BASE}${path}`, { ...options, headers, signal: controller.signal })
     clearTimeout(timeout)
 
     if (!resp.ok) {
@@ -114,6 +147,15 @@ export async function listGames(params?: {
   offset?: number
   isDlc?: boolean
 }): Promise<GameListResponse> {
+  // Check cache first (only for paginated requests without search)
+  if (!params?.search) {
+    const cacheKey = getCacheKey(params)
+    const cached = gameListCache.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < GAME_LIST_CACHE_TTL) {
+      return cached.data
+    }
+  }
+
   const query = new URLSearchParams()
   if (params?.search) query.set('search', params.search)
   if (params?.category) query.set('category', params.category)
@@ -123,7 +165,20 @@ export async function listGames(params?: {
   if (params?.isDlc !== undefined) query.set('is_dlc', String(params.isDlc))
 
   const qs = query.toString()
-  return apiFetch<GameListResponse>(`/api/games${qs ? `?${qs}` : ''}`)
+  const result = await apiFetch<GameListResponse>(`/api/games${qs ? `?${qs}` : ''}`)
+
+  // Cache the result (only for paginated requests)
+  if (!params?.search) {
+    const cacheKey = getCacheKey(params)
+    gameListCache.set(cacheKey, { data: result, timestamp: Date.now() })
+    // Cleanup old entries if cache gets too large
+    if (gameListCache.size > 50) {
+      const oldestKey = gameListCache.keys().next().value as string | undefined
+      if (oldestKey) gameListCache.delete(oldestKey)
+    }
+  }
+
+  return result
 }
 
 export async function getGameByAppId(appId: string): Promise<GameDetail> {

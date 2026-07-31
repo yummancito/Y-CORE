@@ -31,20 +31,45 @@ export const gameService = {
       return { success: false, games: [], error: 'Steam installation not found' }
     }
 
-    if (state.gamesCache) {
-      return { success: true, games: state.gamesCache }
+    if (state.gamesCache !== null) {
+      // Check if cache has unresolved names - if so, don't use it
+      const hasUnresolvedNames = state.gamesCache.some(g =>
+        g.name === g.appId ||
+        /^app\s*\d+$/i.test(g.name) ||
+        /^appid[_\s]\d+$/i.test(g.name)
+      )
+      if (!hasUnresolvedNames) {
+        return { success: true, games: state.gamesCache }
+      }
     }
+
+    const NAMES_CACHE_PATH = path.join(app.getPath('userData'), 'ycore-names-cache.json')
+    let namesCache: Record<string, string> = {}
+    try {
+      if (fs.existsSync(NAMES_CACHE_PATH)) {
+        namesCache = JSON.parse(fs.readFileSync(NAMES_CACHE_PATH, 'utf-8'))
+      }
+    } catch { /* ignore */ }
 
     const games: any[] = []
     const folders = getSteamLibraryFolders()
     for (const folder of folders) {
       let entries: string[] = []
-      try { entries = fs.readdirSync(folder) } catch { continue }
+      try {
+        // FIX #5: Use async filesystem access with timeout for network drives
+        entries = await gameService.readDirWithTimeout(folder, 5000)
+      } catch (err) {
+        logger.warn(`Failed to read folder ${folder}: ${err instanceof Error ? err.message : 'unknown'}`, 'steam')
+        continue
+      }
+
       for (const entry of entries) {
         if (!entry.startsWith('appmanifest_') || !entry.endsWith('.acf')) continue
         const acfPath = path.join(folder, entry)
+
         try {
-          const content = fs.readFileSync(acfPath, 'utf-8')
+          // FIX #4: Handle locked ACF files in offline mode
+          const content = await gameService.readFileWithRetry(acfPath, 'utf-8', 3)
           const parsed = parseVdf(content)
           const appState = parsed['AppState']
           if (!appState) continue
@@ -52,7 +77,8 @@ export const gameService = {
           const appId = String(appState.appid || '').trim()
           if (!appId || !isValidAppId(appId)) continue
 
-          const name = appState.name?.trim() || appId
+          const acfName = appState.name?.trim() || ''
+          const name = namesCache[appId] || acfName || appId
           const installDir = appState.installdir?.trim() || ''
 
           const game: any = {
@@ -82,8 +108,119 @@ export const gameService = {
         }
       }
     }
+
+    // Resolve missing names from Steam API in parallel
+    // Detect games with unresolved names: appId only, "app123", "appid_123", etc.
+    const missingNames = games.filter(g =>
+      g.name === g.appId ||
+      /^app\s*\d+$/i.test(g.name) ||
+      /^appid[_\s]\d+$/i.test(g.name)
+    )
+    if (missingNames.length > 0) {
+      try {
+        const promises = missingNames.map(async (game) => {
+          try {
+            const agent = gameService.getProxyAgent()
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 5000)
+            try {
+              const resp = await fetch(
+                `https://store.steampowered.com/api/appdetails?appids=${game.appId}`,
+                {
+                  headers: { 'User-Agent': 'Y-core' },
+                  signal: controller.signal,
+                }
+              )
+              if (!resp.ok) return
+              const data = await resp.json()
+              const steamName = data[game.appId]?.data?.name
+              if (steamName) {
+                game.name = steamName
+                namesCache[game.appId] = steamName
+              }
+            } finally {
+              clearTimeout(timeoutId)
+            }
+          } catch (err) {
+            logger.debug(`Failed to fetch Steam name for ${game.appId}: ${err instanceof Error ? err.message : String(err)}`, 'steam')
+          }
+        })
+
+        await Promise.all(promises)
+
+        // Save updated names cache
+        try {
+          fs.writeFileSync(NAMES_CACHE_PATH, JSON.stringify(namesCache, null, 2), 'utf-8')
+        } catch { /* ignore */ }
+      } catch (err) {
+        logger.debug(`Error resolving names: ${err instanceof Error ? err.message : String(err)}`, 'steam')
+      }
+    }
+
     state.gamesCache = games
     return { success: true, games }
+  },
+
+  /**
+   * FIX #4: Read file with retry logic for locked ACF files
+   */
+  async readFileWithRetry(filePath: string, encoding: string, maxRetries: number): Promise<string> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        return await fs.promises.readFile(filePath, encoding as BufferEncoding)
+      } catch (err: any) {
+        if (attempt < maxRetries - 1 && (err.code === 'EACCES' || err.code === 'EAGAIN')) {
+          await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)))
+          continue
+        }
+        throw err
+      }
+    }
+    throw new Error(`Failed to read ${filePath} after ${maxRetries} attempts`)
+  },
+
+  /**
+   * FIX #5: Read directory with timeout for network drives and USB
+   */
+  async readDirWithTimeout(dirPath: string, timeoutMs: number): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`Directory read timeout for ${dirPath}`))
+      }, timeoutMs)
+
+      fs.promises.readdir(dirPath)
+        .then(entries => {
+          clearTimeout(timer)
+          resolve(entries as string[])
+        })
+        .catch(err => {
+          clearTimeout(timer)
+          reject(err)
+        })
+    })
+  },
+
+  /**
+   * FIX #6: Add proxy support for corporate environments
+   */
+  getProxyAgent(): any {
+    try {
+      // Check for proxy environment variables
+      const proxyUrl = process.env.HTTP_PROXY || process.env.http_proxy || process.env.HTTPS_PROXY || process.env.https_proxy
+      if (!proxyUrl) return undefined
+
+      // Use HttpProxyAgent/HttpsProxyAgent if available
+      const { HttpProxyAgent, HttpsProxyAgent } = require('http-proxy-agent')
+      const url = proxyUrl.startsWith('http') ? proxyUrl : `http://${proxyUrl}`
+      const protocol = url.startsWith('https') ? 'https' : 'http'
+
+      if (protocol === 'https') {
+        return new HttpsProxyAgent(url)
+      }
+      return new HttpProxyAgent(url)
+    } catch {
+      return undefined
+    }
   },
 
   async resolveOrphanNames(games: { appId: string; installDir: string }[]) {
@@ -102,9 +239,13 @@ export const gameService = {
         continue
       }
       try {
+        const agent = gameService.getProxyAgent()
         const resp = await fetch(
           `https://store.steampowered.com/api/appdetails?appids=${g.appId}`,
-          { headers: { 'User-Agent': 'Y-core' } }
+          {
+            headers: { 'User-Agent': 'Y-core' },
+            ...(agent && { agent }),
+          }
         )
         if (!resp.ok) continue
         const data = await resp.json()
@@ -148,9 +289,10 @@ export const gameService = {
       //    (e.g.IPC arrives before LibraryPage finished its first fetch).
       let games = state.gamesCache
       if (!games) {
-        const r = await this.listInstalled()
+        const r = await gameService.listInstalled()
         games = (r as any).games ?? []
       }
+      if (!games) return { success: false, error: 'No games available' }
       const game = games.find((g: any) => String(g.appId) === String(appId))
       const installDir = game?.installDir
       if (!installDir) {
@@ -212,7 +354,7 @@ export const gameService = {
     // Round-9 fix: removed shell.openExternal('steam://uninstall/...'). Y-core owns
     // the uninstall path now — delegate to deleteGame which removes the game directory
     // and the ACF manifest atomically, rendering the game gone from Y-core's library.
-    return await this.deleteGame(appId, '')
+    return await gameService.deleteGame(appId, '')
   },
 
   async deleteGame(appId: string, installDir: string) {
@@ -260,9 +402,13 @@ export const gameService = {
 
   async searchGames(query: string) {
     try {
+      const agent = gameService.getProxyAgent()
       const resp = await fetch(
         `https://store.steampowered.com/api/storesearch?term=${encodeURIComponent(query)}&cc=US&l=en`,
-        { headers: { 'User-Agent': 'Y-core' } }
+        {
+          headers: { 'User-Agent': 'Y-core' },
+          ...(agent && { agent }),
+        }
       )
       if (!resp.ok) return []
       const data = await resp.json()
@@ -272,9 +418,13 @@ export const gameService = {
 
   async isFreeToPlay(appId: string) {
     try {
+      const agent = gameService.getProxyAgent()
       const resp = await fetch(
         `https://store.steampowered.com/api/appdetails?appids=${appId}`,
-        { headers: { 'User-Agent': 'Y-core' } }
+        {
+          headers: { 'User-Agent': 'Y-core' },
+          ...(agent && { agent }),
+        }
       )
       if (!resp.ok) return false
       const data = await resp.json()
@@ -290,16 +440,22 @@ export const gameService = {
   // Failures are NOT cached — user can retry by re-selecting the game.
   // Tries Spanish first (most of the userbase), falls back to English.
   // AbortController timeout per fetch — if Steam is slow we give up and show the fallback.
+  // FIX #6: Use proxy support for corporate environments
   async getSteamDetails(appId: string): Promise<import('../common/ipc-contract').SteamAppDetails | null> {
     const cached = steamDetailsCache.get(appId)
     if (cached) return cached
+    const agent = gameService.getProxyAgent()
     const fetchOne = async (locale: 'spanish' | 'english') => {
       const ctl = new AbortController()
       const timer = setTimeout(() => ctl.abort(), 7000)
       try {
         const resp = await fetch(
           `https://store.steampowered.com/api/appdetails?appids=${appId}&l=${locale}`,
-          { headers: { 'User-Agent': 'Y-core' }, signal: ctl.signal },
+          {
+            headers: { 'User-Agent': 'Y-core' },
+            signal: ctl.signal,
+            ...(agent && { agent }),
+          },
         )
         if (!resp.ok) return null
         const json = await resp.json()

@@ -119,6 +119,10 @@ function HostTab() {
     toggleAudio,
   } = useScreenCapture()
 
+  const [lanModeEnabled] = useState(
+    () => localStorage.getItem('y-core:remotePlay:lanMode') === 'true',
+  )
+
   const [sessionName, setSessionName] = useState('Y-Core Stream')
   const [captureStarted, setCaptureStarted] = useState(false)
   const [signalListenerStarted, setSignalListenerStarted] = useState(false)
@@ -492,6 +496,12 @@ function HostTab() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {lanModeEnabled && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    <Wifi className="w-2.5 h-2.5" />
+                    LAN Only
+                  </span>
+                )}
                 {webrtc.reconnecting && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 animate-pulse">
                     <Loader2 className="w-2.5 h-2.5 animate-spin" />
@@ -591,6 +601,9 @@ function BrowseTab() {
   } = useRemotePlayStore()
 
   const [webRtcStarted, setWebRtcStarted] = useState(false)
+  const [lanModeEnabled] = useState(
+    () => localStorage.getItem('y-core:remotePlay:lanMode') === 'true',
+  )
 
   // ── WebRTC (client mode) ────────────────────────────────────────────────
   const sendSignal = useCallback(async (signal: any) => {
@@ -692,6 +705,12 @@ function BrowseTab() {
             <span className="text-[10px] font-mono text-text-dim">
               {currentSession.host}:{currentSession.port}
             </span>
+            {lanModeEnabled && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <Wifi className="w-2.5 h-2.5" />
+                LAN Only
+              </span>
+            )}
             {webrtc.reconnecting && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 animate-pulse">
                 <Loader2 className="w-2.5 h-2.5 animate-spin" />
@@ -783,6 +802,23 @@ function BrowseTab() {
 
 function SettingsTab() {
   const { settings, updateSettings, successMessage, error, clearMessages } = useRemotePlayStore()
+  const [lanModeEnabled, setLanModeEnabled] = useState(
+    () => localStorage.getItem('y-core:remotePlay:lanMode') === 'true',
+  )
+  const [lanModeLoading, setLanModeLoading] = useState(false)
+
+  const handleLanModeToggle = useCallback(async (enabled: boolean) => {
+    try {
+      setLanModeLoading(true)
+      await (window as any).ipcRenderer?.invoke('remote:enable-lan-mode', enabled)
+      setLanModeEnabled(enabled)
+      localStorage.setItem('y-core:remotePlay:lanMode', enabled ? 'true' : 'false')
+    } catch (err) {
+      console.error('[RemotePlay] Failed to toggle LAN mode:', err)
+    } finally {
+      setLanModeLoading(false)
+    }
+  }, [])
 
   return (
     <div className="space-y-4">
@@ -801,6 +837,17 @@ function SettingsTab() {
           {error ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
           <span className="flex-1">{error || successMessage}</span>
           <button onClick={clearMessages} className="opacity-60 hover:opacity-100">×</button>
+        </div>
+      )}
+
+      {/* LAN Mode Banner */}
+      {lanModeEnabled && (
+        <div className="rounded-xl p-4 border border-blue-500/30 bg-blue-500/[0.08] flex items-center gap-3">
+          <Radio className="w-5 h-5 text-blue-400 animate-pulse" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-blue-400">Local streaming only</p>
+            <p className="text-xs text-blue-300 mt-0.5">Cloud sync and internet connectivity are disabled</p>
+          </div>
         </div>
       )}
 
@@ -885,6 +932,15 @@ function SettingsTab() {
               description={t('remotePlay.autoAcceptConnectionsDesc')}
               checked={settings.autoAccept}
               onChange={(v) => updateSettings({ autoAccept: v })}
+              disabled={lanModeEnabled}
+            />
+            <ToggleSetting
+              icon={<Wifi className="w-4 h-4" />}
+              label="LAN Only Mode"
+              description="Disable cloud sync and internet connectivity for local-only streaming"
+              checked={lanModeEnabled}
+              onChange={handleLanModeToggle}
+              loading={lanModeLoading}
             />
           </div>
 
@@ -916,38 +972,44 @@ function SettingsTab() {
 }
 
 function ToggleSetting({
-  icon, label, description, checked, onChange,
+  icon, label, description, checked, onChange, disabled = false, loading = false,
 }: {
   icon: React.ReactNode
   label: string
   description: string
   checked: boolean
   onChange: (v: boolean) => void
+  disabled?: boolean
+  loading?: boolean
 }) {
   return (
-    <label className="flex items-start gap-3 cursor-pointer group">
+    <label className={`flex items-start gap-3 group ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
       <div className="flex-shrink-0 mt-0.5" style={{ color: checked ? 'var(--accent)' : 'var(--text-dim)' }}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-text-bright group-hover:text-accent transition-colors">{label}</p>
+        <p className={`text-sm font-medium ${disabled ? 'text-text-dim' : 'text-text-bright group-hover:text-accent transition-colors'}`}>{label}</p>
         <p className="text-xs text-text-dim mt-0.5">{description}</p>
       </div>
       <div
         className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${
           checked ? 'bg-accent' : 'bg-white/[0.1]'
-        }`}
+        } ${disabled ? 'opacity-50' : ''}`}
       >
         <div
           className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
             checked ? 'translate-x-[18px]' : 'translate-x-0.5'
-          }`}
+          } ${loading ? 'opacity-50' : ''}`}
         />
+        {loading && (
+          <Loader2 className="absolute inset-2 w-2 h-2 animate-spin" />
+        )}
         <input
           type="checkbox"
           checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          className="absolute inset-0 opacity-0 cursor-pointer"
+          onChange={(e) => !disabled && !loading && onChange(e.target.checked)}
+          disabled={disabled || loading}
+          className="absolute inset-0 opacity-0 cursor-pointer disabled:cursor-not-allowed"
         />
       </div>
     </label>
@@ -1016,14 +1078,13 @@ export default function RemotePlayPage() {
       <div className="flex items-center gap-2.5">
         <Monitor className="w-5 h-5" style={{ color: 'var(--accent)' }} />
         <h1 className="text-xl font-bold text-text-bright leading-none">{t('remotePlay.title')}</h1>
-        {/* "New" badge — pulses subtly to draw attention, matches the rest of
-            the page's chip style (Online / Signaling / Hosting / Connected). */}
+        {/* "Beta" badge */}
         <span
-          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-accent/20 text-accent border border-accent/40 shadow-[0_0_10px_var(--accent-glow)] animate-pulse"
-          title={t('remotePlay.newBadgeTitle')}
+          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-500/20 text-orange-400 border border-orange-500/40"
+          title="Remote Play is in Beta. LAN mode only for now."
         >
-          <Sparkles className="w-2.5 h-2.5" />
-          {t('remotePlay.newBadge')}
+          <Radio className="w-2.5 h-2.5" />
+          BETA
         </span>
       </div>
       <p className="text-[11px] text-text-dim hidden sm:block">{t('remotePlay.subtitle')}</p>
@@ -1114,6 +1175,17 @@ export default function RemotePlayPage() {
           </div>
         </div>
       )}
+
+      {/* Beta LAN-only banner */}
+      <div className="rounded-xl border border-orange-500/30 bg-orange-500/[0.08] p-4 flex items-start gap-3">
+        <Radio className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />
+        <div className="flex-1">
+          <h3 className="font-semibold text-orange-400 text-sm">Remote Play is in Beta</h3>
+          <p className="text-xs text-orange-300/80 mt-1">
+            Currently supports <strong>LAN mode only</strong>. Connect your phone to the same WiFi network and use LAN discovery to play games.
+          </p>
+        </div>
+      </div>
 
       {/* Tab selector — descriptive: icon + label + one-line description per tab. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

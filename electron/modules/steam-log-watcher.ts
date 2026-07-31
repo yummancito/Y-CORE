@@ -73,8 +73,13 @@ function checkLine(line: string): void {
 
       logger.warn(`[Steam Log Watcher] ${line.trim()}`, 'steam-watcher')
 
-      for (const win of BrowserWindow.getAllWindows()) {
-        win.webContents.send('steam:error', errorData)
+      // ERROR #13 FIX: Check if windows are destroyed before sending
+      const windows = BrowserWindow.getAllWindows()
+      for (const win of windows) {
+        if (win.isDestroyed()) continue
+        try {
+          win.webContents.send('steam:error', errorData)
+        } catch {}
       }
       return
     }
@@ -82,6 +87,7 @@ function checkLine(line: string): void {
 }
 
 function tailFile(filePath: string): void {
+  let fd: number | null = null
   try {
     const stat = fs.statSync(filePath)
     if (stat.size < lastByteOffset) {
@@ -91,20 +97,37 @@ function tailFile(filePath: string): void {
 
     if (stat.size === lastByteOffset) return
 
-    const fd = fs.openSync(filePath, 'r')
-    const length = stat.size - lastByteOffset
-    const buffer = Buffer.alloc(length)
-    fs.readSync(fd, buffer, 0, length, lastByteOffset)
-    fs.closeSync(fd)
+    fd = fs.openSync(filePath, 'r')
 
-    lastByteOffset = stat.size
+    try {
+      const length = stat.size - lastByteOffset
+      const buffer = Buffer.alloc(length)
+      fs.readSync(fd, buffer, 0, length, lastByteOffset)
 
-    const content = buffer.toString('utf-8')
-    const lines = content.split('\n')
-    for (const line of lines) {
-      if (line.trim()) checkLine(line)
+      lastByteOffset = stat.size
+
+      const content = buffer.toString('utf-8')
+      const lines = content.split('\n')
+      for (const line of lines) {
+        if (line.trim()) checkLine(line)
+      }
+    } finally {
+      // ERROR #15 FIX: Always close FD, even if error occurs
+      if (fd !== null) {
+        try {
+          fs.closeSync(fd)
+        } catch (closeErr: any) {
+          logger.warn(`[Steam Log Watcher] Failed to close FD: ${closeErr.message}`, 'steam-watcher')
+        }
+      }
     }
   } catch (err: any) {
+    // ERROR #15 FIX: If error occurs before FD is assigned, ensure it's handled
+    if (fd !== null) {
+      try {
+        fs.closeSync(fd)
+      } catch {}
+    }
     logger.warn(`[Steam Log Watcher] tailFile error: ${err.message}`, 'steam-watcher')
   }
 }

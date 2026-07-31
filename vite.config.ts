@@ -77,6 +77,9 @@ export default defineConfig({
           },
           build: {
             outDir: 'dist-electron',
+            commonjsOptions: {
+              ignoreDynamicRequires: true,
+            },
             rollupOptions: {
               external: [
                 'electron',
@@ -89,6 +92,7 @@ export default defineConfig({
                 'ws',
                 'bufferutil',
                 'utf-8-validate',
+                'sqlite3',
               ],
               output: {
                 format: 'cjs',
@@ -134,8 +138,8 @@ export default defineConfig({
     // dev server. Requires the mobile route (#/remote-mobile) + a working
     // firewall for the 42863 / 42864 WebSocket ports on the host machine.
     host: true,
-    port: 5173,
-    strictPort: true,
+    port: 5174,
+    strictPort: false,
     watch: {
       ignored: ['**/native/**', '**/node_modules/**', '**/.git/**'],
     },

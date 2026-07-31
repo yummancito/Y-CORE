@@ -324,6 +324,10 @@ export default function LibraryPage() {
 
   const { showFavoritesOnly, setShowFavoritesOnly } = useLibraryV2Store()
 
+  const [visibleGamesCount, setVisibleGamesCount] = useState(50)
+  const sidebarGamesListRef = useRef<HTMLDivElement>(null)
+  const loadingMoreGamesRef = useRef(false)
+
   const downloadTasks = useDownloadEngineStore((s) => s.tasks)
   const hasActiveDownloads = downloadTasks.some(
     (tk) => tk.state === 'downloading' || tk.state === 'preparing' || tk.state === 'connecting',
@@ -363,6 +367,30 @@ export default function LibraryPage() {
     main.addEventListener('scroll', onScroll, { passive: true })
     return () => main.removeEventListener('scroll', onScroll)
   }, [])
+
+  // Sidebar games list virtual scrolling
+  useEffect(() => {
+    const sidebar = sidebarGamesListRef.current
+    if (!sidebar) return
+    let debounceTimer: NodeJS.Timeout | null = null
+    const onSidebarScroll = () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        if (!loadingMoreGamesRef.current && sidebar.scrollTop + sidebar.clientHeight >= sidebar.scrollHeight - 300) {
+          loadingMoreGamesRef.current = true
+          setVisibleGamesCount((prev) => Math.min(prev + 15, games.length))
+          setTimeout(() => {
+            loadingMoreGamesRef.current = false
+          }, 100)
+        }
+      }, 200)
+    }
+    sidebar.addEventListener('scroll', onSidebarScroll, { passive: true })
+    return () => {
+      sidebar.removeEventListener('scroll', onSidebarScroll)
+      if (debounceTimer) clearTimeout(debounceTimer)
+    }
+  }, [games.length])
 
   const scrollToTop = () => {
     const main = document.querySelector('main')
@@ -515,6 +543,11 @@ export default function LibraryPage() {
   // useToastStore ya no cambia en cada render porque extraemos s.showToast directamente
   // -- esto estabiliza todos los useCallbacks que dependen de showToast
 
+  // Reset visible games count when games array changes (due to search/sort)
+  useEffect(() => {
+    setVisibleGamesCount(50)
+  }, [games.length])
+
   // ── Derived data ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedAppId && games.length > 0) {
@@ -581,7 +614,7 @@ export default function LibraryPage() {
           </div>
 
         {/* Games list (vertical compact rows, scrollable) */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-2 py-3 mt-1">
+        <div ref={sidebarGamesListRef} className="flex-1 min-h-0 overflow-y-auto px-2 py-3 mt-1">
             {loading && games.length === 0 ? (
               <div className="flex items-center justify-center py-10 text-text-dim">
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -594,7 +627,7 @@ export default function LibraryPage() {
                 </p>
               </div>
             ) : (
-              games.map((game) => (
+              games.slice(0, visibleGamesCount).map((game) => (
                 <SidebarGameRow
                   key={game.appId}
                   game={game}
@@ -838,7 +871,7 @@ function stripSteamHtml(input: string | undefined | null): string {
     .trim()
 }
 
-function GameDetailPanel({
+const GameDetailPanel = memo(function GameDetailPanel({
   game,
   onLaunch,
   onVerify,
@@ -1651,9 +1684,9 @@ function GameDetailPanel({
       </div>
     </div>
   )
-}
+})
 
-function ActionButton({
+const ActionButton = memo(function ActionButton({
   icon: Icon,
   label,
   onClick,
@@ -1680,9 +1713,9 @@ function ActionButton({
       <span>{label}</span>
     </button>
   )
-}
+})
 
-function DetailRow({
+const DetailRow = memo(function DetailRow({
   label,
   value,
   mono = false,
@@ -1704,10 +1737,10 @@ function DetailRow({
       </span>
     </div>
   )
-}
+})
 
 // ─── Gallery image (Steam CDN with placeholder fallback) ──────────
-function GalleryImage({
+const GalleryImage = memo(function GalleryImage({
   appId,
   variant,
   aspectClass,
@@ -1779,10 +1812,10 @@ function GalleryImage({
       }}
     />
   )
-}
+})
 
 // ─── Sticky download bar ────────────────────────────────────────────
-function DownloadBar({
+const DownloadBar = memo(function DownloadBar({
   tasks,
   activeTask,
   hasActiveDownloads,
@@ -1961,4 +1994,4 @@ function DownloadBar({
       </div>
     </div>
   )
-}
+})

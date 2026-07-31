@@ -12,18 +12,23 @@ export type ServiceHandler = Record<string, (...args: any[]) => any>
 
 export class ServiceRegistry {
   private services = new Map<string, ServiceHandler>()
+  private serviceVersions = new Map<string, number>()
 
   /**
    * Register a service with its handler methods.
+   * ERROR #5 FIX: Track service versions to detect stale references
    * @param name - Service name (must match the contract key)
    * @param handler - Object whose methods are the service's handlers
    */
-  register(name: string, handler: ServiceHandler): void {
+  register(name: string, handler: ServiceHandler): number {
+    const currentVersion = (this.serviceVersions.get(name) ?? 0) + 1
+    this.serviceVersions.set(name, currentVersion)
     if (this.services.has(name)) {
-      logger.warn(`[ServiceRegistry] Overwriting existing service: ${name}`, 'services')
+      logger.warn(`[ServiceRegistry] Overwriting existing service: ${name} (v${this.serviceVersions.get(name) ?? 0} → v${currentVersion})`, 'services')
     }
     this.services.set(name, handler)
-    logger.info(`[ServiceRegistry] Registered service: ${name} (${Object.keys(handler).length} methods)`, 'services')
+    logger.info(`[ServiceRegistry] Registered service: ${name} (v${currentVersion}, ${Object.keys(handler).length} methods)`, 'services')
+    return currentVersion
   }
 
   /**
@@ -76,9 +81,26 @@ export class ServiceRegistry {
 
   /**
    * Remove a registered service (for testing / cleanup).
+   * ERROR #5 FIX: Also remove version tracking
    */
   unregister(name: string): void {
     this.services.delete(name)
+    this.serviceVersions.delete(name)
+    logger.info(`[ServiceRegistry] Unregistered service: ${name}`, 'services')
+  }
+
+  /**
+   * Get the current version of a service (ERROR #5 FIX)
+   */
+  getVersion(serviceName: string): number {
+    return this.serviceVersions.get(serviceName) ?? 0
+  }
+
+  /**
+   * Check if a service is available and ready (ERROR #3 FIX for database dependency)
+   */
+  isReady(serviceName: string): boolean {
+    return this.services.has(serviceName)
   }
 }
 

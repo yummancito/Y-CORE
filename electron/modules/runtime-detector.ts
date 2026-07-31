@@ -12,8 +12,7 @@
 // Inspired by: Steam's runtime detection + Bottles dependency manifests.
 // ============================================================================
 
-import { execSync } from 'child_process'
-import { spawn } from 'child_process'
+import { execSync, spawn, type ChildProcess } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import https from 'https'
@@ -311,6 +310,8 @@ export async function installRuntime(type: RuntimeType): Promise<{ success: bool
 
   if (!def.downloadUrl) return { success: false, message: `${def.name} has no installer URL configured` }
 
+  const downloadUrl = def.downloadUrl;
+
   try {
     const tmpDir = path.join(os.tmpdir(), 'ycore-runtimes')
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true })
@@ -342,26 +343,27 @@ export async function installRuntime(type: RuntimeType): Promise<{ success: bool
           reject(err)
         })
       }
-      doRequest(def.downloadUrl)
+      doRequest(downloadUrl)
     })
 
     // Run installer silently
     if (def.installerArgs && def.installerArgs.length > 0) {
       await new Promise<void>((resolve, reject) => {
-        const proc = spawn(installerPath, def.installerArgs, {
+        const installerArgs = def.installerArgs;
+        const proc = spawn(installerPath, installerArgs ?? [], {
           windowsHide: true,
           stdio: 'ignore',
-        })
+        }) as ChildProcess
         const timeout = setTimeout(() => {
           proc.kill()
           reject(new Error('Installer timed out after 120s'))
         }, 120000)
-        proc.on('close', (code) => {
+        proc.on('close', (code: number | null) => {
           clearTimeout(timeout)
           if (code === 0) resolve()
           else reject(new Error(`Installer exited with code ${code}`))
         })
-        proc.on('error', (err) => { clearTimeout(timeout); reject(err) })
+        proc.on('error', (err: Error) => { clearTimeout(timeout); reject(err) })
       })
     }
 

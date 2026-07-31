@@ -1135,11 +1135,22 @@ export class DownloadEngine {
   }
 
   private moveToHistory(task: DownloadTask): void {
+    // ERROR #14 FIX: Enforce MAX_HISTORY size immediately to prevent unbounded growth
     this.history.unshift({ ...task })
+
+    // Enforce size limit immediately
     if (this.history.length > MAX_HISTORY) {
-      this.history = this.history.slice(0, MAX_HISTORY)
+      const removed = this.history.splice(MAX_HISTORY)
+      logger.info(`[download-engine] History pruned: removed ${removed.length} old entries to maintain max size`, 'download-engine')
     }
     this.persister.saveHistory(this.history)
+  }
+
+  /**
+   * Enforce bounded history (ERROR #14)
+   */
+  addToHistory(task: DownloadTask): void {
+    this.moveToHistory(task)
   }
 
   private heartbeat(): void {

@@ -19,7 +19,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
   // JWT
-  JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
+  JWT_SECRET: z.string().optional(),
   JWT_EXPIRES_IN: z.string().default('24h'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('30d'),
 
@@ -33,6 +33,11 @@ const envSchema = z.object({
 
   // Heartbeat
   HEARTBEAT_TIMEOUT_SECONDS: z.coerce.number().default(90),
+
+  // Security
+  ENABLE_HTTPS: z.enum(['true', 'false']).default('false'),
+  SSL_CERT_PATH: z.string().optional(),
+  SSL_KEY_PATH: z.string().optional(),
 })
 
 export type Env = z.infer<typeof envSchema>

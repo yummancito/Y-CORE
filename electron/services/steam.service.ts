@@ -62,7 +62,7 @@ export const steamService = {
   },
 
   async importManifest(options: { manifestPath: string }) {
-    const { path: manifestPath } = options
+    const { manifestPath } = options
     if (!fs.existsSync(manifestPath)) return { success: false, error: 'File not found' }
     const steamAppsPath = getSteamAppsPath()
     if (!steamAppsPath) return { success: false, error: 'Steam apps path not found' }

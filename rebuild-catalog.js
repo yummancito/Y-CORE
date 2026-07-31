@@ -426,6 +426,20 @@ const T = {
   __category_tests: 'Una prueba interna falló. Lo registramos para que el equipo lo revise.',
 
   // APPEND_TAIL_HERE — sync-catalog.mjs will auto-inject T entries derived from src/lib/i18n.ts errors.* keys.
+  // AUTO — derived from i18n.ts key 'errors.api.httpRequest'
+  'TAIL-ES-API-HTTPREQUEST': "Error de servidor (HTTP {status}). {details}",
+  // AUTO — derived from i18n.ts key 'errors.api.timeout'
+  'TAIL-ES-API-TIMEOUT': "La solicitud al servidor tardó demasiado. Intenta de nuevo.",
+  // AUTO — derived from i18n.ts key 'errors.api.jobTimeout'
+  'TAIL-ES-API-JOBTIMEOUT': "El trabajo tardó demasiado en completarse. Intenta de nuevo.",
+  // AUTO — derived from i18n.ts key 'errors.api.downloadManifest'
+  'TAIL-ES-API-DOWNLOADMANIFEST': "Error al descargar el manifiesto del juego.",
+  // AUTO — derived from i18n.ts key 'errors.api.rateLimited'
+  'TAIL-ES-API-RATELIMITED': "Demasiadas solicitudes. Espera un momento e intenta de nuevo.",
+  // AUTO — derived from i18n.ts key 'errors.api.forbidden'
+  'TAIL-ES-API-FORBIDDEN': "No tienes permiso para acceder a este recurso.",
+  // AUTO — derived from i18n.ts key 'errors.api.notFound'
+  'TAIL-ES-API-NOTFOUND': "El recurso solicitado no fue encontrado.",
   // AUTO — derived from i18n.ts key 'errors.retry'
   'TAIL-ES-RETRY': "Reintentar",
   // AUTO — derived from i18n.ts key 'errors.offline'

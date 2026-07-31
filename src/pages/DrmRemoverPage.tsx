@@ -53,34 +53,6 @@ export default function DrmRemoverPage() {
     if (games.length === 0) return
     games.forEach((game) => {
       setDrmStates((prev) => ({ ...prev, [game.appId]: { status: 'idle' } }))
-
-      // Try new detection API first
-      window.steamtools?.detectDrm?.(game.appId).then((result: any) => {
-        if (result?.detected && result?.drmTypes?.length > 0) {
-          const drm = result.drmTypes[0]
-          const riskColorMap: Record<string, string> = {
-            'safe': 'green',
-            'moderate': 'yellow',
-            'risky': 'red',
-          }
-          setDrmStates((prev) => ({
-            ...prev,
-            [game.appId]: {
-              status: 'idle',
-              message: `${drm.type} (${drm.confidence}% confidence)`,
-              drmType: drm.type,
-              riskLevel: riskColorMap[drm.riskLevel] || 'yellow',
-            }
-          }))
-        }
-      }).catch((e) => console.warn(`[DRM] detectDrm for ${game.appId} failed:`, e))
-
-      // Fallback to legacy status check
-      window.steamtools?.checkDrmStatus?.(game.appId).then((result: any) => {
-        if (result?.status === 'drm-removed') {
-          setDrmStates((prev) => ({ ...prev, [game.appId]: { status: 'already-removed', message: result.message } }))
-        }
-      }).catch((e) => console.warn(`[DRM] checkDrmStatus for ${game.appId} failed:`, e))
     })
   }, [games])
 

@@ -292,7 +292,7 @@ export async function buildEmulator(opts: BuildOptions = {}): Promise<BuildResul
         error: success ? null : `build exited code=${code}, dll=${candidate ?? 'NOT FOUND'}${tailHint}`,
         durationMs: Date.now() - started,
         lastLines,
-        dllPath: candidate,
+        dllPath: candidate ?? null,
         dllSizeBytes: size,
       })
     })

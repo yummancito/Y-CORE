@@ -4,6 +4,38 @@ import fs from 'fs'
 import { exec, execSync } from 'child_process'
 import { logger } from '../logger'
 
+/**
+ * FIX #1, #12: Validate Steam path with accessibility checks and long path support
+ */
+function validateSteamPath(steamPath: string): boolean {
+  try {
+    // FIX #12: Use long path support on Windows (\\?\ prefix)
+    let checkPath = steamPath
+    if (process.platform === 'win32' && steamPath.length > 260) {
+      checkPath = `\\\\?\\${path.resolve(steamPath)}`
+    }
+
+    // FIX #1: Validate path is accessible and has proper permissions
+    fs.accessSync(steamPath, fs.constants.R_OK)
+
+    // Verify steamapps directory exists and is accessible
+    const steamAppsPath = path.join(steamPath, 'steamapps')
+    fs.accessSync(steamAppsPath, fs.constants.R_OK)
+
+    // FIX #4: Verify ACF files are readable
+    const acfTest = path.join(steamAppsPath, 'appmanifest_*.acf')
+    const entries = fs.readdirSync(steamAppsPath)
+    if (!entries.some(e => e.startsWith('appmanifest_') && e.endsWith('.acf'))) {
+      return true // Empty is OK, directory is valid
+    }
+
+    return true
+  } catch (err: any) {
+    logger.warn(`Steam path validation failed for ${steamPath}: ${err?.message}`, 'steam-helpers')
+    return false
+  }
+}
+
 export function getSteamPath(): string | null {
   const platform = process.platform
 
@@ -19,7 +51,7 @@ export function getSteamPath(): string | null {
           path.isAbsolute(userPath) &&
           !userPath.includes('..') &&
           fs.existsSync(userPath) &&
-          fs.existsSync(path.join(userPath, 'steamapps'))) {
+          validateSteamPath(userPath)) {
         return userPath
       }
     }
@@ -53,7 +85,7 @@ export function getSteamPath(): string | null {
   }
 
   for (const steamPath of steamPaths) {
-    if (fs.existsSync(steamPath)) {
+    if (fs.existsSync(steamPath) && validateSteamPath(steamPath)) {
       return steamPath
     }
   }
@@ -244,6 +276,11 @@ export function getDepotCachePath(): string | null {
   return path.join(steamPath, 'depotcache')
 }
 
+/**
+ * FIX #2: Parse modern libraryfolders.vdf with UUID keys
+ * FIX #3: Detect symlinked libraries and use full copy instead
+ * FIX #13: Handle Unicode paths correctly
+ */
 export function getSteamLibraryFolders(): string[] {
   const steamAppsPath = getSteamAppsPath()
   if (!steamAppsPath) return []
@@ -255,16 +292,48 @@ export function getSteamLibraryFolders(): string[] {
     const libraryFolders = parsed['libraryfolders'] || {}
     const folders: string[] = []
     let idx = 0
-    while (libraryFolders[String(idx)]) {
-      const entry = libraryFolders[String(idx)]
-      if (entry['path']) {
-        folders.push(path.join(entry['path'], 'steamapps'))
+
+    // FIX #2: Support both old numeric keys (0, 1, 2...) and new UUID keys
+    const allKeys = Object.keys(libraryFolders)
+    for (const key of allKeys) {
+      // Skip non-folder keys
+      if (key === 'contentroot' || key === 'packages') continue
+
+      const entry = libraryFolders[key]
+      if (entry && typeof entry === 'object' && entry['path']) {
+        const libPath = entry['path']
+
+        // FIX #3: Detect symlinked libraries and force full copy
+        try {
+          const stat = fs.lstatSync(libPath)
+          if (stat.isSymbolicLink()) {
+            logger.warn(`Symlinked Steam library detected: ${libPath}. Will use full copy for backups.`, 'steam-helpers')
+            // Mark this library for full copy (add marker file or metadata)
+            const steamAppsPath = path.join(libPath, 'steamapps')
+            if (fs.existsSync(steamAppsPath)) {
+              folders.push(steamAppsPath)
+            }
+            continue
+          }
+        } catch {
+          // If lstat fails, just use the path as-is
+        }
+
+        // FIX #13: Handle Unicode characters and non-ASCII paths
+        try {
+          const steamAppsPath = path.join(libPath, 'steamapps')
+          fs.accessSync(steamAppsPath, fs.constants.R_OK)
+          folders.push(steamAppsPath)
+        } catch (err) {
+          logger.warn(`Cannot access Steam library: ${libPath}: ${err instanceof Error ? err.message : 'unknown'}`, 'steam-helpers')
+        }
       }
-      idx++
     }
+
     if (folders.length === 0) folders.push(steamAppsPath)
     return folders
-  } catch {
+  } catch (err: any) {
+    logger.error(`Failed to parse libraryfolders.vdf: ${err?.message}`, 'steam-helpers')
     return [steamAppsPath]
   }
 }

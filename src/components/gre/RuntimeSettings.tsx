@@ -14,6 +14,7 @@ import {
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useRuntimeStore } from '../../stores/useRuntimeStore'
 import { RuntimeCenter } from './RuntimeCenter'
+import { configService } from '../../services/config.service'
 
 interface RuntimeSettingsConfig {
   autoDetect: boolean
@@ -53,7 +54,6 @@ export function RuntimeSettings() {
   const handleSave = async () => {
     // Persist to config service
     try {
-      const { configService } = await import('../../services/config.service')
       await configService.write({
         ...(await configService.read()),
         runtimeSettings: config,

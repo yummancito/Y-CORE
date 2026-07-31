@@ -72,6 +72,39 @@ export const configService = {
         return value
       })
     } catch (err: any) {
+      // ERROR #2 FIX: Distinguish between missing file and corruption
+      if (err instanceof SyntaxError) {
+        logger.error(`CONFIG CORRUPTED: ${err?.message}. Attempting to restore from backup...`, 'config')
+        const CONFIG_PATH_BAK = CONFIG_PATH + '.bak'
+
+        // Backup the corrupted file
+        try {
+          fs.copyFileSync(CONFIG_PATH, CONFIG_PATH_BAK + '.corrupted')
+          logger.info(`Corrupted config backed up to ${CONFIG_PATH_BAK}.corrupted`, 'config')
+        } catch {}
+
+        // Try to restore from backup
+        if (fs.existsSync(CONFIG_PATH_BAK)) {
+          try {
+            const bakRaw = fs.readFileSync(CONFIG_PATH_BAK, 'utf-8')
+            const restored = JSON.parse(bakRaw, (key, value) =>
+              key === '__proto__' || key === 'constructor' || key === 'prototype' ? undefined : value
+            )
+            logger.info(`Restored config from backup`, 'config')
+            return restored
+          } catch (bakErr: any) {
+            logger.error(`Backup also corrupted: ${bakErr?.message}`, 'config')
+          }
+        }
+
+        // Both corrupted, delete and return null
+        try {
+          fs.unlinkSync(CONFIG_PATH)
+          logger.warn(`Deleted corrupted config file, will use defaults`, 'config')
+        } catch {}
+        return null
+      }
+
       logger.error(`Failed to read config: ${err?.message ?? err}`, 'config')
       return null
     }
@@ -79,6 +112,9 @@ export const configService = {
 
   async write(data: object): Promise<{ success: boolean; error?: string }> {
     const CONFIG_PATH = getConfigPath()
+    const CONFIG_PATH_TMP = CONFIG_PATH + '.tmp'
+    const CONFIG_PATH_BAK = CONFIG_PATH + '.bak'
+
     try {
       if (!data || typeof data !== 'object' || Array.isArray(data)) {
         return { success: false, error: 'Config must be a plain object' }
@@ -115,10 +151,41 @@ export const configService = {
       if (serialized.length > MAX_CONFIG_SIZE) {
         return { success: false, error: 'Config exceeds maximum size of 256KB' }
       }
-      fs.writeFileSync(CONFIG_PATH, serialized, 'utf-8')
+
+      // ERROR #12 FIX: Use async write with atomic rename
+      // Write to temp file first, then atomically rename (prevents corruption on crash)
+      await new Promise<void>((resolve, reject) => {
+        fs.writeFile(CONFIG_PATH_TMP, serialized, 'utf-8', (err) => {
+          if (err) reject(err)
+          else resolve()
+        })
+      })
+
+      // Keep backup before overwriting
+      if (fs.existsSync(CONFIG_PATH)) {
+        try {
+          fs.copyFileSync(CONFIG_PATH, CONFIG_PATH_BAK)
+        } catch (backupErr: any) {
+          logger.warn(`Failed to create backup: ${backupErr?.message}`, 'config')
+        }
+      }
+
+      // Atomic rename (very fast, <1ms)
+      await new Promise<void>((resolve, reject) => {
+        fs.rename(CONFIG_PATH_TMP, CONFIG_PATH, (err) => {
+          if (err) reject(err)
+          else resolve()
+        })
+      })
+
       return { success: true }
     } catch (err: any) {
-      return { success: false, error: err.message }
+      logger.error(`Failed to write config: ${err?.message ?? err}`, 'config')
+      // Clean up temp file
+      try {
+        fs.unlinkSync(CONFIG_PATH_TMP)
+      } catch {}
+      return { success: false, error: err?.message ?? String(err) }
     }
   },
 }

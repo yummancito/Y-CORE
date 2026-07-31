@@ -23,6 +23,7 @@ interface SteamDownloadTask {
 }
 
 class SteamDownloadService {
+  [key: string]: any
   private tasks = new Map<string, SteamDownloadTask>()
   private networkOptimized = false
 

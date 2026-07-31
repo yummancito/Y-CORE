@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { setLanguage as setI18nLanguage } from '../lib/i18n'
 import { configService } from '../services/config.service'
+import { useToastStore } from './useToastStore'
 
 export interface NavItemConfig {
   id: string
@@ -303,19 +304,15 @@ if (typeof window !== "undefined" && (window as any).steamtools?.onAppEvent) {
   })
 
   // 2. Silent auto-build at startup completed (or failed). Surface via toast.
-  // Lazy-require useToastStore so we never break the store module load.
   subscribeAppEventOnce("app:autoBuildFinished", (payload: any) => {
     try {
-      // Dynamic import to avoid circular deps + ensure toast store ready.
-      void import("../stores/useToastStore").then((mod: any) => {
-        const showToast = mod?.useToastStore?.getState?.()?.showToast
-        if (typeof showToast !== "function") return
-        if (payload?.success) {
-          showToast("success", `Emulador compilado en ${payload.durationMs ?? "?"}ms. Reiniciá Y-core para tomar el DLL nuevo.`)
-        } else {
-          showToast("error", `Emulador no se compiló: ${payload?.error ?? "error desconocido"}. Instalá cmake 3.20+ y Visual Studio Build Tools 2022.`)
-        }
-      }).catch(() => { /* silent */ })
+      const showToast = useToastStore.getState()?.showToast
+      if (typeof showToast !== "function") return
+      if (payload?.success) {
+        showToast("success", `Emulador compilado en ${payload.durationMs ?? "?"}ms. Reiniciá Y-core para tomar el DLL nuevo.`)
+      } else {
+        showToast("error", `Emulador no se compiló: ${payload?.error ?? "error desconocido"}. Instalá cmake 3.20+ y Visual Studio Build Tools 2022.`)
+      }
     } catch { /* never crash UI */ }
   })
 
@@ -325,19 +322,17 @@ if (typeof window !== "undefined" && (window as any).steamtools?.onAppEvent) {
   // error with manual-install instructions.
   subscribeAppEventOnce("app:installToolchain:finished", (payload: any) => {
     try {
-      void import("../stores/useToastStore").then((mod: any) => {
-        const showToast = mod?.useToastStore?.getState?.()?.showToast
-        if (typeof showToast !== "function") return
-        if (payload?.success) {
-          const secs = Math.round((payload?.durationMs ?? 0) / 1000)
-          showToast("info", `cmake instalado vía ${payload.installedFrom ?? "auto-install"} (${secs}s). Compilando emulador…`)
-        } else {
-          showToast(
-            "error",
-            `No se pudo instalar cmake automáticamente. ${payload?.error ?? "Error desconocido"}. Instalá manualmente desde cmake.org/download (marcá "Add to PATH") y reiniciá Y-core.`,
-          )
-        }
-      }).catch(() => { /* silent */ })
+      const showToast = useToastStore.getState()?.showToast
+      if (typeof showToast !== "function") return
+      if (payload?.success) {
+        const secs = Math.round((payload?.durationMs ?? 0) / 1000)
+        showToast("info", `cmake instalado vía ${payload.installedFrom ?? "auto-install"} (${secs}s). Compilando emulador…`)
+      } else {
+        showToast(
+          "error",
+          `No se pudo instalar cmake automáticamente. ${payload?.error ?? "Error desconocido"}. Instalá manualmente desde cmake.org/download (marcá "Add to PATH") y reiniciá Y-core.`,
+        )
+      }
     } catch { /* never crash UI */ }
   })
 

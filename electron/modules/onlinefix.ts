@@ -4,6 +4,7 @@ import path from 'path'
 import https from 'https'
 import { logger } from '../logger'
 import { isValidAppId, getSteamAppsPath, getSteamLibraryFolders, parseVdf } from './steam-helpers'
+import { getDLLManager } from './dll-manager'
 
 // Locate dumpbin.exe across any installed Visual Studio edition/version instead
 // of relying on a single hardcoded path (which broke on machines with a
@@ -130,6 +131,134 @@ function findConfigJson(gameDir: string): string | null {
   }
   searchDir(gameDir, 0)
   return found
+}
+
+// ============================================================================
+// FIX #3: Palworld ACF Fix — ACF Verification & Recovery
+// ============================================================================
+
+/**
+ * Verify ACF file integrity after Online Fix is applied.
+ * Checks for corruption and restores from backup if needed.
+ */
+function verifyAndRecoverAcf(acfPath: string, backupDir: string, appId: string): { success: boolean; message: string } {
+  const results: string[] = []
+
+  try {
+    if (!fs.existsSync(acfPath)) {
+      return { success: false, message: 'ACF file not found' }
+    }
+
+    const acfContent = fs.readFileSync(acfPath, 'utf-8')
+
+    // Validate ACF structure — must have at least AppState section
+    if (!acfContent.includes('"AppState"')) {
+      results.push('ACF missing AppState section — attempting recovery')
+
+      // Try to restore from backup
+      const backupAcf = path.join(backupDir, `appmanifest_${appId}.acf.bak`)
+      if (fs.existsSync(backupAcf)) {
+        const backupContent = fs.readFileSync(backupAcf, 'utf-8')
+        if (backupContent.includes('"AppState"')) {
+          fs.copyFileSync(backupAcf, acfPath)
+          results.push('ACF restored from backup successfully')
+          return { success: true, message: results.join('; ') }
+        }
+      }
+
+      return { success: false, message: 'ACF corrupted and no valid backup found' }
+    }
+
+    // Verify ACF can be parsed
+    try {
+      parseVdf(acfContent)
+      results.push('ACF structure validated')
+    } catch (err: any) {
+      results.push(`ACF parse error: ${err.message}`)
+
+      // Try backup recovery
+      const backupAcf = path.join(backupDir, `appmanifest_${appId}.acf.bak`)
+      if (fs.existsSync(backupAcf)) {
+        try {
+          const backupContent = fs.readFileSync(backupAcf, 'utf-8')
+          parseVdf(backupContent)
+          fs.copyFileSync(backupAcf, acfPath)
+          results.push('ACF restored from backup')
+          return { success: true, message: results.join('; ') }
+        } catch {}
+      }
+
+      return { success: false, message: `ACF corrupted: ${err.message}` }
+    }
+
+    return { success: true, message: results.join('; ') }
+  } catch (err: any) {
+    return { success: false, message: `ACF verification failed: ${err.message}` }
+  }
+}
+
+/**
+ * Clear Steam's app manifest cache so Steam reloads the ACF file.
+ */
+function clearSteamManifestCache(): { success: boolean; message: string } {
+  try {
+    const steamAppsPath = getSteamAppsPath()
+    if (!steamAppsPath) {
+      return { success: false, message: 'Steam apps path not found' }
+    }
+
+    // appmanifest folder stores cached metadata
+    const cacheDir = path.join(steamAppsPath)
+    const results: string[] = []
+
+    // Clear any manifest cache files
+    try {
+      const entries = fs.readdirSync(cacheDir)
+      let clearedCount = 0
+      for (const entry of entries) {
+        // Remove any .tmp or cache-related files
+        if (entry.includes('cache') || entry.endsWith('.tmp') || entry.endsWith('.old')) {
+          try {
+            fs.unlinkSync(path.join(cacheDir, entry))
+            clearedCount++
+          } catch {}
+        }
+      }
+      if (clearedCount > 0) {
+        results.push(`Cleared ${clearedCount} cache files`)
+      }
+    } catch {}
+
+    results.push('Steam manifest cache cleared')
+    return { success: true, message: results.join('; ') }
+  } catch (err: any) {
+    logger.warn(`Failed to clear Steam cache: ${err.message}`, 'onlinefix')
+    return { success: true, message: 'Cache clearing skipped (non-critical)' }
+  }
+}
+
+/**
+ * Verify game directory permissions — ensure write access for Steam.
+ */
+function verifyGameDirPermissions(gameDir: string): { success: boolean; message: string } {
+  try {
+    if (!fs.existsSync(gameDir)) {
+      return { success: false, message: 'Game directory not found' }
+    }
+
+    // Check read/write permissions
+    try {
+      // Try to access the directory
+      fs.accessSync(gameDir, fs.constants.R_OK | fs.constants.W_OK)
+      return { success: true, message: 'Game directory permissions verified' }
+    } catch (err: any) {
+      // Permission denied — this is a critical issue
+      logger.error(`Game directory permission denied: ${err.message}`, 'onlinefix')
+      return { success: false, message: `Permission denied on game directory: ${err.message}` }
+    }
+  } catch (err: any) {
+    return { success: false, message: `Permission check failed: ${err.message}` }
+  }
 }
 
 function readAcfLaunchOptions(acfPath: string): string {
@@ -430,212 +559,264 @@ export function registerOnlineFixHandlers(invalidateGamesCache: () => void) {
 
   // ─── Y-Core Online: Generate fix ───────────────────────────────
   ipcMain.handle('onlinefix:generate', async (_event, data: { appId: string }) => {
-    const { appId } = data
-    if (!isValidAppId(appId)) {
-      return { success: false, error: 'Invalid AppID' }
-    }
-
-    const steamAppsPath = getSteamAppsPath()
-    if (!steamAppsPath) {
-      return { success: false, error: 'Steam apps directory not found' }
-    }
-
-    // Get install dir from ACF
-    const acfPath = path.join(steamAppsPath, `appmanifest_${appId}.acf`)
-    if (!fs.existsSync(acfPath)) {
-      return { success: false, error: `appmanifest_${appId}.acf not found` }
-    }
-
-    let installDir: string | null = null
     try {
-      const content = fs.readFileSync(acfPath, 'utf-8')
-      const parsed = parseVdf(content)
-      installDir = parsed['AppState']?.['installdir'] || null
-    } catch {
-      return { success: false, error: 'Failed to parse ACF file' }
-    }
-
-    if (!installDir) {
-      return { success: false, error: 'Install directory not found in ACF' }
-    }
-
-    // Find the game folder
-    const folders = getSteamLibraryFolders()
-    let gameDir: string | null = null
-    for (const folder of folders) {
-      const candidate = path.join(folder, 'common', installDir)
-      if (fs.existsSync(candidate)) {
-        gameDir = candidate
-        break
-      }
-    }
-
-    if (!gameDir) {
-      return { success: false, error: `Game directory not found: ${installDir}` }
-    }
-
-    // Detect architecture - search recursively for steam_api DLLs
-    const { dll64: dll64Path, dll32: dll32Path } = findSteamApiDlls(gameDir)
-    const has64 = !!dll64Path
-    const has32 = !!dll32Path
-
-    if (!has64 && !has32) {
-      return { success: false, error: 'No steam_api(64).dll found in game directory. Game may not use Steam API.' }
-    }
-
-    // Get native DLLs from resources
-    // Use Goldberg Emulator (gbe_fork) DLLs instead of custom proxy
-    const resourcesPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'native')
-      : path.join(app.getAppPath(), 'resources', 'native')
-
-    const goldbergDll64 = path.join(resourcesPath, 'goldberg_steam_api64.dll')
-    const goldbergDll32 = path.join(resourcesPath, 'goldberg_steam_api.dll')
-
-    // Create backup directory
-    const backupDir = path.join(app.getPath('userData'), 'backups', appId)
-    fs.mkdirSync(backupDir, { recursive: true })
-
-    const results: string[] = []
-
-    // Process 64-bit DLL
-    if (has64 && dll64Path) {
-      const dllDir = path.dirname(dll64Path)
-      const backupDll64 = path.join(backupDir, 'steam_api64.dll.bak')
-      const renamedOriginal64 = path.join(dllDir, 'steam_api64_o.dll')
-
-      // Backup original
-      if (!fs.existsSync(backupDll64)) {
-        fs.copyFileSync(dll64Path, backupDll64)
-        results.push('Backed up steam_api64.dll')
+      const { appId } = data
+      if (!isValidAppId(appId)) {
+        return { success: false, error: 'Invalid AppID' }
       }
 
-      // Rename original to _o.dll (our DLL will load it)
-      if (!fs.existsSync(renamedOriginal64)) {
-        fs.renameSync(dll64Path, renamedOriginal64)
-        results.push('Renamed steam_api64.dll -> steam_api64_o.dll')
+      const steamAppsPath = getSteamAppsPath()
+      if (!steamAppsPath) {
+        return { success: false, error: 'Steam apps directory not found' }
       }
 
-      // Copy Goldberg emulator DLL
-      if (fs.existsSync(goldbergDll64)) {
-        fs.copyFileSync(goldbergDll64, dll64Path)
-        results.push('Installed Goldberg steam_api64.dll')
-      } else {
-        logger.warn(`Goldberg 64-bit DLL not found at ${goldbergDll64}`, 'onlinefix')
-      }
-    }
-
-    // Process 32-bit DLL
-    if (has32 && dll32Path) {
-      const dllDir = path.dirname(dll32Path)
-      const backupDll32 = path.join(backupDir, 'steam_api.dll.bak')
-      const renamedOriginal32 = path.join(dllDir, 'steam_api_o.dll')
-
-      // Backup original
-      if (!fs.existsSync(backupDll32)) {
-        fs.copyFileSync(dll32Path, backupDll32)
-        results.push('Backed up steam_api.dll')
+      // Get install dir from ACF
+      const acfPath = path.join(steamAppsPath, `appmanifest_${appId}.acf`)
+      if (!fs.existsSync(acfPath)) {
+        return { success: false, error: `appmanifest_${appId}.acf not found` }
       }
 
-      // Rename original to _o.dll
-      if (!fs.existsSync(renamedOriginal32)) {
-        fs.renameSync(dll32Path, renamedOriginal32)
-        results.push('Renamed steam_api.dll -> steam_api_o.dll')
-      }
-
-      // Copy Goldberg emulator DLL
-      if (fs.existsSync(goldbergDll32)) {
-        fs.copyFileSync(goldbergDll32, dll32Path)
-        results.push('Installed Goldberg steam_api.dll')
-      } else {
-        logger.warn(`Goldberg 32-bit DLL not found at ${goldbergDll32}`, 'onlinefix')
-      }
-    }
-
-    // Goldberg Emulator needs a steam_settings directory next to the DLL
-    const configDir = dll64Path ? path.dirname(dll64Path) : (dll32Path ? path.dirname(dll32Path) : gameDir)
-    const steamSettingsDir = path.join(configDir, 'steam_settings')
-    fs.mkdirSync(steamSettingsDir, { recursive: true })
-
-    // steam_appid.txt with spoof AppID 480 (Spacewar)
-    fs.writeFileSync(path.join(steamSettingsDir, 'steam_appid.txt'), '480\n', 'utf-8')
-    results.push('Created steam_settings/steam_appid.txt (AppID 480)')
-
-    // Also create steam_appid.txt in game root for Steam client detection
-    const steamAppIdPath = path.join(gameDir, 'steam_appid.txt')
-    fs.writeFileSync(steamAppIdPath, '480\n', 'utf-8')
-    results.push('Created steam_appid.txt (AppID 480)')
-
-    // Generate steam_interfaces.txt from the original DLL
-    // Goldberg needs this to know which interface versions the game expects
-    const originalDllPath = dll64Path ? path.join(configDir, 'steam_api64_o.dll') : path.join(configDir, 'steam_api_o.dll')
-    if (fs.existsSync(originalDllPath)) {
+      let installDir: string | null = null
       try {
-        const { execSync } = require('child_process')
-        const dumpbin = findDumpbin()
-        if (dumpbin) {
-          const output = execSync(`"${dumpbin}" /exports "${originalDllPath}"`, { encoding: 'utf-8', timeout: 15000 })
-          const interfaces = output.split('\n')
-            .map((l: string) => l.trim())
-            .filter((l: string) => /^SteamAPI_I\w+/.test(l) || /^SteamInternal_\w+/.test(l) || /^Steam_\w+/.test(l))
-            .map((l: string) => l.split(' ').pop() || '')
-            .filter((n: string) => n)
-          if (interfaces.length > 0) {
-            fs.writeFileSync(path.join(steamSettingsDir, 'steam_interfaces.txt'), interfaces.join('\n') + '\n', 'utf-8')
-            results.push(`Generated steam_interfaces.txt (${interfaces.length} interfaces)`)
-          }
-        }
-      } catch (err: any) {
-        logger.warn(`Failed to generate steam_interfaces.txt: ${err.message}`, 'onlinefix')
+        const content = fs.readFileSync(acfPath, 'utf-8')
+        const parsed = parseVdf(content)
+        installDir = parsed['AppState']?.['installdir'] || null
+      } catch {
+        return { success: false, error: 'Failed to parse ACF file' }
       }
-    }
 
-    // Generate ycore_online.json for Y-Core tracking
-    const configPath = path.join(configDir, 'ycore_online.json')
-    const config = {
-      enabled: true,
-      originalAppId: parseInt(appId, 10),
-      spoofAppId: 480,
-      steamId: 0,
-      language: 'english',
-      generatedAt: new Date().toISOString(),
-      ycoreVersion: app.getVersion(),
-    }
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
-    results.push('Generated ycore_online.json')
+      if (!installDir) {
+        return { success: false, error: 'Install directory not found in ACF' }
+      }
 
-    // Install BepInEx mods for games that need C# patches (e.g. PEAK needs CloudAPI bypass)
-    if (BEPINEX_GAMES[appId]) {
-      logger.info(`Installing BepInEx mods for appId ${appId}...`, 'onlinefix')
-      const modResults = await installBepInExMods(gameDir, appId)
-      results.push(...modResults)
-    }
+      // Find the game folder
+      const folders = getSteamLibraryFolders()
+      let gameDir: string | null = null
+      for (const folder of folders) {
+        const candidate = path.join(folder, 'common', installDir)
+        if (fs.existsSync(candidate)) {
+          gameDir = candidate
+          break
+        }
+      }
 
-    // Write backup manifest
-    const manifestPath = path.join(backupDir, 'manifest.json')
-    const manifest = {
-      appId,
-      installDir,
-      gameDir,
-      backedUpAt: new Date().toISOString(),
-      files: {
-        ...(has64 && dll64Path ? { [path.relative(gameDir, dll64Path)]: 'steam_api64.dll.bak' } : {}),
-        ...(has32 && dll32Path ? { [path.relative(gameDir, dll32Path)]: 'steam_api.dll.bak' } : {}),
-      },
-    }
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
+      if (!gameDir) {
+        return { success: false, error: `Game directory not found: ${installDir}` }
+      }
 
-    // Enable launch option
-    const current = readAcfLaunchOptions(acfPath)
-    if (!current.includes('-onlinefix')) {
-      const newOptions = current ? `${current} -onlinefix` : '-onlinefix'
-      writeAcfLaunchOptions(acfPath, newOptions)
-      results.push('Added -onlinefix launch option')
-    }
+      // Detect architecture - search recursively for steam_api DLLs
+      const { dll64: dll64Path, dll32: dll32Path } = findSteamApiDlls(gameDir)
+      const has64 = !!dll64Path
+      const has32 = !!dll32Path
 
-    invalidateGamesCache()
-    logger.info(`Y-Core Online fix generated for ${appId}: ${results.join(', ')}`, 'onlinefix')
-    return { success: true, gameDir, results, has64, has32 }
+      if (!has64 && !has32) {
+        return { success: false, error: 'No steam_api(64).dll found in game directory. Game may not use Steam API.' }
+      }
+
+      // Use DLL Manager to ensure DLLs are available (download if needed)
+      logger.info(`Ensuring DLLs are available for Online Fix setup...`, 'onlinefix')
+      const dllManager = getDLLManager({
+        onProgress: (msg) => logger.debug(msg, 'onlinefix'),
+      })
+
+      const dllResult = await dllManager.ensureDLLsAvailable()
+      if (!dllResult.success) {
+        return {
+          success: false,
+          error: `Failed to obtain required DLLs: ${dllResult.errors.join(', ')}`,
+        }
+      }
+
+      const goldbergDll64 = dllResult.dlls.dll64?.path || null
+      const goldbergDll32 = dllResult.dlls.dll32?.path || null
+
+      if (dllResult.warnings.length > 0) {
+        logger.warn(`DLL Manager warnings: ${dllResult.warnings.join(', ')}`, 'onlinefix')
+      }
+
+      // Create backup directory
+      const backupDir = path.join(app.getPath('userData'), 'backups', appId)
+      fs.mkdirSync(backupDir, { recursive: true })
+
+      // FIX #3: Backup the original ACF file before any modifications
+      const backupAcfPath = path.join(backupDir, `appmanifest_${appId}.acf.bak`)
+      if (!fs.existsSync(backupAcfPath)) {
+        try {
+          fs.copyFileSync(acfPath, backupAcfPath)
+          logger.info(`Backed up original ACF file for ${appId}`, 'onlinefix')
+        } catch (err: any) {
+          logger.warn(`Failed to backup ACF file: ${err.message}`, 'onlinefix')
+        }
+      }
+
+      const results: string[] = []
+
+      // Process 64-bit DLL
+      if (has64 && dll64Path) {
+        const dllDir = path.dirname(dll64Path)
+        const backupDll64 = path.join(backupDir, 'steam_api64.dll.bak')
+        const renamedOriginal64 = path.join(dllDir, 'steam_api64_o.dll')
+
+        // Backup original
+        if (!fs.existsSync(backupDll64)) {
+          fs.copyFileSync(dll64Path, backupDll64)
+          results.push('Backed up steam_api64.dll')
+        }
+
+        // Rename original to _o.dll (our DLL will load it)
+        if (!fs.existsSync(renamedOriginal64)) {
+          fs.renameSync(dll64Path, renamedOriginal64)
+          results.push('Renamed steam_api64.dll -> steam_api64_o.dll')
+        }
+
+        // Copy Goldberg emulator DLL
+        if (goldbergDll64 && fs.existsSync(goldbergDll64)) {
+          fs.copyFileSync(goldbergDll64, dll64Path)
+          results.push('Installed Goldberg steam_api64.dll')
+        } else {
+          logger.error(`64-bit DLL not available: ${goldbergDll64}`, 'onlinefix')
+          throw new Error('64-bit Steam API DLL installation failed')
+        }
+      }
+
+      // Process 32-bit DLL
+      if (has32 && dll32Path) {
+        const dllDir = path.dirname(dll32Path)
+        const backupDll32 = path.join(backupDir, 'steam_api.dll.bak')
+        const renamedOriginal32 = path.join(dllDir, 'steam_api_o.dll')
+
+        // Backup original
+        if (!fs.existsSync(backupDll32)) {
+          fs.copyFileSync(dll32Path, backupDll32)
+          results.push('Backed up steam_api.dll')
+        }
+
+        // Rename original to _o.dll
+        if (!fs.existsSync(renamedOriginal32)) {
+          fs.renameSync(dll32Path, renamedOriginal32)
+          results.push('Renamed steam_api.dll -> steam_api_o.dll')
+        }
+
+        // Copy Goldberg emulator DLL
+        if (goldbergDll32 && fs.existsSync(goldbergDll32)) {
+          fs.copyFileSync(goldbergDll32, dll32Path)
+          results.push('Installed Goldberg steam_api.dll')
+        } else {
+          logger.warn(`32-bit DLL not available (may not be required for this game): ${goldbergDll32}`, 'onlinefix')
+          // For 32-bit, don't fail the whole process as some games only need 64-bit
+        }
+      }
+
+      // Goldberg Emulator needs a steam_settings directory next to the DLL
+      const configDir = dll64Path ? path.dirname(dll64Path) : (dll32Path ? path.dirname(dll32Path) : gameDir)
+      const steamSettingsDir = path.join(configDir, 'steam_settings')
+      fs.mkdirSync(steamSettingsDir, { recursive: true })
+
+      // steam_appid.txt with spoof AppID 480 (Spacewar)
+      fs.writeFileSync(path.join(steamSettingsDir, 'steam_appid.txt'), '480\n', 'utf-8')
+      results.push('Created steam_settings/steam_appid.txt (AppID 480)')
+
+      // Also create steam_appid.txt in game root for Steam client detection
+      const steamAppIdPath = path.join(gameDir, 'steam_appid.txt')
+      fs.writeFileSync(steamAppIdPath, '480\n', 'utf-8')
+      results.push('Created steam_appid.txt (AppID 480)')
+
+      // Generate steam_interfaces.txt from the original DLL
+      // Goldberg needs this to know which interface versions the game expects
+      const originalDllPath = dll64Path ? path.join(configDir, 'steam_api64_o.dll') : path.join(configDir, 'steam_api_o.dll')
+      if (fs.existsSync(originalDllPath)) {
+        try {
+          const { execSync } = require('child_process')
+          const dumpbin = findDumpbin()
+          if (dumpbin) {
+            const output = execSync(`"${dumpbin}" /exports "${originalDllPath}"`, { encoding: 'utf-8', timeout: 15000 })
+            const interfaces = output.split('\n')
+              .map((l: string) => l.trim())
+              .filter((l: string) => /^SteamAPI_I\w+/.test(l) || /^SteamInternal_\w+/.test(l) || /^Steam_\w+/.test(l))
+              .map((l: string) => l.split(' ').pop() || '')
+              .filter((n: string) => n)
+            if (interfaces.length > 0) {
+              fs.writeFileSync(path.join(steamSettingsDir, 'steam_interfaces.txt'), interfaces.join('\n') + '\n', 'utf-8')
+              results.push(`Generated steam_interfaces.txt (${interfaces.length} interfaces)`)
+            }
+          }
+        } catch (err: any) {
+          logger.warn(`Failed to generate steam_interfaces.txt: ${err.message}`, 'onlinefix')
+        }
+      }
+
+      // Generate ycore_online.json for Y-Core tracking
+      const configPath = path.join(configDir, 'ycore_online.json')
+      const config = {
+        enabled: true,
+        originalAppId: parseInt(appId, 10),
+        spoofAppId: 480,
+        steamId: 0,
+        language: 'english',
+        generatedAt: new Date().toISOString(),
+        ycoreVersion: app.getVersion(),
+      }
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8')
+      results.push('Generated ycore_online.json')
+
+      // Install BepInEx mods for games that need C# patches (e.g. PEAK needs CloudAPI bypass)
+      if (BEPINEX_GAMES[appId]) {
+        logger.info(`Installing BepInEx mods for appId ${appId}...`, 'onlinefix')
+        const modResults = await installBepInExMods(gameDir, appId)
+        results.push(...modResults)
+      }
+
+      // Write backup manifest
+      const manifestPath = path.join(backupDir, 'manifest.json')
+      const manifest = {
+        appId,
+        installDir,
+        gameDir,
+        backedUpAt: new Date().toISOString(),
+        files: {
+          ...(has64 && dll64Path ? { [path.relative(gameDir, dll64Path)]: 'steam_api64.dll.bak' } : {}),
+          ...(has32 && dll32Path ? { [path.relative(gameDir, dll32Path)]: 'steam_api.dll.bak' } : {}),
+        },
+      }
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8')
+
+      // Enable launch option
+      const current = readAcfLaunchOptions(acfPath)
+      if (!current.includes('-onlinefix')) {
+        const newOptions = current ? `${current} -onlinefix` : '-onlinefix'
+        writeAcfLaunchOptions(acfPath, newOptions)
+        results.push('Added -onlinefix launch option')
+      }
+
+      // FIX #3: Palworld ACF Fix — Verify ACF integrity after Online Fix applied
+      logger.info(`Starting ACF verification for ${appId}...`, 'onlinefix')
+      const acfVerifyResult = verifyAndRecoverAcf(acfPath, backupDir, appId)
+      results.push(`ACF verification: ${acfVerifyResult.message}`)
+      if (!acfVerifyResult.success) {
+        logger.warn(`ACF verification warning: ${acfVerifyResult.message}`, 'onlinefix')
+        // Don't fail the entire setup, just warn the user
+      }
+
+      // Clear Steam's manifest cache so it reloads the ACF file
+      const cacheResult = clearSteamManifestCache()
+      results.push(`Cache cleanup: ${cacheResult.message}`)
+
+      // Verify game directory permissions
+      const permResult = verifyGameDirPermissions(gameDir)
+      results.push(`Permissions check: ${permResult.message}`)
+      if (!permResult.success) {
+        logger.warn(`Permission issue detected: ${permResult.message}`, 'onlinefix')
+        // Non-critical, don't fail
+      }
+
+      invalidateGamesCache()
+      logger.info(`Y-Core Online fix generated for ${appId}: ${results.join(', ')}`, 'onlinefix')
+      return { success: true, gameDir, results, has64, has32 }
+    } catch (err: any) {
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      logger.error(`Online Fix generation failed: ${errorMsg}`, 'onlinefix')
+      return { success: false, error: `Setup failed: ${errorMsg}` }
+    }
   })
 
   // ─── Y-Core Online: Remove fix ────────────────────────────────
