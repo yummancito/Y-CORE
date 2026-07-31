@@ -16,7 +16,7 @@
     "dist": "electron-builder && node scripts/cleanup-dist.js",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p electron/tsconfig.json --noEmit",
-    "electron:dev": "concurrently -n vite,electron -c green,magenta \"vite\" \"wait-on tcp:5174 && electron .\"",
+    "electron:dev": "concurrently -n vite,electron -c green,magenta \"vite\" \"ping localhost -n 15 > nul && electron .\"",
     "electron:dev:local": "concurrently -n api,vite,electron -c blue,green,magenta \"pnpm --filter @y-core/api dev\" \"vite\" \"wait-on tcp:5174 && wait-on tcp:3000 && electron .\"",
     "electron:build": "node scripts/sync-catalog.mjs && node rebuild-catalog.js && tsc && vite build && tsc -p electron/tsconfig.json",
     "test": "vitest run",

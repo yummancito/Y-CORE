@@ -124,7 +124,8 @@ import { logService } from './services/log.service'
 import { steamService } from './services/steam.service'
 import { updateService } from './services/update.service'
 import { onlinefixService } from './services/onlinefix.service'
-import { drmService } from './services/drm.service'
+// Import drmService lazily to fix Vite resolution
+let drmService: any = null
 import { steamcmdService } from './services/steamcmd.service'
 import { runtimeDetectorService } from './services/runtime-detector.service'
 import { launchProfilesService } from './services/launch-profiles.service'
@@ -140,7 +141,7 @@ import { inputInjectionService } from './services/input-injection.service'
 import { cloudSignalingService } from './services/cloud-signaling.service'
 import { steamDownloadService } from './services/steam-download.service'
 
-function registerAllServices(): void {
+async function registerAllServices(): Promise<void> {
   const registry = getServiceRegistry()
   registry.register('config', configService)
   registry.register('auth', authService)
@@ -151,6 +152,16 @@ function registerAllServices(): void {
   registry.register('steam', steamService)
   registry.register('update', updateService)
   registry.register('onlinefix', onlinefixService)
+
+  // Lazy load DRM service
+  if (!drmService) {
+    try {
+      const { drmService: loadedDrmService } = await import('./services/drm.service')
+      drmService = loadedDrmService
+    } catch (err) {
+      logger.error(`Failed to load DRM service: ${err}`, 'init')
+    }
+  }
   registry.register('drm', drmService)
   registry.register('steamcmd', steamcmdService)
   registry.register('storage', storageService)
@@ -323,7 +334,7 @@ if (gotTheLock) {
 
   // ── Register Service Layer (gateway + all services) BEFORE IPC handlers ───
   // ERROR #1 FIX: Register services FIRST before creating windows or setting up handlers
-  registerAllServices()
+  await registerAllServices()
   registerGatewayRouter()
 
 
