@@ -643,7 +643,7 @@ if (gotTheLock) {
   registerLogHandlers(() => state.mainWindow)
   registerConfigHandlers()
   registerOnlineFixHandlers(() => { invalidateGamesCache() })
-  registerDrmHandlers()
+  await registerDrmHandlers()
   registerDrmPluginHandlers()
   registerSteamLogWatcherHandlers()
   registerStoreImageHandlers()

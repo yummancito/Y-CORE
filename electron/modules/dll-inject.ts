@@ -205,8 +205,10 @@ export interface InstallHookDllOpts {
 
 export async function installHookDll(steamPath: string, mode: 'release' | 'debug' = 'release', opts: InstallHookDllOpts = {}): Promise<{ success: boolean; error?: string; installed: boolean; unsupportedBuild?: boolean }> {
   const appRoot = getAppRoot()
-  const steamlessSrcDir = path.join(appRoot, 'tools', 'steamless')
-  const destSteamlessDir = path.join(steamPath, 'steamless')
+  // NOTE: Steamless has been removed from Y-core's DRM removal system.
+  // Only native C++ steamstub_remover.dll is used now.
+  // const steamlessSrcDir = path.join(appRoot, 'tools', 'steamless')
+  // const destSteamlessDir = path.join(steamPath, 'steamless')
 
   const ostDir = path.join(appRoot, 'native', mode === 'debug' ? 'opensteamtool-debug' : 'opensteamtool')
   const ostHookPath = path.join(ostDir, 'YCoreTool.dll')
@@ -270,9 +272,10 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
   })
 
   if (hookFilesUpToDate(hookPath, dwmapiPath, xinputPath, destHook, destDwmapi, destXinput) && !buildIdChanged) {
-    if (!fs.existsSync(path.join(destSteamlessDir, 'Steamless.CLI.exe')) && fs.existsSync(steamlessSrcDir)) {
-      try { fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true }) } catch {}
-    }
+    // NOTE: Steamless copy removed (native module only)
+    // if (!fs.existsSync(path.join(destSteamlessDir, 'Steamless.CLI.exe')) && fs.existsSync(steamlessSrcDir)) {
+    //   try { fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true }) } catch {}
+    // }
     writeLastBuildId(steamPath, currentBuildId)
     return { success: true, installed: false }
   }
@@ -327,7 +330,8 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
       const tomlSrc = path.join(ostDir, 'ycoretool.toml')
       const tomlDst = path.join(steamPath, 'ycoretool.toml')
       if (fs.existsSync(tomlSrc)) fs.copyFileSync(tomlSrc, tomlDst)
-      if (fs.existsSync(steamlessSrcDir)) fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true })
+      // NOTE: Steamless copy removed (native module only)
+      // if (fs.existsSync(steamlessSrcDir)) fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true })
       writeLastBuildId(steamPath, currentBuildId)
       monitorAndRemediateHook(steamPath, signatureResults, currentBuildId).catch((err: any) => {
         logger.error(`monitorAndRemediateHook error: ${err.message}`, 'dll-inject')
@@ -371,7 +375,8 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
     const tomlSrc = path.join(ostDir, 'ycoretool.toml')
     const tomlDst = path.join(steamPath, 'ycoretool.toml')
     if (fs.existsSync(tomlSrc)) fs.copyFileSync(tomlSrc, tomlDst)
-    if (fs.existsSync(steamlessSrcDir)) fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true })
+    // NOTE: Steamless copy removed (native module only)
+    // if (fs.existsSync(steamlessSrcDir)) fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true })
 
     if (!fs.existsSync(destHook) || !fs.existsSync(destDwmapi) || !fs.existsSync(destXinput)) {
       return { success: false, error: 'errors.hook.notCopied', installed: false }

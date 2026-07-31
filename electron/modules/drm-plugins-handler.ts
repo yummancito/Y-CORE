@@ -17,6 +17,50 @@ import type { DrmDetectionResult, DrmRemovalResult } from './drm-plugins/types'
  */
 export function registerDrmPluginHandlers(): void {
   /**
+   * Legacy handler: Remove DRM from game (maps to plugin system)
+   */
+  ipcMain.handle('drm:remove', async (_event, appId: string) => {
+    try {
+      logger.info(`[DRM Handler] Legacy drm:remove call for app ${appId}`, 'drm')
+      const { removeGameDrm } = await import('./drm-remover')
+      const result = await removeGameDrm(appId)
+      return result
+    } catch (err) {
+      logger.error(
+        `[DRM Handler] Legacy removal failed: ${err instanceof Error ? err.message : 'unknown'}`,
+        'drm'
+      )
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Unknown error',
+        hadDrm: false,
+        errorKey: 'drm.error.removalFailed',
+      }
+    }
+  })
+
+  /**
+   * Legacy handler: Check DRM status
+   */
+  ipcMain.handle('drm:status', async (_event, appId: string) => {
+    try {
+      logger.info(`[DRM Handler] Legacy drm:status call for app ${appId}`, 'drm')
+      const { checkDrmStatus } = await import('./drm-remover')
+      const result = await checkDrmStatus(appId)
+      return result
+    } catch (err) {
+      logger.error(
+        `[DRM Handler] Legacy status check failed: ${err instanceof Error ? err.message : 'unknown'}`,
+        'drm'
+      )
+      return {
+        status: 'not-found',
+        message: err instanceof Error ? err.message : 'Status check failed',
+      }
+    }
+  })
+
+  /**
    * Detect all DRMs in a game
    */
   ipcMain.handle('drm:plugins:detect-all', async (_event, exePath: string, gameDir: string, appId?: string) => {

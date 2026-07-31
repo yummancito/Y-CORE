@@ -9,7 +9,7 @@ import type { DrmPlugin, DrmDetectionResult, DrmRemovalResult, DrmInfo } from '.
 import { securomPlugin } from './securom-plugin'
 import { tagesPlugin } from './tages-plugin'
 import { denuvoPlugin } from './denuvo-plugin'
-import { steamstubPlugin } from './steamstub-wrapper'
+import { steamstubPlugin } from './steamstub-plugin'
 
 /**
  * DRM Plugin Registry

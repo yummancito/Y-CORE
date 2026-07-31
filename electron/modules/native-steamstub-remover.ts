@@ -31,7 +31,7 @@ export interface SteamStubDetectionResult {
 export interface SteamStubRemovalResult {
   success: boolean
   hadDrm: boolean
-  backupPath: string
+  backupPath: string | undefined
   outputPath: string
   bytesRemoved: number
   detailedMessage: string
@@ -138,11 +138,18 @@ function candidateDllPaths(): string[] {
     // app not ready yet
   }
 
-  // Development paths
-  const root = path.join(__dirname, '..', '..')
+  // Development paths - use absolute path from app root
+  let root: string
+  try {
+    root = app.getAppPath()
+  } catch {
+    root = process.cwd()
+  }
+
   paths.push(path.join(root, 'native', 'steamstub-remover', 'build', 'bin', 'Release', 'steamstub_remover.dll'))
   paths.push(path.join(root, 'native', 'steamstub-remover', 'build', 'bin', 'steamstub_remover.dll'))
   paths.push(path.join(root, 'resources', 'native', 'steamstub_remover.dll'))
+  paths.push(path.join(root, 'dist-electron', 'native', 'steamstub-remover', 'build', 'bin', 'Release', 'steamstub_remover.dll'))
 
   return paths
 }
@@ -231,6 +238,10 @@ function validatePath(filePath: string): boolean {
 
 /**
  * Detect SteamStub DRM in a PE executable without modifying it.
+ *
+ * NOTE: Current implementation checks basic PE structure.
+ * Full SteamStub detection requires proper koffi struct handling
+ * to call the native C++ module's detectSteamStub() function.
  */
 export async function detectSteamStub(exePath: string): Promise<SteamStubDetectionResult> {
   if (!validatePath(exePath)) {
@@ -241,25 +252,41 @@ export async function detectSteamStub(exePath: string): Promise<SteamStubDetecti
     })
   }
 
-  if (!ensureLoaded()) {
-    logger.warn(`[steamstub-remover] DLL unavailable: ${loadFailureReason}`, 'native')
-    return {
-      detected: false,
-      version: null,
-      confidence: 0,
-      stubType: null,
-    }
-  }
-
   try {
-    // Call native function
-    // This is a simplified version; actual koffi integration needs proper struct handling
-    const exePathBuf = Buffer.from(exePath, 'utf-8')
+    // First: Validate it's a PE executable
+    const isValid = await isValidPE(exePath)
+    if (!isValid) {
+      logger.warn(`[steamstub-remover] File is not a valid PE: ${exePath}`, 'native')
+      return {
+        detected: false,
+        version: null,
+        confidence: 0,
+        stubType: null,
+      }
+    }
 
-    // Note: This would need proper koffi struct support in actual implementation
+    // Check if native DLL is available
+    const available = ensureLoaded()
+    if (!available) {
+      logger.warn(`[steamstub-remover] DLL unavailable: ${loadFailureReason}`, 'native')
+      // Return "no detection possible" rather than false positive
+      return {
+        detected: false,
+        version: null,
+        confidence: 0,
+        stubType: null,
+      }
+    }
+
     logger.info(`[steamstub-remover] Detecting SteamStub in: ${exePath}`, 'native')
 
-    // Placeholder for actual native call
+    // TODO: Implement actual koffi call to native module:
+    // const exePathBuf = Buffer.from(exePath, 'utf-8')
+    // const outResult = Buffer.alloc(256)
+    // const status = binding.detect(exePathBuf, [outResult])
+    // if (status !== SteamStubStatus.OK) { throw error }
+
+    // For now: return no detection but log that module is ready
     return {
       detected: false,
       version: null,
@@ -280,11 +307,14 @@ export async function detectSteamStub(exePath: string): Promise<SteamStubDetecti
  * Remove SteamStub DRM from a PE executable.
  *
  * Flow:
- *   1. Validates PE file
- *   2. Detects SteamStub
+ *   1. Validates PE file and path
+ *   2. Checks if native module is available
  *   3. Creates automatic backup
- *   4. Unpacks stub and restores original entry point
+ *   4. Calls native C++ unpacking routine (when implemented)
  *   5. Verifies result with SHA256 checksum
+ *
+ * NOTE: Current implementation is a stub. Full implementation requires
+ * proper koffi struct handling to call the native steamstub_remover.dll
  */
 export async function removeSteamStub(
   exePath: string,
@@ -302,32 +332,62 @@ export async function removeSteamStub(
     })
   }
 
-  if (!ensureLoaded()) {
-    logger.error(`[steamstub-remover] DLL unavailable: ${loadFailureReason}`, 'native')
-    throw new SteamStubNativeError({
-      code: SteamStubStatus.INTERNAL,
-      technical: loadFailureReason,
-      operation: 'remove SteamStub',
-    })
-  }
-
   try {
+    // Validate it's a PE executable
+    const isValid = await isValidPE(exePath)
+    if (!isValid) {
+      logger.error(`[steamstub-remover] File is not a valid PE: ${exePath}`, 'native')
+      return {
+        success: false,
+        hadDrm: false,
+        backupPath: undefined,
+        outputPath: exePath,
+        bytesRemoved: 0,
+        detailedMessage: 'Target file is not a valid PE executable',
+      }
+    }
+
+    // Check if native DLL is available
+    if (!ensureLoaded()) {
+      logger.error(`[steamstub-remover] Native module unavailable: ${loadFailureReason}`, 'native')
+      return {
+        success: false,
+        hadDrm: false,
+        backupPath: undefined,
+        outputPath: exePath,
+        bytesRemoved: 0,
+        detailedMessage: `Native module unavailable: ${loadFailureReason}`,
+      }
+    }
+
     logger.info(
-      `[steamstub-remover] Removing SteamStub from: ${exePath}` +
+      `[steamstub-remover] Attempting removal from: ${exePath}` +
         (options?.backupPath ? ` (backup: ${options.backupPath})` : ''),
       'native'
     )
 
-    // Simplified implementation (actual koffi calls would go here)
-    const backupPath = options?.backupPath || exePath + '.backup'
+    // TODO: Implement actual koffi calls to native module:
+    // 1. Create backup
+    // const backupPath = options?.backupPath || exePath + '.bak'
+    // fs.copyFileSync(exePath, backupPath)
+    //
+    // 2. Call native remove function:
+    // const exePathBuf = Buffer.from(exePath, 'utf-8')
+    // const backupPathBuf = Buffer.from(backupPath, 'utf-8')
+    // const outResult = Buffer.alloc(512)
+    // const status = binding.remove(exePathBuf, backupPathBuf, null, 0, [outResult])
+    //
+    // 3. Parse result and return success
 
+    // For now: return stub response (no-op)
+    const backupPath = options?.backupPath || exePath + '.backup'
     return {
-      success: true,
+      success: false,  // Stub: no actual removal possible yet
       hadDrm: false,
       backupPath,
       outputPath: options?.outputPath || exePath,
       bytesRemoved: 0,
-      detailedMessage: 'SteamStub removal process completed',
+      detailedMessage: 'Native module koffi integration not yet implemented (awaiting struct support)',
     }
   } catch (err: any) {
     logger.error(`[steamstub-remover] Removal failed: ${err.message}`, 'native')

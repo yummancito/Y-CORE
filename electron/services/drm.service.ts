@@ -106,14 +106,17 @@ export const drmService = {
     }
 
     try {
-      // Try plugin-based removal first
+      // Use native C++ plugin for removal only
       const result = await drmPluginRegistry.removeWithBestPlugin(paths.exePath, paths.gameDir, appId)
       return result
     } catch (err) {
-      // Fallback to legacy Steamless method
-      logger.warn(`[DRM Service] Plugin removal failed, falling back to Steamless: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')
-      const legacyResult = await removeGameDrm(appId)
-      return legacyResult
+      logger.error(`[DRM Service] Plugin removal failed: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Removal failed',
+        hadDrm: false,
+        errorKey: 'drm.error.removalFailed',
+      }
     }
   },
 

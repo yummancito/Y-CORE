@@ -10,7 +10,7 @@ export type { Platform, RiskLevel, RemovalMethod } from './types'
 export { securomPlugin } from './securom-plugin'
 export { tagesPlugin } from './tages-plugin'
 export { denuvoPlugin, type DenuvoWhitelistEntry } from './denuvo-plugin'
-export { steamstubPlugin } from './steamstub-wrapper'
+export { steamstubPlugin } from './steamstub-plugin'
 
 export { drmPluginRegistry } from './registry'
 
