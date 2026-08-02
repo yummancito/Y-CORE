@@ -18,16 +18,19 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import { fileURLToPath } from 'url'
+import koffi from 'koffi'  // ESM import (require() NO existe en .mjs)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
 const nativeDir = path.join(rootDir, 'resources', 'native')
 const dllPath = path.join(nativeDir, 'ycore_steam.dll')
 
-// URL del DLL pre-compilado (GitHub releases o CDN)
-// Cambiar si tienes servidor propio
+// URL del DLL pre-compilado (GitHub releases o CDN).
+// Round-13: la v3.0.1 distribuía el DLL BASURA (177,664 bytes, cero exports)
+// — NUNCA descargar de una release anterior a v4.2.6. El fallback solo se
+// usa cuando no hay DLL válido local y cmake no está disponible.
 const PREBUILT_URL = process.env.YCORE_STEAM_DLL_URL ||
-  'https://github.com/yummancito/Y-CORE/releases/download/v3.0.1/ycore_steam.dll'
+  'https://github.com/yummancito/Y-CORE/releases/download/v4.2.6/ycore_steam.dll'
 
 console.log('[build-or-download-dll] Iniciando builder con fallback...')
 
@@ -134,12 +137,60 @@ function downloadPrebuilt() {
 }
 
 /**
- * Verifica si el DLL ya existe y es válido
+ * Verifica si el DLL ya existe y es válido.
+ *
+ * Round-13 FIX (bug crítico): antes solo se validaba el TAMAÑO (0-100MB),
+ * lo que dejaba pasar cualquier archivo con ese rango — incluyendo el DLL
+ * basura de 177,664 bytes que se distribuyó en releases y que NO exportaba
+ * ninguna función del emulador (los juegos abrían contra Steam real →
+ * "Comprar" en la librería, y el log mostraba "Cannot find function
+ * ycore_steam_version"). Ahora se valida que el PE exporte realmente las
+ * funciones que el bridge TS (electron/modules/local-steam-emulator.ts)
+ * bindea con koffi. Si el DLL es inválido → se fuerza compilar/descargar.
  */
 function isDllValid() {
   if (!fs.existsSync(dllPath)) return false
   const stats = fs.statSync(dllPath)
-  return stats.size > 0 && stats.size < 100 * 1024 * 1024 // 0-100MB válido
+  if (!(stats.size > 0 && stats.size < 100 * 1024 * 1024)) return false
+
+  // Validación de exports reales. koffi lanza "Cannot find function" si un
+  // símbolo no existe en el PE (o si el archivo no es un DLL válido).
+  // Cada export se bindea UNA sola vez con su firma real — re-bindear el
+  // mismo símbolo con otra firma puede lanzar error en koffi.
+  const REQUIRED_EXPORTS = [
+    ['const char*', 'ycore_steam_version'],
+    ['int', 'ycore_steam_short_sha'],
+    ['int', 'ycore_steam_init'],
+    ['void', 'ycore_steam_shutdown'],
+    ['int', 'ycore_steam_restart_app_if_necessary'],
+    ['void', 'ycore_steam_run_callbacks'],
+    ['unsigned int', 'ycore_steam_get_h_steam_user'],
+    ['unsigned int', 'ycore_steam_get_h_steam_pipe'],
+    ['unsigned int', 'ycore_steam_get_app_id'],
+    ['const void*', 'ycore_steam_iface_user'],
+    ['const void*', 'ycore_steam_iface_utils'],
+    ['const void*', 'ycore_steam_iface_apps'],
+    ['const void*', 'ycore_steam_iface_client'],
+    ['const void*', 'ycore_steam_iface_networking'],
+  ]
+  try {
+    const lib = koffi.load(dllPath)
+    let versionFn = null
+    for (const [ret, name] of REQUIRED_EXPORTS) {
+      const fn = lib.func(`${ret} ${name}()`)
+      if (name === 'ycore_steam_version') versionFn = fn
+    }
+    // Sanity check mínimo: version() debe devolver un string no vacío.
+    const version = versionFn ? versionFn() : null
+    if (!version || !String(version).length) {
+      console.log(`[build-or-download-dll] ✗ ycore_steam.dll presente pero version() inválida (${String(version)})`)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.log(`[build-or-download-dll] ✗ ycore_steam.dll presente pero exports inválidos: ${err?.message ?? err}`)
+    return false
+  }
 }
 
 /**
