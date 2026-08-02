@@ -34,8 +34,9 @@ import { CustomizationPanel } from '../components/settings/CustomizationPanel'
 import type { LogConfig } from '../domain/types'
 import { sendDiscordReport } from '../lib/discord-report'
 import { useDefenderFixStore } from '../stores/useDefenderFixStore'
+import PcAnalyzerCard from '../components/diagnostics/PcAnalyzerCard'
 
-type SettingsTab = 'account' | 'logs' | 'personalization' | 'community'
+type SettingsTab = 'account' | 'logs' | 'personalization' | 'community' | 'diagnostics'
 
 interface TabConfig {
   id: SettingsTab
@@ -47,6 +48,7 @@ const TABS: TabConfig[] = [
   { id: 'account', label: 'settings.tabAccount', icon: User },
   { id: 'logs', label: 'settings.tabLogs', icon: ScrollText },
   { id: 'personalization', label: 'settings.tabPersonalization', icon: Palette },
+  { id: 'diagnostics', label: 'settings.tabDiagnostics', icon: Activity },
   { id: 'community', label: 'settings.tabCommunity', icon: Users },
 ]
 
@@ -704,6 +706,24 @@ export default function SettingsPage() {
 
           {/* Advanced customization */}
           <CustomizationPanel />
+        </div>
+      )}
+
+      {/* Diagnostics tab */}
+      {activeTab === 'diagnostics' && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-lg font-bold text-text-bright">{t('settings.diagnostics')}</h2>
+            <p className="text-xs text-text-dim mt-0.5">{t('settings.diagnosticsDesc')}</p>
+          </div>
+
+          <Card>
+            <PcAnalyzerCard />
+          </Card>
+
+          <Card>
+            <DefenderCard />
+          </Card>
         </div>
       )}
 

@@ -260,6 +260,9 @@ interface Window {
       restored: boolean
       error?: string
     }>
+
+    // ── PC Analyzer ────────────────────────────────────────────────────
+    analyzePc: () => Promise<any>
   }
 }
 

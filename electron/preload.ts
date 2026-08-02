@@ -241,6 +241,10 @@ contextBridge.exposeInMainWorld('steamtools', {
   // Streams progress via onAppEvent('app:installToolchain:progress', cb),
   // fires onAppEvent('app:installToolchain:finished', cb) on completion.
   installToolchain: () => ipcRenderer.invoke('app:installToolchain'),
+
+  // ── PC Analyzer — diagnóstico completo del sistema para enviar a Discord
+  analyzePc: () => ipcRenderer.invoke('app:analyzePc'),
+
   runManualInstaller: (installerPath: string) => ipcRenderer.invoke('app:runManualInstaller', installerPath),
   onUpdateAvailable: (callback: (info: { version?: string }) => void) => {
     const handler = (_event: any, info: { version?: string }) => callback(info)

@@ -510,6 +510,9 @@ const es: Dict = {
   'settings.tabAccount': 'Cuenta',
   'settings.tabLogs': 'Logs',
   'settings.tabPersonalization': 'Personalización',
+  'settings.tabDiagnostics': 'Diagnóstico',
+  'settings.diagnostics': 'Diagnóstico del Sistema',
+  'settings.diagnosticsDesc': 'Analiza Y-Core y Steam para detectar problemas. Envía el reporte a Discord para recibir ayuda.',
 
   // Account
   'settings.account': 'Cuenta',

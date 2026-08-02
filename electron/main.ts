@@ -101,6 +101,7 @@ import { initDiscordRpc, shutdownDiscordRpc } from './modules/discord-rpc'
 import { showDefenderWarningIfNeeded, scanDlls } from './modules/defender-check'
 import { runDefenderFix } from './modules/defender-fix'
 import { getEmulatorDiagnostics } from './modules/emulator-diagnostics'
+import { analyzePc } from './modules/pc-analyzer'
 import { checkToolchain, buildEmulator, tryAutoBuildOnce } from './modules/build-emulator'
 import { tryInstallCmake } from './modules/install-toolchain'
 import { isSteamRunning, getSteamPath } from './modules/steam-helpers'
@@ -878,6 +879,16 @@ if (gotTheLock) {
       return { success }
     } catch (err: any) {
       return { success: false }
+    }
+  })
+
+  // ── Análisis completo del PC (Y-Core + Steam) para envío a Discord ─────
+  ipcMain.handle('app:analyzePc', async () => {
+    try {
+      return await analyzePc()
+    } catch (err: any) {
+      logger.error(`[main] analyzePc error: ${err?.message ?? err}`, 'diagnostics')
+      return { error: err?.message ?? String(err) }
     }
   })
 

@@ -443,6 +443,9 @@ export default {
   'settings.tabAccount': 'Account',
   'settings.tabLogs': 'Logs',
   'settings.tabPersonalization': 'Personalization',
+  'settings.tabDiagnostics': 'Diagnostics',
+  'settings.diagnostics': 'System Diagnostics',
+  'settings.diagnosticsDesc': 'Analyze Y-Core and Steam to detect issues. Send the report to Discord for help.',
 
   // Account
   'settings.account': 'Account',
