@@ -404,3 +404,88 @@ export interface ModInfo {
    - FIX #10: Version tracking
    - FIX #13: Unicode support
    - FIX #16: Read-only files
+
+---
+
+# Y-CORE v4.3.0 — Cambios Detallados (2026-08-03)
+
+## File: electron/modules/hook-auto-repair.ts (NUEVO)
+
+### Change 1: Watchdog de auto-reparación del hook (Round-13)
+**What Changed**:
+- Nuevo módulo de fondo que reemplaza el reintento acotado de `main.ts` (30 × 1min → se rendía para siempre).
+- Corre una pasada al arrancar y cada 60s (configurable), con timer `unref` (no bloquea el cierre de la app).
+- **Sin falsos negativos**: verifica el trío completo (`YCoreTool.dll` + `dwmapi.dll` + `xinput1_4.dll`) vía `checkSteamVerification()`, además del cambio de build de Steam.
+- **Sin falsos positivos**: si el trío está completo y el build no cambió → short-circuit `healthy` sin reinstalar.
+- **Nunca fuerza Steam**: si Steam está corriendo → `deferred` y reintenta al cerrarse. Re-chequea `isSteamRunning()` justo antes de instalar (ventana de carrera).
+- **Consent gate**: sin `hook_consent.txt` ni hook pre-existente → `no-consent`, no instala en silencio.
+- Logs solo en transiciones de estado (sin spam cada 60s).
+
+**API pública**:
+```typescript
+startHookAutoRepair(opts?: { intervalMs?: number }): void
+stopHookAutoRepair(): void
+runHookAutoRepairPass(): Promise<HookAutoRepairStatus>
+getHookAutoRepairState(): HookAutoRepairState
+```
+
+## File: electron/modules/pc-analyzer.ts
+
+### Change 2: Detección de sección `depots` corregida
+**Before**: buscaba `"Depots"` (mayúscula) → falso negativo en config.vdf reales.
+**After**: `/\"depots\"\s*\{/i` — case-insensitive, igual que `depot-keys.ts`.
+
+### Change 3: Emulador con datos reales (tamaño + exports)
+**Before**: `dllSizeMB: null`, `exportCount: 0` (stubs hardcodeados → el reporte salía `?MB, 0 exports`).
+**After**: `analyzeEmulator()` async usando `getEmulatorDiagnostics()` (parser PE) → valores reales.
+
+### Change 4: Issues de config.vdf sin contradicción
+**Before**: `!hasDepotsSection` (warning) e `exists && depotCount === 0` (info) disparaban a la vez.
+**After**: `else-if` — o falta la sección, o existe sin claves, nunca ambos.
+
+### Change 5: cmake y hook sin alarmas falsas
+- cmake ausente + emulador disponible → INFO (solo importa para recompilar).
+- Hook ausente + consentimiento → INFO "reparación pendiente" con estado real del watchdog (`getHookAutoRepairState()`).
+
+## File: electron/modules/dll-inject.ts
+
+### Change 6: Exports para el watchdog
+`readLastBuildId`, `hasHookConsent`, `hookPresent` pasan de privados a `export`.
+
+## File: electron/main.ts
+
+### Change 7: Arranque del watchdog
+- Importa `startHookAutoRepair` y lo lanza en `app.whenReady()`.
+- Elimina el bloque de reintento acotado (`MAX_RETRIES = 30`).
+- Remueve import sin uso (`getSteamPath`).
+
+## File: tests/e2e-hook-auto-repair.test.ts (NUEVO)
+
+### Change 8: 15 tests E2E de la matriz de decisión
+Cubre: healthy short-circuit, falso negativo (`dwmapi.dll` faltante), defer con Steam corriendo, race window, consent gate (explícito e implícito), `install-failed`, build cambiado, ciclo de vida del watchdog, y verificación de contenido (main.ts sin `MAX_RETRIES`, exports de dll-inject, integración en pc-analyzer).
+
+## Test Summary
+
+| Suite | Tests |
+|---|---|
+| e2e-hook-auto-repair | 15 |
+| acf-pure-functions | 23 |
+| depot-keys | 7 |
+| vdf-parser | 8 |
+| local-installation-diagnostics | 2 |
+| **Total verificado** | **55** |
+
+> Nota: el suite completo del repo tiene 16 fallos pre-existentes en archivos
+> ajenos a esta release (p. ej. `e2e-runtime-verification` espera
+> `registry.register('mods')` tras la eliminación de mods, y
+> `local-steam-emulator` exige formato semver para una cadena de versión que
+> el DLL real devuelve como `ycore_steam 0.3.0 (v5)`).
+
+## Breaking Changes
+
+**None.** Todos los cambios son retrocompatibles; el watchdog reemplaza un reintento interno sin cambios de API del renderer.
+
+## Performance Impact
+
+- Watchdog: ~0ms cuando el hook está sano (solo `fs.existsSync` + lectura de buildid).
+- `tasklist` (isSteamRunning) solo se invoca cuando el hook necesita reparación, no cada tick.

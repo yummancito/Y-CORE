@@ -29,7 +29,7 @@ vi.mock('electron', () => ({
     on: vi.fn(),
     getPath: vi.fn(() => '/tmp/ycore-test'),
     getAppPath: vi.fn(() => '/tmp/ycore-test'),
-    getVersion: vi.fn(() => '4.2.9'),
+    getVersion: vi.fn(() => '4.3.0'),
     isPackaged: false,
   },
 }))
