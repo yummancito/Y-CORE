@@ -83,34 +83,66 @@ export class SteamStubNativeError extends Error {
 // ---------------------------------------------------------------------------
 // Native Binding Interface (via koffi FFI)
 // ---------------------------------------------------------------------------
+//
+// Struct layouts below mirror native/steamstub-remover/include/steamstub_remover.h
+// exactly. koffi marshals these as out-parameters (pointer to struct); the
+// native side writes into caller-allocated memory, so no manual buffer/offset
+// math is needed on the JS side.
+
+export interface NativeDetectionResult {
+  detected: number
+  version: string | null
+  confidence: number
+  stub_type: string | null
+}
+
+export interface NativeRemovalResult {
+  success: number
+  had_drm: number
+  backup_path: string | null
+  output_path: string | null
+  bytes_removed: number
+  detailed_message: string | null
+}
+
+export interface NativeChecksum {
+  sha256_hex: string
+  file_size: number | bigint
+}
 
 interface NativeBinding {
   version: () => string
   lastError: () => string
-  freeString: (s: Buffer | null) => void
+  freeString: (s: string | null) => void
 
   // Detection
-  detect: (exePath: Buffer, out: Buffer[]) => number
+  detect: (exePath: string, out: NativeDetectionResult) => number
 
   // Removal
   remove: (
-    exePath: Buffer,
-    backupPath: Buffer | null,
-    outputPath: Buffer | null,
+    exePath: string,
+    backupPath: string | null,
+    outputPath: string | null,
     forceClean: number,
-    out: Buffer[]
+    out: NativeRemovalResult
   ) => number
 
   // Backup/restore
-  restoreFromBackup: (backupPath: Buffer, outputPath: Buffer | null, out: Buffer[]) => number
+  restoreFromBackup: (backupPath: string, outputPath: string | null, out: [string | null]) => number
 
   // Checksums
-  computeChecksum: (filePath: Buffer, out: Buffer[]) => number
-  verifyChecksum: (filePath: Buffer, expectedHex: Buffer, out: Buffer[]) => number
+  computeChecksum: (filePath: string, out: NativeChecksum) => number
+  verifyChecksum: (filePath: string, expectedHex: string, out: [number]) => number
 
   // File info
-  isValidPE: (filePath: Buffer, out: Buffer[]) => number
-  getPEInfo: (filePath: Buffer, out: Buffer[]) => number
+  isValidPE: (filePath: string, out: [number]) => number
+  getPEInfo: (
+    filePath: string,
+    outIs32Bit: [number],
+    outEntryPoint: [number],
+    outImageBase: [number | bigint],
+    outSizeOfImage: [number]
+  ) => number
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +165,14 @@ function candidateDllPaths(): string[] {
       // Fallback: resources/native root
       paths.push(path.join(process.resourcesPath, 'native', 'steamstub_remover.dll'))
       paths.push(path.join(process.resourcesPath, 'steamstub_remover.dll'))
+      // electron-builder's `files: ["native/**/*"]` packs this DLL preserving
+      // its source-tree relative path under app.asar.unpacked/ (native DLLs
+      // can't live inside the asar archive), NOT flattened into resources/native/
+      // like ycore.dll (which fix-exe.js explicitly copies there). Without this
+      // candidate, the packaged app can never find the real DLL and silently
+      // falls back to "unavailable" on every install.
+      paths.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'native', 'steamstub-remover', 'build', 'bin', 'Release', 'steamstub_remover.dll'))
+      paths.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'native', 'steamstub-remover', 'build', 'bin', 'steamstub_remover.dll'))
     }
   } catch {
     // app not ready yet
@@ -185,18 +225,56 @@ function ensureLoaded(): boolean {
     const koffi = require('koffi')
     const lib = koffi.load(dllPath)
 
-    // Type-safe wrapper object
+    // Struct layouts must match steamstub_remover.h byte-for-byte.
+    const DetectionResult = koffi.struct('SteamStubDetectionResult', {
+      detected: 'int',
+      version: 'const char*',
+      confidence: 'int',
+      stub_type: 'const char*',
+    })
+    const RemovalResult = koffi.struct('SteamStubRemovalResult', {
+      success: 'int',
+      had_drm: 'int',
+      backup_path: 'char*',
+      output_path: 'char*',
+      bytes_removed: 'int',
+      detailed_message: 'char*',
+    })
+    const Checksum = koffi.struct('SteamStubChecksum', {
+      sha256_hex: koffi.array('char', 65),
+      file_size: 'size_t',
+    })
+
+    // Type-safe wrapper object. Every out-parameter is an explicit
+    // koffi.out(koffi.pointer(...)) so koffi copies the native-populated
+    // struct/scalar back into the JS object/array passed at the call site.
     binding = {
-      version: lib.declare('const char* steamstub_version(void)'),
-      lastError: lib.declare('const char* steamstub_last_error(void)'),
-      freeString: lib.declare('void steamstub_free_string(char* s)'),
-      detect: lib.declare('int steamstub_detect(const char* exe_path, void* out_result)'),
-      remove: lib.declare('int steamstub_remove(const char* exe_path, const char* backup_path, const char* output_path, int force_clean, void* out_result)'),
-      restoreFromBackup: lib.declare('int steamstub_restore_from_backup(const char* backup_path, const char* output_path, void* out_restored_path)'),
-      computeChecksum: lib.declare('int steamstub_compute_checksum(const char* file_path, void* out_checksum)'),
-      verifyChecksum: lib.declare('int steamstub_verify_checksum(const char* file_path, const char* expected_sha256_hex, int* out_matches)'),
-      isValidPE: lib.declare('int steamstub_is_valid_pe(const char* file_path, int* out_is_pe)'),
-      getPEInfo: lib.declare('int steamstub_get_pe_info(const char* file_path, int* out_is_32bit, unsigned int* out_entry_point, unsigned long long* out_image_base, unsigned int* out_size_of_image)'),
+      version: lib.func('steamstub_version', 'str', []),
+      lastError: lib.func('steamstub_last_error', 'str', []),
+      freeString: lib.func('steamstub_free_string', 'void', ['str']),
+      detect: lib.func('steamstub_detect', 'int', ['str', koffi.out(koffi.pointer(DetectionResult))]),
+      remove: lib.func('steamstub_remove', 'int', [
+        'str',
+        'str',
+        'str',
+        'int',
+        koffi.out(koffi.pointer(RemovalResult)),
+      ]),
+      restoreFromBackup: lib.func('steamstub_restore_from_backup', 'int', [
+        'str',
+        'str',
+        koffi.out(koffi.pointer('str')),
+      ]),
+      computeChecksum: lib.func('steamstub_compute_checksum', 'int', ['str', koffi.out(koffi.pointer(Checksum))]),
+      verifyChecksum: lib.func('steamstub_verify_checksum', 'int', ['str', 'str', koffi.out(koffi.pointer('int'))]),
+      isValidPE: lib.func('steamstub_is_valid_pe', 'int', ['str', koffi.out(koffi.pointer('int'))]),
+      getPEInfo: lib.func('steamstub_get_pe_info', 'int', [
+        'str',
+        koffi.out(koffi.pointer('int')),
+        koffi.out(koffi.pointer('uint32_t')),
+        koffi.out(koffi.pointer('uint64_t')),
+        koffi.out(koffi.pointer('uint32_t')),
+      ]),
     } as NativeBinding
 
     loadedDllPath = dllPath
@@ -280,18 +358,24 @@ export async function detectSteamStub(exePath: string): Promise<SteamStubDetecti
 
     logger.info(`[steamstub-remover] Detecting SteamStub in: ${exePath}`, 'native')
 
-    // TODO: Implement actual koffi call to native module:
-    // const exePathBuf = Buffer.from(exePath, 'utf-8')
-    // const outResult = Buffer.alloc(256)
-    // const status = binding.detect(exePathBuf, [outResult])
-    // if (status !== SteamStubStatus.OK) { throw error }
+    const out: NativeDetectionResult = { detected: 0, version: null, confidence: 0, stub_type: null }
+    const status = binding!.detect(exePath, out)
 
-    // For now: return no detection but log that module is ready
+    if (status !== SteamStubStatus.OK) {
+      const technical = binding!.lastError()
+      // NOT_PE / NO_STUB just mean "nothing found", not an operational failure.
+      if (status === SteamStubStatus.NOT_PE || status === SteamStubStatus.NO_STUB) {
+        logger.info(`[steamstub-remover] No SteamStub detected: ${technical}`, 'native')
+        return { detected: false, version: null, confidence: 0, stubType: null }
+      }
+      throw new SteamStubNativeError({ code: status, technical, operation: 'detect SteamStub' })
+    }
+
     return {
-      detected: false,
-      version: null,
-      confidence: 0,
-      stubType: null,
+      detected: out.detected === 1,
+      version: out.version || null,
+      confidence: out.confidence,
+      stubType: out.stub_type || null,
     }
   } catch (err: any) {
     logger.error(`[steamstub-remover] Detection failed: ${err.message}`, 'native')
@@ -366,28 +450,52 @@ export async function removeSteamStub(
       'native'
     )
 
-    // TODO: Implement actual koffi calls to native module:
-    // 1. Create backup
-    // const backupPath = options?.backupPath || exePath + '.bak'
-    // fs.copyFileSync(exePath, backupPath)
-    //
-    // 2. Call native remove function:
-    // const exePathBuf = Buffer.from(exePath, 'utf-8')
-    // const backupPathBuf = Buffer.from(backupPath, 'utf-8')
-    // const outResult = Buffer.alloc(512)
-    // const status = binding.remove(exePathBuf, backupPathBuf, null, 0, [outResult])
-    //
-    // 3. Parse result and return success
+    const backupPath = options?.backupPath || null
+    const outputPath = options?.outputPath || null
+    const forceClean = options?.forceClean ? 1 : 0
 
-    // For now: return stub response (no-op)
-    const backupPath = options?.backupPath || exePath + '.backup'
+    const out: NativeRemovalResult = {
+      success: 0,
+      had_drm: 0,
+      backup_path: null,
+      output_path: null,
+      bytes_removed: 0,
+      detailed_message: null,
+    }
+    const status = binding!.remove(exePath, backupPath, outputPath, forceClean, out)
+
+    if (status !== SteamStubStatus.OK) {
+      const technical = binding!.lastError()
+      // NO_STUB (without forceClean) just means the file was already clean.
+      if (status === SteamStubStatus.NO_STUB) {
+        logger.info(`[steamstub-remover] No SteamStub present: ${technical}`, 'native')
+        return {
+          success: true,
+          hadDrm: false,
+          backupPath: undefined,
+          outputPath: exePath,
+          bytesRemoved: 0,
+          detailedMessage: technical || 'No SteamStub DRM detected',
+        }
+      }
+      logger.error(`[steamstub-remover] Removal failed: ${technical}`, 'native')
+      return {
+        success: false,
+        hadDrm: status === SteamStubStatus.ALREADY_UNPACKED,
+        backupPath: undefined,
+        outputPath: exePath,
+        bytesRemoved: 0,
+        detailedMessage: technical || `Removal failed with status ${status}`,
+      }
+    }
+
     return {
-      success: false,  // Stub: no actual removal possible yet
-      hadDrm: false,
-      backupPath,
-      outputPath: options?.outputPath || exePath,
-      bytesRemoved: 0,
-      detailedMessage: 'Native module koffi integration not yet implemented (awaiting struct support)',
+      success: out.success === 1,
+      hadDrm: out.had_drm === 1,
+      backupPath: out.backup_path || undefined,
+      outputPath: out.output_path || outputPath || exePath,
+      bytesRemoved: out.bytes_removed,
+      detailedMessage: out.detailed_message || 'SteamStub removed successfully',
     }
   } catch (err: any) {
     logger.error(`[steamstub-remover] Removal failed: ${err.message}`, 'native')
@@ -427,8 +535,18 @@ export async function restoreFromBackup(
     const finalOutputPath = outputPath || backupPath.replace(/\.backup$/, '')
     logger.info(`[steamstub-remover] Restoring from backup: ${backupPath} -> ${finalOutputPath}`, 'native')
 
-    // Simplified implementation
-    return { restoredPath: finalOutputPath }
+    const out: [string | null] = [null]
+    const status = binding!.restoreFromBackup(backupPath, outputPath || null, out)
+
+    if (status !== SteamStubStatus.OK) {
+      throw new SteamStubNativeError({
+        code: status,
+        technical: binding!.lastError(),
+        operation: 'restore from backup',
+      })
+    }
+
+    return { restoredPath: out[0] || finalOutputPath }
   } catch (err: any) {
     logger.error(`[steamstub-remover] Restore failed: ${err.message}`, 'native')
     throw new SteamStubNativeError({

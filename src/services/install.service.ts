@@ -72,8 +72,8 @@ async function startV2Download(opts: {
   manifestFiles: { depotId: string; manifestId: string }[]
   depotKeys: { depotId: string; key: string }[]
   priority?: number
-  source?: 'steam-native' | 'steamcmd' | 'direct' | 'api_proxy' | 'torrent'
-}): Promise<{ success: boolean; taskId?: string; error?: string }> {
+  source?: 'steam-native' | 'direct' | 'api_proxy' | 'torrent'
+}): Promise<{ success: boolean; taskId?: string; alreadyComplete?: boolean; error?: string }> {
   try {
     const result = await downloadService.startFromApi({
       appId: opts.appId,
@@ -91,6 +91,17 @@ async function startV2Download(opts: {
     const task = tasks.find((t: any) => String(t.appId) === String(opts.appId)) ?? tasks[0]
     if (!task?.id) {
       return { success: false, error: 'engine did not return a task id' }
+    }
+    // Steam-native installs never enter the download-engine's own task table —
+    // download.service.ts's startFromApi does the depot-key/ACF/Lua setup and
+    // hands off to Steam itself for the actual bytes, returning state:'ready'
+    // as a marker that its job is done. waitForV2TaskComplete polls the
+    // engine's getTasks()/getHistory() for this id, which never happens for
+    // Steam-native — every install silently "failed" after a few retries even
+    // though Steam was correctly downloading it. Short-circuit here instead
+    // of handing a task id to the poller that can never resolve it.
+    if (task.state === 'ready') {
+      return { success: true, taskId: task.id, alreadyComplete: true }
     }
     return { success: true, taskId: task.id }
   } catch (err: any) {
@@ -119,6 +130,14 @@ async function waitForV2TaskComplete(
   timeoutMs = 30 * 60 * 1000,
 ): Promise<{ success: boolean; reason: 'completed' | 'failed' | 'timeout' | 'not-found' | 'cancelled' | 'blocked-prereq'; errorMessage?: string }> {
   const deadline = Date.now() + timeoutMs
+  // A task can legitimately be absent from both getTasks() and getHistory()
+  // for the first poll or two right after creation — the engine hasn't
+  // finished registering it yet. Treating that as terminal 'not-found' on
+  // the very first miss silently abandoned real downloads (the caller just
+  // returns without any toast). Requiring a few consecutive misses before
+  // giving up distinguishes the startup race from an actual rotated task.
+  let consecutiveMisses = 0
+  const MAX_CONSECUTIVE_MISSES = 5
   while (Date.now() < deadline) {
     try {
       const r = await downloadService.getTasks()
@@ -134,8 +153,14 @@ async function waitForV2TaskComplete(
           if (histTask.state === 'cancelled') return { success: false, reason: 'cancelled', errorMessage: histTask.errorMessage ?? 'Cancelado por el usuario' }
           if (histTask.state === 'failed') return { success: false, reason: 'failed', errorMessage: histTask.errorMessage }
         }
+        consecutiveMisses++
+        if (consecutiveMisses < MAX_CONSECUTIVE_MISSES) {
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+          continue
+        }
         return { success: false, reason: 'not-found' }
       }
+      consecutiveMisses = 0
       if (task.state === 'completed') return { success: true, reason: 'completed' }
       // Distinguish cancel from failure so the UI can show "cancelled" instead
       // of the misleading "Descarga sin Steam falló" toast when the user hits

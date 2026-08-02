@@ -1208,7 +1208,7 @@ export default function RemotePlayPage() {
                   isActive ? 'bg-accent/15 text-accent' : 'bg-black/30 text-text-dim'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-[18px] h-[18px]" />
               </div>
               <div className="min-w-0">
                 <div className={`text-sm font-bold ${isActive ? 'text-text-bright' : 'text-text-secondary'}`}>

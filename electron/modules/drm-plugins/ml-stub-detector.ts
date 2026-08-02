@@ -246,9 +246,18 @@ export async function analyzePeFile(filePath: string): Promise<PeAnalysis | null
     const sections: PeSection[] = []
     const entropy = new Map<string, number>()
 
-    // Parse section headers (starts at peOffset + 24 = start of COFF header + 20 bytes)
-    const numSections = buffer.readUInt16LE(peOffset + 6)
-    let sectionOffset = peOffset + 24 + 96 // COFF + Optional header
+    // Parse section headers. COFF header starts at peOffset + 4 (right after
+    // the 4-byte "PE\0\0" signature); numberOfSections is at COFF+2,
+    // sizeOfOptionalHeader is at COFF+16. Sections start right after the
+    // Optional Header, whose actual size (96 for PE32, 112 for PE32+, or
+    // anything else a linker chose) is authoritatively given by that COFF
+    // field — reading it beats hardcoding 96 or guessing from the magic
+    // number, which broke 64-bit (PE32+) executables entirely.
+    const coffOffset = peOffset + 4
+    const numSections = buffer.readUInt16LE(coffOffset + 2)
+    const sizeOfOptionalHeader = buffer.readUInt16LE(coffOffset + 16)
+    const optionalHeaderOffset = coffOffset + 20
+    let sectionOffset = optionalHeaderOffset + sizeOfOptionalHeader
 
     for (let i = 0; i < Math.min(numSections, 30); i++) {
       if (sectionOffset + 40 > buffer.length) break
@@ -296,21 +305,25 @@ export async function analyzePeFile(filePath: string): Promise<PeAnalysis | null
 
 function detectSignaturesInBuffer(buffer: Buffer): FoundSignature[] {
   const found: FoundSignature[] = []
+  // Convert once — the previous version re-stringified the remaining
+  // buffer on every iteration (O(n) allocation per match, O(n^2) overall
+  // for files with many hits).
+  const text = buffer.toString('binary')
 
   for (const sig of DRM_SIGNATURES) {
     for (const pattern of sig.patterns) {
-      let offset = 0
-      while (offset < buffer.length) {
-        const match = buffer.toString('binary', offset).match(pattern)
-        if (!match || !match.index) break
-
+      // Force a global, non-sticky-index-reset regex so matchAll can walk
+      // every occurrence, including one at index 0 (the previous
+      // `!match.index` check treated a match at offset 0 as "no match"
+      // and silently dropped it).
+      const globalPattern = new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g')
+      for (const match of text.matchAll(globalPattern)) {
+        if (match.index === undefined) continue
         found.push({
           name: sig.name,
-          offset: offset + match.index,
+          offset: match.index,
           confidence: sig.confidence,
         })
-
-        offset += match.index + 1
       }
     }
   }

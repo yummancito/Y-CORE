@@ -18,6 +18,9 @@ const Y_CORE_ALLOWED_PERMISSIONS = new Set([
   'media',
   'display-capture',
   'audioCapture',
+  'clipboard-read',
+  'clipboard-write',
+  'clipboard-sanitized-write',
 ])
 import path from 'path'
 import fs from 'fs'
@@ -91,13 +94,6 @@ import { registerRemotePlayHandlers } from './handlers/remote-play.handler'
 import { registerCloudSyncHandlers } from './handlers/cloud-sync'
 import { registerOnlineHandlers } from './handlers/online.handler'
 import { registerApiProxyHandlers } from './handlers/api-proxy.handler'
-import {
-  startSteamCmdInstall,
-  cancelSteamCmdInstall,
-  isSteamCmdAvailable,
-  getActiveJobs,
-  shutdownAllSteamCmdJobs,
-} from './modules/steamcmd-manager'
 // Steampipe removed — now using Steam-native downloads instead
 import { registerDownloadHandlers } from './modules/download-ipc'
 import { startAcfWatcher } from './modules/manifest-sync'
@@ -107,7 +103,8 @@ import { runDefenderFix } from './modules/defender-fix'
 import { getEmulatorDiagnostics } from './modules/emulator-diagnostics'
 import { checkToolchain, buildEmulator, tryAutoBuildOnce } from './modules/build-emulator'
 import { tryInstallCmake } from './modules/install-toolchain'
-import { isSteamRunning } from './modules/steam-helpers'
+import { isSteamRunning, getSteamPath } from './modules/steam-helpers'
+import { revalidateHookIfUpdated } from './modules/dll-inject'
 import { isLocalSteamEmulatorAvailable } from './modules/local-steam-emulator'
 import { configService as backendConfigService } from './services/config.service'
 // (Round-11 dead-code block removed)
@@ -126,7 +123,6 @@ import { updateService } from './services/update.service'
 import { onlinefixService } from './services/onlinefix.service'
 // Import drmService lazily to fix Vite resolution
 let drmService: any = null
-import { steamcmdService } from './services/steamcmd.service'
 import { runtimeDetectorService } from './services/runtime-detector.service'
 import { launchProfilesService } from './services/launch-profiles.service'
 import { saveManagerService } from './services/save-manager.service'
@@ -163,7 +159,6 @@ async function registerAllServices(): Promise<void> {
     }
   }
   registry.register('drm', drmService)
-  registry.register('steamcmd', steamcmdService)
   registry.register('storage', storageService)
   registry.register('runtimeDetect', runtimeDetectorService)
   registry.register('launchProfiles', launchProfilesService)
@@ -270,19 +265,72 @@ if (gotTheLock) {
   app.whenReady().then(async () => {
     console.log('[STARTUP] [M] app.whenReady() started')
 
-  // Auto-update OpenSteamTool DLLs (non-blocking, runs in background)
-  // TODO: Fix compilation error in opensteamtool-updater.ts
-  // (async () => {
-  //   try {
-  //     const { checkAndUpdateOpenSteamTool } = await import('./modules/opensteamtool-updater')
-  //     const result = await checkAndUpdateOpenSteamTool()
-  //     if (result.updated) {
-  //       logger.info(`OpenSteamTool updated to ${result.version}`, 'updater')
-  //     }
-  //   } catch (err: any) {
-  //     logger.warn(`Failed to check OpenSteamTool updates: ${err.message}`, 'updater')
-  //   }
-  // })()
+  // Auto-update OpenSteamTool DLLs (non-blocking, runs in background).
+  // Needed because Steam client updates change steamclient.dll's internal
+  // signatures/offsets — this keeps the hook DLLs compatible after Steam updates.
+  ;(async () => {
+    try {
+      const { checkAndUpdateOpenSteamTool } = await import('./modules/opensteamtool-updater')
+      const result = await checkAndUpdateOpenSteamTool()
+      if (result.updated) {
+        logger.info(`OpenSteamTool updated to ${result.version}`, 'updater')
+      }
+    } catch (err: any) {
+      logger.warn(`Failed to check OpenSteamTool updates: ${err.message}`, 'updater')
+    }
+  })()
+
+  // Re-validate the Steam ownership hook after Steam client updates.
+  // When Steam updates, steamclient64.dll's internal signatures change and
+  // the previously-installed YCoreTool/OpenSteamTool hook becomes stale:
+  // the hook gets removed as incompatible and Steam stops faking ownership,
+  // so every game flips to "Comprar" in the Steam library. This background
+  // kick-off re-installs a compatible hook (silently, only when the user has
+  // previously consented — see last_build_id.txt) and retries periodically
+  // while Steam is closed, so games go back to "Play/Jugar" without the user
+  // having to touch Settings → Steam → Verify.
+  ;(async () => {
+    try {
+      const steamPath = getSteamPath()
+      if (!steamPath) return
+      // Bounded retry: once per minute up to 30 attempts (30 min), then give
+      // up quietly so a broken/crashing hook can't cause an install→remove
+      // thrash loop. The user can always trigger a manual Verify in
+      // Settings → Steam which runs the full non-silent flow.
+      const MAX_RETRIES = 30
+      const RETRY_MS = 60 * 1000
+      let attempts = 0
+      let quitSignaled = false
+      const onQuit = () => { quitSignaled = true }
+      app.on('before-quit', onQuit)
+      const tryRevalidate = async (): Promise<boolean> => {
+        if (quitSignaled) return true
+        attempts++
+        try {
+          const ok = await revalidateHookIfUpdated(steamPath)
+          if (ok) logger.info('[hook-revalidation] Steam ownership hook is up to date', 'steam')
+          return ok
+        } catch (err: any) {
+          logger.warn(`[hook-revalidation] check failed: ${err?.message ?? err}`, 'steam')
+          return false
+        }
+      }
+      await tryRevalidate()
+      // If Steam is running or the new signature isn't cached yet, retry
+      // periodically until healthy or the attempt budget is exhausted.
+      const retryTimer = setInterval(async () => {
+        if (quitSignaled || attempts >= MAX_RETRIES) {
+          clearInterval(retryTimer)
+          return
+        }
+        const ok = await tryRevalidate()
+        if (ok) clearInterval(retryTimer)
+      }, RETRY_MS)
+      retryTimer.unref?.()
+    } catch (err: any) {
+      logger.warn(`[hook-revalidation] startup check failed: ${err?.message ?? err}`, 'steam')
+    }
+  })()
 
   // Install permission handler here — NOT at module-top. In this Electron
   // version session.defaultSession is only safe to receive after app is
@@ -853,198 +901,6 @@ if (gotTheLock) {
     }
   })
 
-  // SteamCMD IPC — expone electron/modules/steamcmd-manager.ts al renderer.
-  // Cada handler envuelve try/catch con categoría 'steamcmd' para que
-  // cualquier excepción (sync o async) quede registrada en ycore.log.
-  ipcMain.handle('steamcmd:start', async (_event, opts) => {
-    if (!opts?.appId) {
-      logger.warn('[steamcmd] start sin appId', 'steamcmd')
-      return {
-        success: false,
-        error: 'appId es requerido',
-        errorKey: 'errors.steamcmd.spawnFailed',
-      }
-    }
-    try {
-      // Sanitización del installDir: solo aceptamos rutas dentro de
-      // userData/Library/. El renderer no debe poder crear carpetas fuera
-      // de nuestro root (defensa en profundidad del contextBridge).
-      // Si el renderer omite installDir, default = ${userData}/Library/${appId}.
-      const libraryRoot = path.resolve(app.getPath('userData'), 'Library')
-
-      // ERROR #11 FIX: Strengthen path validation with fs.realpathSync()
-      const requested = opts.installDir
-        ? path.resolve(opts.installDir)
-        : path.join(libraryRoot, String(opts.appId))
-
-      // Resolve real path (follows symlinks)
-      let realRequested: string
-      try {
-        realRequested = fs.realpathSync(requested)
-      } catch (err: any) {
-        if (err.code === 'ENOENT') {
-          // Path doesn't exist yet (OK, we'll create it)
-          // But ensure parent is in library root
-          const parent = path.dirname(requested)
-          let realParent: string
-          try {
-            realParent = fs.realpathSync(parent)
-          } catch {
-            realParent = path.resolve(parent)
-          }
-          if (!realParent.startsWith(libraryRoot + path.sep) && realParent !== libraryRoot) {
-            logger.warn(`[steamcmd] installDir outside library: ${requested} → ${realParent}`, 'steamcmd')
-            return {
-              success: false,
-              error: `installDir fuera de library root`,
-              errorKey: 'errors.steamcmd.installDirCreateFailed',
-            }
-          }
-          realRequested = requested  // Will be created inside library
-        } else {
-          throw err
-        }
-      }
-
-      // Validate real path is within library root
-      if (!realRequested.startsWith(libraryRoot + path.sep) && realRequested !== libraryRoot) {
-        logger.warn(
-          `[steamcmd] installDir escapes library root: requested=${requested}, real=${realRequested}`,
-          'steamcmd',
-        )
-        return {
-          success: false,
-          error: `installDir fuera de library root (real path: ${realRequested})`,
-          errorKey: 'errors.steamcmd.installDirCreateFailed',
-        }
-      }
-
-      // Additional: check that requested path contains no suspicious patterns
-      if (realRequested.includes('..') || requested.includes('..')) {
-        logger.warn(`[steamcmd] Relative path detected: ${requested}`, 'steamcmd')
-        return {
-          success: false,
-          error: `installDir no puede contener ..`,
-          errorKey: 'errors.steamcmd.installDirCreateFailed',
-        }
-      }
-
-      return await startSteamCmdInstall({ ...opts, installDir: realRequested })
-    } catch (err: any) {
-      logger.error(
-        `[steamcmd] start appId=${opts?.appId} falló: ${err?.message ?? err}`,
-        'steamcmd',
-      )
-      return {
-        success: false,
-        error: String(err?.message ?? err),
-        errorKey: 'errors.steamcmd.spawnFailed',
-      }
-    }
-  })
-
-  ipcMain.handle('steamcmd:cancel', async (_event, appId: string) => {
-    if (!appId) {
-      logger.warn('[steamcmd] cancel sin appId', 'steamcmd')
-      return { success: false, appId: '', error: 'appId es requerido' }
-    }
-    try {
-      return cancelSteamCmdInstall(appId)
-    } catch (err: any) {
-      logger.warn(
-        `[steamcmd] cancel appId=${appId} falló: ${err?.message ?? err}`,
-        'steamcmd',
-      )
-      return { success: false, appId, error: String(err?.message ?? err) }
-    }
-  })
-
-  ipcMain.handle('steamcmd:isAvailable', () => {
-    try {
-      return isSteamCmdAvailable()
-    } catch (err: any) {
-      logger.warn(`[steamcmd] isAvailable falló: ${err?.message ?? err}`, 'steamcmd')
-      return false
-    }
-  })
-
-  ipcMain.handle('steamcmd:list', () => {
-    try {
-      return getActiveJobs()
-    } catch (err: any) {
-      logger.warn(`[steamcmd] list falló: ${err?.message ?? err}`, 'steamcmd')
-      return []
-    }
-  })
-
-  // H1.7.3 — dispara la descarga del binario SteamCMD desde el renderer
-  // cuando el caché está vacío (install-method = auto/steamcmd).
-  // La promesa dura segundos, retorna JSON estándar { success, error?, errorKey? }.
-  //
-  // H1.7.4 — bug fix: el handler ANTES retornaba success:true aunque el
-  // fetcher devolviera { success: false } porque fetchSteamCmd no throwea
-  // en errores de extracción (los retorna como payload). El renderer creía
-  // que había descargado OK y abortaba el install sin razón. Ahora
-  // propagamos el success/error/exito del fetcher al renderer para
-  // diferenciar "descargó" de "falló la extracción".
-  ipcMain.handle('steamcmd:fetch', async () => {
-    try {
-      const { fetchSteamCmd } = await import('./modules/steamcmd-fetcher')
-      const result = await fetchSteamCmd({})
-      if (!result.success) {
-        logger.warn(
-          `[steamcmd] fetch on-demand result no exitoso: ${result.error ?? '<no error msg>'} (errorKey=${result.errorKey ?? 'none'})`,
-          'steamcmd',
-        )
-        return {
-          success: false,
-          error: result.error ?? 'fetch sin success ni error message (caso bug)',
-          errorKey: result.errorKey,
-        }
-      }
-      logger.info(
-        `[steamcmd] fetch on-demand completado (source=${result.source} binPath=${result.binPath ?? 'n/a'})`,
-        'steamcmd',
-      )
-      return {
-        success: true,
-        binPath: result.binPath,
-        source: result.source,
-      }
-    } catch (err: any) {
-      logger.warn(
-        `[steamcmd] fetch on-demand throw: ${err?.message ?? err}`,
-        'steamcmd',
-      )
-      return {
-        success: false,
-        error: String(err?.message ?? err),
-      }
-    }
-  })
-
-  // H1.5 — kick-off best-effort del fetcher si SteamCMD no está disponible.
-  // Import lazy para evitar cargar 7zip-min hasta que sepamos que hace falta.
-  // No bloquea el arranque: la app arranca con cliente legacy mientras SteamCMD
-  // descarga en background. El operador también puede disparar manualmente con
-  // `ycore fetch-steamcmd` desde Settings o CLI.
-  // ERROR #8 FIX: Chain .catch() on both import and fetchSteamCmd promises
-  if (!isSteamCmdAvailable()) {
-    setImmediate(() => {
-      import('./modules/steamcmd-fetcher')
-        .then(({ fetchSteamCmd }) => {
-          return fetchSteamCmd({})
-        })
-        .catch((err: unknown) => {
-          const msg = err instanceof Error ? err.message : String(err)
-          logger.warn(
-            `[auto-fetch-steamcmd] falló (best-effort): ${msg}. El operador puede disparar 'ycore fetch-steamcmd' manualmente.`,
-            'steamcmd',
-          )
-        })
-    })
-  }
-
   registerStoreHandlers(invalidateGamesCache)
 
   createSplashWindow()
@@ -1293,10 +1149,22 @@ if (gotTheLock) {
       })
     }
 
-    // Check on startup, then periodically (the app runs long in the tray)
-    checkForUpdates()
-    const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000 // 4 hours
-    setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL)
+    // ── TEST BUILD (v4.2.5 RC): automatic update checks are DISABLED so a
+    // test PC keeps this exact build and can't be auto-downgraded to an older
+    // GitHub release (allowDowngrade=true above). Manual update via
+    // app:installUpdate / app:manualDownloadUpdate stays functional, but with
+    // no checkForUpdates() nothing is ever downloaded or installed on its own.
+    // Re-enable for the stable release by exporting Y_CORE_ENABLE_AUTO_UPDATE=1
+    // or by restoring the two calls below.
+    const AUTO_UPDATE_ENABLED = process.env.Y_CORE_ENABLE_AUTO_UPDATE === '1'
+    if (AUTO_UPDATE_ENABLED) {
+      // Check on startup, then periodically (the app runs long in the tray)
+      checkForUpdates()
+      const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000 // 4 hours
+      setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL)
+    } else {
+      logger.info('[updater] Auto-update checks disabled (test build); set Y_CORE_ENABLE_AUTO_UPDATE=1 to enable', 'updater')
+    }
 
     ipcMain.handle('app:installUpdate', () => {
       logger.info('User requested update install — forcing clean exit before installer', 'updater')
@@ -1451,11 +1319,6 @@ app.on('before-quit', async () => {
   }
 
   saveUsername()
-  // Cerrar jobs SteamCMD ANTES de los watchers: si SteamCMD tiene un child
-  // activo, su muerte emite un último evento FAILED al renderer mientras
-  // todavía hay ventanas para mostrarlo. Detener los log-watchers primero
-  // silenciaría esos eventos.
-  shutdownAllSteamCmdJobs('app quitting')
   stopSteamLogWatcher()
   shutdownDiscordRpc()
 })

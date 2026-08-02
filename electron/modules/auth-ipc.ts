@@ -45,7 +45,7 @@ export function saveUsername(): void {
 
 export function getApiUrl(): string {
   const DEFAULT_API_URL = app.isPackaged
-    ? 'https://y-core-render-api-rxwd.onrender.com'
+    ? 'https://y-core-render-api-6jbv.onrender.com'
     : (process.env.VITE_YCORE_API_URL || 'http://localhost:3000')
   try {
     const configPath = path.join(app.getPath('userData'), 'ycore-config.json')

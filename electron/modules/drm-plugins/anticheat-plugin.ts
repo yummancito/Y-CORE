@@ -163,13 +163,16 @@ async function checkRegistry(registryPaths: string[]): Promise<boolean> {
   // This requires native module or WMI query
   // For now, we'll skip if not on Windows or if native interface unavailable
   try {
-    const { execSync } = await import('child_process')
+    const { execFileSync } = await import('child_process')
 
     for (const registryPath of registryPaths) {
       try {
-        // Use reg query to check registry
-        const cmd = `reg query "${registryPath.replace(/\\\\/g, '\\')}" /v Service 2>nul`
-        const result = execSync(cmd, { encoding: 'utf8', stdio: 'pipe' })
+        // execFileSync spawns argv directly (no shell), so registry path
+        // values can't break out or inject shell commands.
+        const result = execFileSync('reg', ['query', registryPath, '/v', 'Service'], {
+          encoding: 'utf8',
+          stdio: 'pipe',
+        })
         if (result) return true
       } catch {
         // Registry path doesn't exist

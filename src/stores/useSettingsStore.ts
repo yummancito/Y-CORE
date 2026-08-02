@@ -101,7 +101,6 @@ export type LauncherMode = 'native'
 interface SettingsStore {
   showAdult: boolean
   showTools: boolean
-  showAddGame: boolean
   logsVisible: boolean
   colorTheme: string
   language: string
@@ -118,7 +117,6 @@ interface SettingsStore {
   killSteamBeforeLaunch: boolean
   setShowAdult: (v: boolean) => void
   setShowTools: (v: boolean) => void
-  setShowAddGame: (v: boolean) => void
   setLogsVisible: (v: boolean) => void
   setColorTheme: (v: string) => void
   setLanguage: (v: string) => void
@@ -157,7 +155,6 @@ async function writeConfigSerialized(updates: Record<string, unknown>): Promise<
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   showAdult: false,
   showTools: false,
-  showAddGame: false,
   logsVisible: true,
   colorTheme: 'ct-y-core',
   language: 'es',
@@ -174,7 +171,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
 
   setShowAdult: (v) => set({ showAdult: v }),
   setShowTools: (v) => set({ showTools: v }),
-  setShowAddGame: (v) => set({ showAddGame: v }),
   setLogsVisible: (v) => set({ logsVisible: v }),
   setColorTheme: (v) => set({ colorTheme: v }),
   setLanguage: (v) => {
@@ -213,7 +209,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
           const c = cfg as any
           if (c.showAdult !== undefined) set({ showAdult: c.showAdult })
           if (c.showTools !== undefined) set({ showTools: c.showTools })
-          if (c.showAddGame !== undefined) set({ showAddGame: c.showAddGame })
           if (c.logsVisible !== undefined) set({ logsVisible: c.logsVisible })
           if (c.colorTheme) set({ colorTheme: c.colorTheme })
           if (c.language) {

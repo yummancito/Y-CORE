@@ -266,7 +266,7 @@ export function createWindow(): void {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self' http://localhost:5174 ws://localhost:5174 http://localhost:3000 https://y-core-render-api-rxwd.onrender.com https://store.steampowered.com",
+        "connect-src 'self' http://localhost:5174 ws://localhost:5174 http://localhost:3000 https://y-core-render-api-6jbv.onrender.com wss://y-core-render-api-6jbv.onrender.com https://store.steampowered.com",
         "media-src 'self' https:",
       ].join('; ')
     : [
@@ -275,7 +275,7 @@ export function createWindow(): void {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self' https://api.ycore.app https://y-core-render-api-rxwd.onrender.com https://store.steampowered.com",
+        "connect-src 'self' https://y-core-render-api-6jbv.onrender.com wss://y-core-render-api-6jbv.onrender.com https://store.steampowered.com",
         "media-src 'self' https:",
       ].join('; ')
 

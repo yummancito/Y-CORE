@@ -20,7 +20,7 @@ import type { WsSignalPayload } from '../common/ipc-contract'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const WS_BASE = (process.env.YCORE_API_URL || 'https://y-core-render-api-rxwd.onrender.com')
+const WS_BASE = (process.env.YCORE_API_URL || 'https://y-core-render-api-6jbv.onrender.com')
   .replace(/^http/, 'ws')
 const WS_PATH = '/api/remote-play/signaling'
 const RECONNECT_DELAY_MS = 3000

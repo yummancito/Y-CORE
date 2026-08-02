@@ -313,26 +313,29 @@ export const gameService = {
         return { success: false, error: `No se encontró la carpeta del juego "${installDir}" en ninguna biblioteca de Steam` }
       }
 
-      // 2. Patch the game folder — only proceed if the emulator DLL is
-      //    available. Without it, the game's steam_api64.dll probe will
-      //    fail and the exe will refuse to start. This is the root of the
-      //    "DLLs aren't loading" symptom from the user.
+      // 2. Patch the game folder with the native emulator DLL. This DLL is
+      //    not built/shipped yet, so patch.success is routinely 'partial' or
+      //    false — in both cases we can't trust steam_api64.dll to satisfy
+      //    the game's Steam probe. Fall back to launching through the real
+      //    Steam Client instead of surfacing an internal DLL error to the user.
       const patch = patchGameFolder(fullGameDir, String(appId))
-      if (!patch.success) {
+      if (patch.success !== true) {
         logger.warn(
-          `[game.service] native launch: patchGameFolder falló para ${appId}: ${patch.error}. ` +
-          `¿Está compilada ycore_steam.dll? (ejecuta scripts/build-ycore-steam.bat)`,
+          `[game.service] native launch: emulador no disponible para ${appId} (${patch.error}); intentando fallback a Steam Client`,
           'launch',
         )
-        return {
-          success: false,
-          error: patch.error ?? 'No se pudo parchear la carpeta del juego',
-          mode: 'native',
-          hint: '¿Está compilada ycore_steam.dll? Si no, ejecuta scripts/build-ycore-steam.bat o cambia a modo Steam en Ajustes.',
+        const steamPath = getSteamPath()
+        if (!steamPath) {
+          return {
+            success: false,
+            error: 'Este juego necesita Steam instalado para poder lanzarse.',
+            mode: 'native',
+            hint: 'Instalá Steam Client, o esperá a que el modo nativo esté disponible.',
+          }
         }
-      }
-      if (patch.warnings?.length) {
-        for (const w of patch.warnings) logger.warn(`[game.service] patch warning: ${w}`, 'launch')
+        shell.openExternal(`steam://rungameid/${appId}`)
+        logger.info(`[game.service] fallback launch via Steam Client for ${appId}`, 'launch')
+        return { success: true, mode: 'steam' }
       }
 
       // 3. Spawn the exe. launchGameFromDir injects SteamAppId/SteamGameId

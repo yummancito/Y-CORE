@@ -10,7 +10,7 @@
 // Row 2 (main, ~56px) — primary section tabs:
 //   Left:  back · forward
 //   Center: STORE  |  LIBRARY  |  REMOTE PLAY
-//   Right: username chip + settings
+//   Right: settings
 // ============================================================================
 
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
@@ -32,9 +32,9 @@ import {
   Package,
 } from 'lucide-react'
 import { Logo } from '../Logo'
-import { useAuthStore } from '../../stores/useAuthStore'
 import { useSupportChatStore } from '../../stores/useSupportChatStore'
 import { useSteamErrorStore } from '../../stores/useSteamErrorStore'
+import { useSettingsStore } from '../../stores/useSettingsStore'
 import { t } from '../../lib/i18n'
 
 // ── Module-level style fragments ──────────────────────────────────────────
@@ -54,33 +54,17 @@ const iconBtnBase =
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-/**
- * Robust initials helper for the username avatar chip.
- *
- * Why: on the mobile route (#/remote-mobile/...), `useAuthStore.username`
- * can be a non-string (e.g., a `{ok: false, reason: ...}` error envelope
- * bubbled up from the WebSocket bridge when `auth.getUsername` is not in
- * the allow-list). The previous `username.slice(0, 2)` call crashed the
- * TopNav render with "username.slice is not a function". Returning `??`
- * for non-strings is a safe fallback for the avatar bubble; the rest of
- * the chip (the full username label) is still gated by `username && …`
- * which keeps react from rendering an un-stringifiable label too.
- */
-function getInitials(name: unknown): string {
-  if (typeof name !== 'string' || name.length === 0) return '??'
-  return name.slice(0, 2).toUpperCase()
-}
-
 interface TopLink {
   to: string
   label: string
   external?: boolean
+  tourId?: string
 }
 
 export function TopNav() {
   const navigate = useNavigate()
   const location = useLocation()
-  const username = useAuthStore((s) => s.username)
+  const logsVisible = useSettingsStore((s) => s.logsVisible)
 
   // Cloud sync state
   const [isSyncing, setIsSyncing] = useState(false)
@@ -110,14 +94,15 @@ export function TopNav() {
   // (Discord opens externally; the other two are in-app NavLinks)
   const topLinks: TopLink[] = [
     { to: 'https://discord.gg/87baAzAKme', label: 'Discord', external: true },
-    { to: '/online-fix', label: 'Online Fix' },
-    { to: '/drm-remover', label: 'DRM Remover' },
+    { to: '/online-fix', label: 'Online Fix', tourId: 'onlinefix' },
+    { to: '/drm-remover', label: 'DRM Remover', tourId: 'drmremover' },
+    ...(logsVisible ? [{ to: '/logs', label: 'Logs', tourId: 'logs' }] : []),
   ]
 
   // Main bar: 3 primary section tabs (Downloads dropped per request)
   const tabs = [
-    { to: '/store', label: t('store.title'), icon: ShoppingBag },
-    { to: '/library', label: t('nav.library'), icon: Library },
+    { to: '/store', label: t('store.title'), icon: ShoppingBag, tourId: 'store' },
+    { to: '/library', label: t('nav.library'), icon: Library, tourId: 'library' },
     { to: '/remote-play', label: t('nav.remotePlay'), icon: Gamepad2 },
   ]
 
@@ -180,7 +165,7 @@ export function TopNav() {
       <div
         className="flex items-center h-[32px] px-3 gap-3 flex-shrink-0"
         style={{
-          background: 'var(--bg-secondary)',
+          background: 'var(--bg-primary)',
         }}
       >
         {/* Left: tiny logo + brand + small links */}
@@ -207,6 +192,7 @@ export function TopNav() {
               <NavLink
                 key={link.to}
                 to={link.to}
+                data-tour={link.tourId}
                 className={({ isActive }) =>
                   isActive
                     ? `${topLinkBase} ${topLinkActiveCls}`
@@ -319,7 +305,7 @@ export function TopNav() {
       <div
         className="flex items-stretch h-[56px] flex-shrink-0"
         style={{
-          background: 'var(--bg-secondary)',
+          background: 'var(--bg-primary)',
         }}
       >
         {/* Left: back + forward */}
@@ -350,10 +336,11 @@ export function TopNav() {
           className="flex items-stretch flex-1 min-w-0"
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
-          {tabs.map(({ to, label, icon: Icon }) => (
+          {tabs.map(({ to, label, icon: Icon, tourId }) => (
             <NavLink
               key={to}
               to={to}
+              data-tour={tourId}
               className={({ isActive }) =>
                 isActive
                   ? `${tabBase} ${tabActiveCls}`
@@ -374,41 +361,14 @@ export function TopNav() {
           ))}
         </nav>
 
-        {/* Right: username + settings */}
+        {/* Right: settings */}
         <div
           className="flex items-center gap-2 pr-3"
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
-          {typeof username === 'string' && username && (
-            <button
-              className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full transition-all duration-150 hover:bg-white/[0.06]"
-              style={{ background: 'rgba(255,255,255,0.03)' }}
-              title={`Signed in as ${username}`}
-            >
-              <div
-                className="flex items-center justify-center w-7 h-7 rounded-full text-[10.5px] font-bold uppercase text-white"
-                style={{
-                  background:
-                    'linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%)',
-                }}
-              >
-                {getInitials(username)}
-              </div>
-              <span className="text-[12.5px] font-semibold text-text-bright">
-                {username}
-              </span>
-              <span
-                className="w-2 h-2 rounded-full"
-                style={{
-                  background: 'var(--accent)',
-                  boxShadow: '0 0 6px var(--accent)',
-                }}
-                aria-label="Online"
-              />
-            </button>
-          )}
           <NavLink
             to="/settings"
+            data-tour="settings"
             className={({ isActive }) =>
               `flex items-center justify-center w-9 h-9 rounded-lg transition-all duration-150 ${
                 isActive

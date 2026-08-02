@@ -9,7 +9,7 @@ import type {
   InstallGameData,
 } from '@y-core/shared'
 
-const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'https://y-core-render-api-rxwd.onrender.com'
+const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'https://y-core-render-api-6jbv.onrender.com'
 
 let cachedUsername: string | null = null
 

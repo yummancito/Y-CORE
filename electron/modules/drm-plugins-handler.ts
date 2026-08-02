@@ -9,7 +9,6 @@ import { logger } from '../logger'
 import { drmPluginRegistry } from './drm-plugins/registry'
 import { versionManager } from './drm-plugins/version-manager'
 import { runCrossPlatformDetection, getPlatformCapabilities } from './drm-plugins/cross-platform'
-import { pcgamingwikiService } from '../services/pcgamingwiki.service'
 import type { DrmDetectionResult, DrmRemovalResult } from './drm-plugins/types'
 
 /**
@@ -287,53 +286,6 @@ export function registerDrmPluginHandlers(): void {
         protonCompat: false,
         drmRemovalSupported: false,
       }
-    }
-  })
-
-  /**
-   * Fetch DRM info from PCGamingWiki
-   */
-  ipcMain.handle('drm:plugins:pcgamingwiki-info', async (_event, appId: string) => {
-    try {
-      logger.info(`[DRM Handler] Fetching PCGamingWiki info for app ${appId}`, 'drm')
-      return await pcgamingwikiService.getDrmInfo(appId)
-    } catch (err) {
-      logger.error(
-        `[DRM Handler] PCGamingWiki fetch failed: ${err instanceof Error ? err.message : 'unknown'}`,
-        'drm'
-      )
-      return null
-    }
-  })
-
-  /**
-   * Get PCGamingWiki cache stats
-   */
-  ipcMain.handle('drm:plugins:pcgamingwiki-cache-stats', (_event) => {
-    try {
-      return pcgamingwikiService.getCacheStats()
-    } catch (err) {
-      logger.error(
-        `[DRM Handler] Cache stats failed: ${err instanceof Error ? err.message : 'unknown'}`,
-        'drm'
-      )
-      return { size: 0, validEntries: 0 }
-    }
-  })
-
-  /**
-   * Clear PCGamingWiki cache
-   */
-  ipcMain.handle('drm:plugins:pcgamingwiki-clear-cache', (_event) => {
-    try {
-      pcgamingwikiService.clearCache()
-      return { success: true }
-    } catch (err) {
-      logger.error(
-        `[DRM Handler] Clear cache failed: ${err instanceof Error ? err.message : 'unknown'}`,
-        'drm'
-      )
-      return { success: false }
     }
   })
 

@@ -33,13 +33,18 @@ const ALLOWED_CONFIG_KEYS = new Set([
   // en runtime (useSignaturePendingStore.isForced) sin necesidad de
   // persistirse entre sesiones. El toggle de SettingsPage fuerza el modal
   // inmediatamente al activarse y al cerrarlo el modal se libera solo.
-  // H1.3 — método de instalación preferido ('steamcmd' | 'steamclient' | 'auto').
-  // Si 'steamcmd' y el binario no está disponible, dispatcher cae a cliente.
+  // H1.3 — método de instalación preferido.
   'installMethod',
-  // H1.4 — razón por la que el último install cayo a cliente. Útil para UI
-  // ("SteamCMD no se pudo porque: stalled | notAnonymous | notFound").
-  // Reset manual: el operador puede forzar re-intento cambiando installMethod.
+  // H1.4 — razón por la que el último install cayó a fallback.
   'lastInstallFallbackReason',
+  // Round-10 — opt-in: matar Steam.exe antes de cada launch nativo para
+  // verificación visual. Ya estaba en config.service.ts's whitelist pero
+  // faltaba acá, el whitelist que config:write realmente aplica — cada
+  // intento de guardarlo se rechazaba silenciosamente con "Rejected unknown
+  // config key", así que el toggle nunca persistía entre sesiones.
+  'killSteamBeforeLaunch',
+  // Modal de donación en primer inicio — persiste "no volver a mostrar".
+  'donationDismissed',
 ])
 
 const MAX_CONFIG_DEPTH = 3

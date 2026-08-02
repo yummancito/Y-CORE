@@ -216,6 +216,14 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
   const ostXinputPath = path.join(ostDir, 'xinput1_4.dll')
   const useYCoreTool = fs.existsSync(ostHookPath) && fs.existsSync(ostDwmapiPath) && fs.existsSync(ostXinputPath)
 
+  // Legacy fallback name, still shipped in native/opensteamtool/ as
+  // OpenSteamTool.dll. The OLD fallback below pointed at
+  // native/steamtools_hook.dll directly under appRoot — a path that never
+  // existed in this repo, so every install silently failed with
+  // errors.hook.notFound whenever YCoreTool.dll wasn't present.
+  const legacyHookPath = path.join(ostDir, 'OpenSteamTool.dll')
+  const useLegacyOst = !useYCoreTool && fs.existsSync(legacyHookPath) && fs.existsSync(ostDwmapiPath) && fs.existsSync(ostXinputPath)
+
   let hookPath: string
   let dwmapiPath: string
   let xinputPath: string
@@ -228,6 +236,12 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
     xinputPath = ostXinputPath
     destHook = path.join(steamPath, 'YCoreTool.dll')
     hookName = 'YCoreTool'
+  } else if (useLegacyOst) {
+    hookPath = legacyHookPath
+    dwmapiPath = ostDwmapiPath
+    xinputPath = ostXinputPath
+    destHook = path.join(steamPath, 'OpenSteamTool.dll')
+    hookName = 'OpenSteamTool'
   } else {
     hookPath = path.join(appRoot, 'native', 'steamtools_hook.dll')
     dwmapiPath = path.join(appRoot, 'native', 'dwmapi.dll')

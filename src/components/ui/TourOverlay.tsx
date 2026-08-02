@@ -16,17 +16,17 @@ const TOUR_STEPS: TourStep[] = [
     placement: 'bottom',
   },
   {
-    id: 'library',
-    target: '[data-tour="library"]',
-    titleKey: 'tour.library.title',
-    descriptionKey: 'tour.library.desc',
-    placement: 'right',
-  },
-  {
     id: 'store',
     target: '[data-tour="store"]',
     titleKey: 'tour.store.title',
     descriptionKey: 'tour.store.desc',
+    placement: 'right',
+  },
+  {
+    id: 'library',
+    target: '[data-tour="library"]',
+    titleKey: 'tour.library.title',
+    descriptionKey: 'tour.library.desc',
     placement: 'right',
   },
   {

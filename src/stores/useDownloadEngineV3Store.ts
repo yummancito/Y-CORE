@@ -12,7 +12,7 @@ import { subscribeToEvent } from '../services/gateway'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type DownloadSource = 'steamcmd' | 'steampipe' | 'api_proxy' | 'direct' | 'torrent'
+export type DownloadSource = 'steam-native' | 'steampipe' | 'api_proxy' | 'direct' | 'torrent'
 
 export type DownloadState =
   | 'queued' | 'preparing' | 'connecting' | 'downloading'
@@ -98,6 +98,7 @@ interface DownloadEngineStore {
   setPaused: (paused: boolean) => Promise<void>
   integrityCheck: (appId: string, installDir: string) => Promise<any>
   repairFiles: (appId: string, installDir: string, corruptedPaths: string[], missingPaths: string[]) => Promise<any>
+  repairLocalInstallation: (appId: string, installDir: string) => Promise<any>
   getCacheStats: () => Promise<any>
   clearCache: () => Promise<void>
   clearCompleted: () => Promise<void>
@@ -304,6 +305,14 @@ export const useDownloadEngineStore = create<DownloadEngineStore>((set, get) => 
       return await downloadService.repairFiles(appId, installDir, corruptedPaths, missingPaths)
     } catch {
       return { success: false, error: 'Repair failed' }
+    }
+  },
+
+  repairLocalInstallation: async (appId, installDir) => {
+    try {
+      return await downloadService.repairLocalInstallation(appId, installDir)
+    } catch {
+      return { success: false, error: 'Local installation repair failed' }
     }
   },
 

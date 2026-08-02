@@ -45,6 +45,7 @@ export default function GameDetailPage() {
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void; variant?: 'danger' | 'warning' } | null>(null)
   const [heroLoaded, setHeroLoaded] = useState(false)
   const [portraitLoaded, setPortraitLoaded] = useState(false)
+  const [portraitFailed, setPortraitFailed] = useState(false)
   const [videoPlaying, setVideoPlaying] = useState(false)
   const [videoError, setVideoError] = useState(false)
 
@@ -285,8 +286,22 @@ export default function GameDetailPage() {
         <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, #09090b 2%, rgba(9,9,11,0.72) 38%, rgba(9,9,11,0.25) 78%, rgba(9,9,11,0.35) 100%)' }} />
         <div className="absolute inset-0" style={{ background: 'linear-gradient(to right, rgba(9,9,11,0.85) 0%, rgba(9,9,11,0.35) 45%, transparent 75%)' }} />
         <div className="absolute bottom-0 left-0 right-0 p-10 flex gap-7 items-end">
-          {!portraitLoaded && (
+          {!portraitLoaded && !portraitFailed && (
             <div className="w-[200px] flex-shrink-0 rounded-xl" style={{ aspectRatio: '2/3', background: '#18181b' }} />
+          )}
+          {portraitFailed && (
+            <div
+              className="w-[200px] flex-shrink-0 rounded-xl flex items-center justify-center text-center px-4"
+              style={{
+                aspectRatio: '2/3',
+                background: '#18181b',
+                border: '1px solid rgba(255,255,255,0.1)',
+              }}
+            >
+              <span className="text-white/30 text-sm font-semibold leading-snug">
+                {details.name}
+              </span>
+            </div>
           )}
           <img
             src={portraitUrl}
@@ -295,18 +310,22 @@ export default function GameDetailPage() {
             style={{
               boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
               border: '1px solid rgba(255,255,255,0.1)',
-              display: portraitLoaded ? 'block' : 'none',
+              display: portraitLoaded && !portraitFailed ? 'block' : 'none',
               willChange: 'transform',
               backfaceVisibility: 'hidden',
             }}
             onLoad={() => setPortraitLoaded(true)}
             onError={(e) => {
               const img = e.target as HTMLImageElement
-              if (!img.dataset.fallback) {
-                img.dataset.fallback = 'true'
+              const step = img.dataset.fallbackStep || '0'
+              if (step === '0') {
+                img.dataset.fallbackStep = '1'
+                img.src = `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/library_600x900_2x.jpg`
+              } else if (step === '1') {
+                img.dataset.fallbackStep = '2'
                 img.src = headerUrl
               } else {
-                img.style.display = 'none'
+                setPortraitFailed(true)
               }
             }}
           />

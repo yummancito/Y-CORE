@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { SteamCmdInstallOptions, SteamCmdProgress } from './modules/steamcmd-manager'
 
 // ============================================================================
 // Service Gateway — typed bridge between renderer and main process
@@ -262,20 +261,6 @@ contextBridge.exposeInMainWorld('steamtools', {
     const handler = (_event: any, info: { message: string }) => callback(info)
     ipcRenderer.on('update-error', handler)
     return () => ipcRenderer.removeListener('update-error', handler)
-  },
-
-  // ── SteamCMD ──────────────────────────────────────────────────────────
-  startSteamCmdInstall: (opts: SteamCmdInstallOptions) =>
-    ipcRenderer.invoke('steamcmd:start', opts),
-  cancelSteamCmdInstall: (appId: string) =>
-    ipcRenderer.invoke('steamcmd:cancel', appId),
-  isSteamCmdAvailable: () => ipcRenderer.invoke('steamcmd:isAvailable'),
-  fetchSteamCmd: () => ipcRenderer.invoke('steamcmd:fetch'),
-  listSteamCmdJobs: () => ipcRenderer.invoke('steamcmd:list'),
-  onSteamCmdProgress: (callback: (payload: SteamCmdProgress) => void) => {
-    const handler = (_event: any, payload: SteamCmdProgress) => callback(payload)
-    ipcRenderer.on('steamcmd:progress', handler)
-    return () => ipcRenderer.removeListener('steamcmd:progress', handler)
   },
 
   // ── Signature validation ────────────────────────────────────────────────

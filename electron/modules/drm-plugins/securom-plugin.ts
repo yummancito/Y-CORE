@@ -319,8 +319,10 @@ function patchEntryPoint(exePath: string): void {
   }
 
   // Patch: Shift entry point by small offset to skip SecuROM initialization
-  // This is done by modifying the AddressOfEntryPoint field
-  const entryPointOffset = 16 // In Optional Header, after COFF header (20 bytes) - 4 bytes
+  // This is done by modifying the AddressOfEntryPoint field.
+  // peBuffer starts at the PE signature (4 bytes) + COFF header (20 bytes),
+  // and AddressOfEntryPoint is at offset 16 within the Optional Header.
+  const entryPointOffset = 4 + 20 + 16 // = 40
   if (peBuffer.length >= entryPointOffset + 4) {
     const currentEntryPoint = peBuffer.readUInt32LE(entryPointOffset)
     const patchedEntryPoint = currentEntryPoint + 16 // Shift by 16 bytes

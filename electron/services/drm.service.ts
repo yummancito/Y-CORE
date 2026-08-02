@@ -173,12 +173,18 @@ export const drmService = {
   // ========================================================================
 
   /**
-   * PHASE 3: Advanced DRM assessment with ML detection and smart routing
-   * Returns comprehensive assessment including:
-   * - ML-based DRM type detection
-   * - Anti-cheat detection and warnings
-   * - Community feedback and success rates
-   * - Optimal removal strategy recommendation
+   * PHASE 3: Advanced DRM assessment with ML detection.
+   * Returns:
+   * - ML-based DRM type detection (signature + entropy analysis)
+   * - Anti-cheat detection and warnings (flagging only, never attempts removal)
+   * - Locally-stored community feedback and success rates for this appId
+   *
+   * Note: there is no server-side "community" — stats are whatever this
+   * install has recorded via contributeResult(). There is also no smart
+   * strategy router here; the removal-method success percentages that used
+   * to come from drm-strategy-router.ts were hardcoded guesses with no real
+   * data behind them, so that module was removed rather than exposed as if
+   * it were a genuine recommendation engine.
    */
   async assessGameAdvanced(appId: string) {
     const paths = getGamePaths(appId)
@@ -191,23 +197,13 @@ export const drmService = {
     }
 
     try {
-      // Lazy load Phase 3 modules to avoid import errors if they're not compiled
       const { detectDrmStubs } = await import('../modules/drm-plugins/ml-stub-detector')
       const { detectAntiCheat } = await import('../modules/drm-plugins/anticheat-plugin')
       const { communityDbService } = await import('./community-db.service')
-      const { assessGameDRM } = await import('./drm-strategy-router')
 
-      // 1. ML-based DRM detection
       const drmDetection = await detectDrmStubs(paths.exePath)
-
-      // 2. Anti-cheat detection
       const antiCheatDetection = await detectAntiCheat(paths.gameDir)
-
-      // 3. Get community stats
       const communityStats = await communityDbService.getStats(appId)
-
-      // 4. Get strategic assessment
-      const assessment = await assessGameDRM(appId, paths.exePath, '1.0.0')
 
       return {
         success: true,
@@ -217,7 +213,6 @@ export const drmService = {
         drmDetection,
         antiCheatDetection,
         communityStats,
-        assessment,
       }
     } catch (err) {
       logger.warn(`[DRM Service] Phase 3 assessment not available: ${err instanceof Error ? err.message : 'unknown'}`, 'drm')

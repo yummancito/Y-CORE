@@ -48,8 +48,15 @@ function encodeFrame(op: number, payload: object): Buffer {
   return Buffer.concat([header, json])
 }
 
-function send(op: number, payload: object): void {
-  if (!socket || !connected) return
+// `allowBeforeReady` lets the initial OP.HANDSHAKE frame go out even though
+// `connected` is still false at that point (it only flips to true once
+// Discord's READY frame comes back in handleData). Without this, send()
+// silently dropped the handshake — the pipe connected but Discord never
+// got the frame that would trigger its READY reply, so the RPC hung
+// forever with no error and no "Connected to Discord" log.
+function send(op: number, payload: object, allowBeforeReady = false): void {
+  if (!socket) return
+  if (!connected && !allowBeforeReady) return
   try {
     socket.write(encodeFrame(op, payload))
   } catch (err: any) {
@@ -127,7 +134,7 @@ function tryConnectPipe(n: number): void {
     s.on('close', () => teardownSocket())
     // `connected` stays false until handleData sees the READY frame — see
     // the comment on the declaration above `s.once('connect', ...)`.
-    send(OP.HANDSHAKE, { v: 1, client_id: DISCORD_CLIENT_ID })
+    send(OP.HANDSHAKE, { v: 1, client_id: DISCORD_CLIENT_ID }, /* allowBeforeReady */ true)
   })
 
   s.once('error', () => {

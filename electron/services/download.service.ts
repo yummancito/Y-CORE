@@ -4,9 +4,9 @@
 // ============================================================================
 
 import { logger } from '../logger'
-import { exec } from 'child_process'
+import { exec, spawn } from 'child_process'
 import path from 'path'
-import { getSteamPath } from '../modules/steam-helpers'
+import { getSteamPath, closeSteamProcess } from '../modules/steam-helpers'
 import { checkAndUpdateOpenSteamTool } from '../modules/opensteamtool-updater'
 import { installHookDll } from '../modules/dll-inject'
 import { installGameCore } from '../modules/manifest-sync'
@@ -19,6 +19,7 @@ import {
   getCacheManager,
 } from '../modules/download-engine-repair'
 import type { DownloadSource } from '../modules/download-engine-types'
+import { diagnoseAndRepairLocalInstallation } from '../modules/local-installation-diagnostics'
 
 export const downloadService = {
   async createTask(opts: any) {
@@ -167,8 +168,27 @@ export const downloadService = {
         gameResult.actions.forEach((action: string) => logger.info(`  - ${action}`, 'services'))
       }
 
-      // Retornar éxito - el usuario abrirá Steam manualmente
-      logger.info(`[DownloadService] Setup complete. User should open Steam to start download.`, 'services')
+      // Setup (depot keys + ACF + Lua) only writes files to disk — Steam
+      // itself has to restart and read the new appmanifest before it starts
+      // pulling the actual bytes. Without this restart, the renderer marked
+      // the install "complete" the moment setup finished, but Steam never
+      // saw the game and showed "No hay licencias" when the user hit Play —
+      // a false success with nothing actually downloaded.
+      logger.info(`[DownloadService] Setup complete. Restarting Steam so it picks up the new appmanifest...`, 'services')
+      try {
+        const closeResult = await closeSteamProcess()
+        if (closeResult.success) {
+          const steamExe = process.platform === 'win32' ? path.join(steamPath, 'steam.exe') : 'steam'
+          const child = spawn(steamExe, [], { detached: true, stdio: 'ignore' })
+          child.unref()
+          logger.info(`[DownloadService] Steam restarted to begin download of ${opts.name}`, 'services')
+        } else {
+          logger.warn(`[DownloadService] Could not close Steam to restart it: ${closeResult.error}`, 'services')
+        }
+      } catch (err: any) {
+        logger.warn(`[DownloadService] Steam restart failed: ${err.message}`, 'services')
+      }
+
       return {
         success: true,
         tasks: [{
@@ -247,6 +267,16 @@ export const downloadService = {
       cache.clear()
       return { success: true }
     } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  },
+
+  async repairLocalInstallation(appId: string, installDir: string) {
+    try {
+      const result = await diagnoseAndRepairLocalInstallation(appId, installDir)
+      return { success: true, result }
+    } catch (err: any) {
+      logger.error(`[DownloadService] local installation repair failed for ${appId}: ${err.message}`, 'services')
       return { success: false, error: err.message }
     }
   },

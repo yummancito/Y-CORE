@@ -205,13 +205,23 @@ class DrmPluginRegistry {
       }
     }
 
-    // Try each removable DRM with its best plugin
+    // Try each removable DRM with its best plugin, falling through to the
+    // next candidate (by confidence) when a plugin reports failure instead
+    // of stopping at the first attempt.
+    let lastFailure: DrmRemovalResult | undefined
     for (const drm of removableDrms) {
       const plugins = this.getPluginsForDrm(drm.type)
       for (const plugin of plugins) {
         try {
           const result = await plugin.remove(exePath, gameDir, appId)
-          return result
+          if (result.success) {
+            return result
+          }
+          lastFailure = result
+          logger.warn(
+            `[DRM Registry] Plugin ${plugin.id} removal attempt reported failure: ${result.message}`,
+            'drm'
+          )
         } catch (err) {
           logger.warn(
             `[DRM Registry] Plugin ${plugin.id} removal attempt failed: ${err instanceof Error ? err.message : 'unknown'}`,
@@ -220,6 +230,10 @@ class DrmPluginRegistry {
           continue
         }
       }
+    }
+
+    if (lastFailure) {
+      return lastFailure
     }
 
     return {

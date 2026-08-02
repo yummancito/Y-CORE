@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   User,
-  Shield,
   ScrollText,
   Palette,
   ChevronRight,
@@ -11,7 +10,6 @@ import {
   Wrench,
   Camera,
   Globe,
-  PlusCircle,
   Users,
   ExternalLink,
   MessagesSquare,
@@ -25,7 +23,7 @@ import {
   Activity,
   X,
 } from 'lucide-react'
-import { AlertTriangle, Cpu, ShieldCheck, ShieldAlert, RotateCcw } from 'lucide-react'
+import { AlertTriangle, ShieldCheck, ShieldAlert, RotateCcw } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { useAuthStore } from '../stores/useAuthStore'
 import { useToastStore } from '../stores/useToastStore'
@@ -33,13 +31,11 @@ import { useSettingsStore } from '../stores/useSettingsStore'
 import { usePageHeader } from '../components/layout/AppShell'
 import { Card } from '../components/ui/Card'
 import { CustomizationPanel } from '../components/settings/CustomizationPanel'
-import { RuntimeSettings } from '../components/gre/RuntimeSettings'
 import type { LogConfig } from '../domain/types'
 import { sendDiscordReport } from '../lib/discord-report'
 import { useDefenderFixStore } from '../stores/useDefenderFixStore'
-import { EmulatorDiagnosticsCard } from '../components/diagnostics/EmulatorDiagnosticsCard'
 
-type SettingsTab = 'account' | 'content' | 'logs' | 'personalization' | 'community' | 'runtime'
+type SettingsTab = 'account' | 'logs' | 'personalization' | 'community'
 
 interface TabConfig {
   id: SettingsTab
@@ -49,10 +45,8 @@ interface TabConfig {
 
 const TABS: TabConfig[] = [
   { id: 'account', label: 'settings.tabAccount', icon: User },
-  { id: 'content', label: 'settings.tabContent', icon: Shield },
   { id: 'logs', label: 'settings.tabLogs', icon: ScrollText },
   { id: 'personalization', label: 'settings.tabPersonalization', icon: Palette },
-  { id: 'runtime', label: 'Runtimes', icon: Cpu },
   { id: 'community', label: 'settings.tabCommunity', icon: Users },
 ]
 
@@ -125,8 +119,8 @@ export default function SettingsPage() {
   const { username } = useAuthStore()
   const { showToast } = useToastStore()
   const {
-    showAdult, showTools, showAddGame, logsVisible, colorTheme, language,
-    setShowAdult, setShowTools, setShowAddGame, setLogsVisible, setColorTheme, setLanguage, loadFromConfig,
+    showAdult, showTools, logsVisible, colorTheme, language,
+    setShowAdult, setShowTools, setLogsVisible, setColorTheme, setLanguage, loadFromConfig,
     /* Round-9 fix: launcherMode removed — Y-core no tiene modo alternativo */
     killSteamBeforeLaunch,
     setKillSteamBeforeLaunch,
@@ -211,11 +205,6 @@ export default function SettingsPage() {
   const handleShowTools = async (v: boolean) => {
     setShowTools(v)
     await saveConfig({ showTools: v })
-  }
-
-  const handleShowAddGame = async (v: boolean) => {
-    setShowAddGame(v)
-    await saveConfig({ showAddGame: v })
   }
 
   const handleColorTheme = async (themeId: string) => {
@@ -346,7 +335,7 @@ export default function SettingsPage() {
                   <p className="text-base font-semibold text-text-bright truncate">
                     {username || '—'}
                   </p>
-                  <span className="inline-flex items-center mt-2 px-3 py-1 rounded-full text-xs font-medium bg-green-500/15 text-green-400 border border-green-500/20">
+                  <span className="inline-flex items-center mt-2 px-3 py-1 rounded-full text-xs font-medium bg-status-success/15 text-status-success border border-status-success/20">
                     {t('settings.activeAccount')}
                   </span>
                 </div>
@@ -372,17 +361,17 @@ export default function SettingsPage() {
               <div className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                 {pathDetected ? (
                   <>
-                    <Check className="w-5 h-5 text-green-400 shrink-0" />
+                    <Check className="w-5 h-5 text-status-success shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-green-400 mb-0.5">{t('settings.steamPathDetected')}</p>
+                      <p className="text-xs font-semibold text-status-success mb-0.5">{t('settings.steamPathDetected')}</p>
                       <p className="text-xs text-text-dim font-mono truncate" title={steamPath || ''}>{steamPath}</p>
                     </div>
                   </>
                 ) : (
                   <>
-                    <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                    <AlertTriangle className="w-5 h-5 text-status-warning shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-amber-400 mb-0.5">{t('settings.steamPathNotDetected')}</p>
+                      <p className="text-xs font-semibold text-status-warning mb-0.5">{t('settings.steamPathNotDetected')}</p>
                       <p className="text-xs text-text-dim">{t('settings.steamPathNotDetectedHelp')}</p>
                     </div>
                   </>
@@ -469,8 +458,8 @@ export default function SettingsPage() {
               </div>
 
               <div className="text-[11px] text-text-dim leading-relaxed p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-                <p className="font-semibold text-amber-400 mb-1">⚠ Si un juego requiere la URL Steam (Layer-4 / Denuvo / EAC / SecuROM)</p>
-                <p>Y-core emite un error accionable en /logs con el nombre exacto de la DLL que rompió el handshake. La ruta "Steam como plan B" ya no existe — instalá Steam Client si necesitás esos juegos, o esperá la detección automática de Layer-4 + telemetría post-launch (en roadmap; ver el card "Emulador nativo" más abajo).</p>
+                <p className="font-semibold text-status-warning mb-1">⚠ Si un juego requiere la URL Steam (Layer-4 / Denuvo / EAC / SecuROM)</p>
+                <p>Y-core intenta primero el modo nativo. Si el emulador no está disponible o el juego lo rechaza, cae automáticamente a Steam Client (necesita estar instalado) en vez de fallar.</p>
               </div>
 
               {/* Round-10: Steam autonomy toggle — togglear esta opción mata
@@ -499,7 +488,7 @@ export default function SettingsPage() {
                     <span className="text-sm font-semibold text-text-bright">
                       Matar proceso de Steam antes de cada launch
                     </span>
-                    <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300">
+                    <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/15 text-status-warning">
                       diagnóstico
                     </span>
                   </div>
@@ -522,52 +511,10 @@ export default function SettingsPage() {
           <Card>
             <DefenderCard />
           </Card>
-
-          {/* ycore_steam.dll diagnostics — Layer 1 API stub + Layer 3 Goldberg layout */}
-          <Card>
-            <EmulatorDiagnosticsCard />
-          </Card>
         </div>
       )}
 
       {/* Content tab */}
-      {activeTab === 'content' && (
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-lg font-bold text-text-bright">{t('settings.content')}</h2>
-            <p className="text-xs text-text-dim mt-0.5">{t('settings.contentDesc')}</p>
-          </div>
-
-          <Card>
-            <div className="space-y-3">
-              <SettingRow
-                icon={showAdult ? Eye : EyeOff}
-                title={t('settings.showAdult')}
-                description={t('settings.showAdultDesc')}
-              >
-                <Toggle checked={showAdult} onChange={handleShowAdult} />
-              </SettingRow>
-
-              <SettingRow
-                icon={Wrench}
-                title={t('settings.showTools')}
-                description={t('settings.showToolsDesc')}
-              >
-                <Toggle checked={showTools} onChange={handleShowTools} />
-              </SettingRow>
-
-              <SettingRow
-                icon={PlusCircle}
-                title={t('settings.showAddGame')}
-                description={t('settings.showAddGameDesc')}
-              >
-                <Toggle checked={showAddGame} onChange={handleShowAddGame} />
-              </SettingRow>
-            </div>
-          </Card>
-        </div>
-      )}
-
       {/* Logs tab */}
       {activeTab === 'logs' && (
         <div className="space-y-4">
@@ -612,7 +559,7 @@ export default function SettingsPage() {
                   disabled={logConfigLoading || !logConfig?.enabled}
                   className="bg-white/[0.06] border border-white/[0.08] rounded-lg px-3 py-1.5 text-sm text-text-bright focus:outline-none focus:border-accent/50 disabled:opacity-50"
                 >
-                  {['DEBUG', 'INFO', 'WARN', 'ERROR'].map((lvl) => (
+                  {['INFO', 'WARN', 'ERROR'].map((lvl) => (
                     <option key={lvl} value={lvl} className="bg-bg-primary">
                       {lvl}
                     </option>
@@ -649,8 +596,25 @@ export default function SettingsPage() {
 
           <Card>
             <div className="space-y-4">
+              {/* Content visibility */}
+              <SettingRow
+                icon={showAdult ? Eye : EyeOff}
+                title={t('settings.showAdult')}
+                description={t('settings.showAdultDesc')}
+              >
+                <Toggle checked={showAdult} onChange={handleShowAdult} />
+              </SettingRow>
+
+              <SettingRow
+                icon={Wrench}
+                title={t('settings.showTools')}
+                description={t('settings.showToolsDesc')}
+              >
+                <Toggle checked={showTools} onChange={handleShowTools} />
+              </SettingRow>
+
               {/* Color theme */}
-              <div>
+              <div className="pt-2 border-t border-white/[0.06]">
                 <p className="text-sm font-medium text-text-bright mb-2">
                   {t('settings.colorTheme')}
                 </p>
@@ -719,8 +683,8 @@ export default function SettingsPage() {
               <div className="pt-2 border-t border-white/[0.06]">
                 <div className="flex items-center justify-between p-3">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-400" />
-                    <span className="text-sm text-red-400">{t('settings.reset')}</span>
+                    <AlertTriangle className="w-4 h-4 text-status-error" />
+                    <span className="text-sm text-status-error">{t('settings.reset')}</span>
                   </div>
                   <button
                     onClick={() => {
@@ -729,7 +693,7 @@ export default function SettingsPage() {
                         window.location.reload()
                       }
                     }}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30 transition-all"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-status-error/20 text-status-error hover:bg-status-error/30 border border-status-error/30 transition-all"
                   >
                     {t('settings.reset')}
                   </button>
@@ -740,19 +704,6 @@ export default function SettingsPage() {
 
           {/* Advanced customization */}
           <CustomizationPanel />
-        </div>
-      )}
-
-      {/* Runtime tab */}
-      {activeTab === 'runtime' && (
-        <div className="space-y-4">
-          <div>
-            <h2 className="text-lg font-bold text-text-bright">Game Runtime Environment</h2>
-            <p className="text-xs text-text-dim mt-0.5">
-              Detect and manage Windows game runtimes, configure process monitoring, and auto-backup saves.
-            </p>
-          </div>
-          <RuntimeSettings />
         </div>
       )}
 
@@ -820,8 +771,8 @@ export default function SettingsPage() {
                 className="flex items-center justify-between w-full p-4 rounded-xl bg-white/[0.03] border border-white/[0.04] hover:bg-white/[0.05] transition-colors group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-red-500/15 flex items-center justify-center">
-                    <Bug className="w-5 h-5 text-red-400" />
+                  <div className="w-10 h-10 rounded-lg bg-status-error/15 flex items-center justify-center">
+                    <Bug className="w-5 h-5 text-status-error" />
                   </div>
                   <div className="text-left">
                     <span className="text-sm font-medium text-text-bright">{t('settings.communityReport')}</span>
@@ -854,14 +805,6 @@ export default function SettingsPage() {
                 </div>
                 <ExternalLink className="w-4 h-4 text-text-dim group-hover:text-text-bright transition-colors" />
               </button>
-
-              {/* Version */}
-              <div className="pt-2 border-t border-white/[0.06]">
-                <div className="flex items-center justify-between p-3">
-                  <span className="text-sm text-text-dim">{t('settings.version')}</span>
-                  <span className="text-sm font-mono text-text-secondary">{appVersion || '—'}</span>
-                </div>
-              </div>
             </div>
           </Card>
         </div>
@@ -914,16 +857,16 @@ function DefenderCard() {
       {/* Status indicator */}
       <div className={`flex items-center gap-3 p-3 rounded-xl border ${
         allOk
-          ? 'bg-green-500/[0.06] border-green-500/20'
+          ? 'bg-status-success/[0.06] border-status-success/20'
           : hasIssues
-            ? 'bg-red-500/[0.06] border-red-500/20'
+            ? 'bg-status-error/[0.06] border-status-error/20'
             : 'bg-white/[0.03] border-white/[0.06]'
       }`}>
         {allOk ? (
           <>
-            <ShieldCheck className="w-5 h-5 text-green-400 shrink-0" />
+            <ShieldCheck className="w-5 h-5 text-status-success shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-green-400">Componentes nativos funcionando</p>
+              <p className="text-xs font-semibold text-status-success">Componentes nativos funcionando</p>
               <p className="text-[11px] text-text-dim mt-0.5">
                 Todos los DLLs estan en su lugar. Windows Defender no esta bloqueando nada.
               </p>
@@ -931,9 +874,9 @@ function DefenderCard() {
           </>
         ) : hasIssues ? (
           <>
-            <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
+            <ShieldAlert className="w-5 h-5 text-status-error shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold text-red-400">DLLs bloqueados o faltantes</p>
+              <p className="text-xs font-semibold text-status-error">DLLs bloqueados o faltantes</p>
               <p className="text-[11px] text-text-dim mt-0.5">
                 Windows Defender puede haber puesto en cuarentena los DLLs nativos.
               </p>
@@ -961,8 +904,8 @@ function DefenderCard() {
               key={i}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${
                 !dll.exists || dll.isEmpty
-                  ? 'bg-red-500/[0.05] text-red-300'
-                  : 'bg-green-500/[0.04] text-green-300'
+                  ? 'bg-status-error/[0.05] text-status-error'
+                  : 'bg-status-success/[0.04] text-status-success'
               }`}
             >
               {dll.exists && !dll.isEmpty ? (
@@ -983,15 +926,15 @@ function DefenderCard() {
       {lastFixResult && (
         <div className={`p-3 rounded-xl text-xs ${
           lastFixResult.success
-            ? 'bg-green-500/[0.08] border border-green-500/20 text-green-300'
-            : 'bg-red-500/[0.08] border border-red-500/20 text-red-300'
+            ? 'bg-status-success/[0.08] border border-status-success/20 text-status-success'
+            : 'bg-status-error/[0.08] border border-status-error/20 text-status-error'
         }`}>
           <p className="font-semibold mb-0.5">
             {lastFixResult.success ? 'Reparación exitosa' : 'Reparación fallida'}
           </p>
           <p className="text-text-dim">{lastFixResult.message}</p>
           {lastFixResult.restored && (
-            <p className="text-green-400 mt-1">
+            <p className="text-status-success mt-1">
               Archivos restaurados desde cuarentena. Reinicia Y-core para aplicar los cambios.
             </p>
           )}
@@ -1012,7 +955,7 @@ function DefenderCard() {
           <button
             onClick={handleFix}
             disabled={isFixing}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-50 transition-colors text-xs font-medium text-amber-300 border border-amber-500/30 flex-1"
+            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-status-warning/20 hover:bg-status-warning/30 disabled:opacity-50 transition-colors text-xs font-medium text-status-warning border border-status-warning/30 flex-1"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isFixing ? 'animate-spin' : ''}`} />
             {isFixing ? 'Reparando...' : 'Reparar Windows Defender'}

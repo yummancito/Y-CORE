@@ -7,55 +7,48 @@
  */
 
 import fs from 'fs'
-import { BaseDrmPlugin, DrmDetectionResult, DrmRemovalResult, RemovalOptions, PluginStatus } from './drm-plugin-base'
 import { logger } from '../../logger'
 import { detectSteamStub, removeSteamStub } from '../native-steamstub-remover'
+import type { Platform, DrmPlugin, DrmDetectionResult, DrmRemovalResult, DrmInfo } from './types'
 
-export class SteamStubPlugin extends BaseDrmPlugin {
+export class SteamStubPlugin implements DrmPlugin {
   readonly id = 'steamstub'
   readonly name = 'SteamStub DRM'
   readonly version = '1.0.0'
-  readonly riskLevel: 'low' | 'medium' | 'high' | 'critical' = 'low'
-  readonly drmTypes = ['SteamStub']
-  readonly supportedPlatforms = ['windows']
+  readonly drmTypes: string[] = ['SteamStub']
+  readonly supportedPlatforms: Platform[] = ['windows']
 
-  async isReady(): Promise<boolean> {
-    return true
-  }
-
-  async getStatus(): Promise<PluginStatus> {
-    return {
-      ready: true,
-      message: 'SteamStub plugin ready (native C++ module)',
-      issues: [],
-      missingDependencies: [],
-    }
-  }
-
-  async detect(exePath: string): Promise<DrmDetectionResult> {
+  async detect(exePath: string, _gameDir: string, _appId?: string): Promise<DrmDetectionResult> {
     try {
-      await this.validateExecutablePath(exePath)
+      if (!exePath || !fs.existsSync(exePath)) {
+        return {
+          detected: false,
+          drmTypes: [],
+          platformSupported: true,
+        }
+      }
 
       // Check for cached markers
       if (fs.existsSync(exePath + '.ycore.drm-removed')) {
-        return {
-          type: 'steamstub',
+        const drm: DrmInfo = {
+          type: 'SteamStub',
           confidence: 100,
-          description: 'Executable previously unpacked by YCore',
-          detectedPath: exePath,
-          riskLevel: 'low',
-          metadata: { previouslyRemoved: true },
+          canRemove: true,
+          riskLevel: 'safe',
+          method: 'file-delete',
+        }
+        return {
+          detected: true,
+          drmTypes: [drm],
+          platformSupported: true,
         }
       }
 
       if (fs.existsSync(exePath + '.ycore.drm-free')) {
         return {
-          type: 'none',
-          confidence: 100,
-          description: 'Previously verified as DRM-free',
-          detectedPath: exePath,
-          riskLevel: 'low',
-          metadata: { verified: true },
+          detected: false,
+          drmTypes: [],
+          platformSupported: true,
         }
       }
 
@@ -63,49 +56,57 @@ export class SteamStubPlugin extends BaseDrmPlugin {
       const result = await detectSteamStub(exePath)
 
       if (result.detected) {
-        return {
-          type: 'steamstub',
+        const drm: DrmInfo = {
+          type: 'SteamStub',
+          version: result.version || undefined,
+          location: exePath,
           confidence: result.confidence,
-          description: `SteamStub v${result.version || 'unknown'} detected`,
-          detectedPath: exePath,
-          riskLevel: 'low',
-          metadata: {
-            version: result.version,
-            stubType: result.stubType,
-          },
+          canRemove: true,
+          riskLevel: 'safe',
+          method: 'file-delete',
+        }
+        return {
+          detected: true,
+          drmTypes: [drm],
+          platformSupported: true,
         }
       } else {
         return {
-          type: 'none',
-          confidence: 0,
-          description: 'SteamStub DRM not detected',
-          detectedPath: exePath,
-          riskLevel: 'low',
+          detected: false,
+          drmTypes: [],
+          platformSupported: true,
         }
       }
     } catch (err) {
       logger.error(`[SteamStub] Detection failed: ${err instanceof Error ? err.message : 'unknown error'}`, 'drm')
       return {
-        type: 'error',
-        confidence: 0,
-        description: `Detection error: ${err instanceof Error ? err.message : 'unknown error'}`,
-        riskLevel: 'critical',
+        detected: false,
+        drmTypes: [],
+        platformSupported: true,
       }
     }
   }
 
-  async remove(exePath: string, _options?: RemovalOptions): Promise<DrmRemovalResult> {
+  async remove(exePath: string, _gameDir?: string, _appId?: string): Promise<DrmRemovalResult> {
     try {
-      await this.validateExecutablePath(exePath)
+      if (!exePath || !fs.existsSync(exePath)) {
+        return {
+          success: false,
+          message: 'Executable not found',
+          drmType: 'SteamStub',
+          hadDrm: false,
+        }
+      }
 
       // Check for cached markers
       if (fs.existsSync(exePath + '.ycore.drm-removed')) {
         return {
           success: true,
           message: 'DRM already removed (cached)',
+          drmType: 'SteamStub',
           hadDrm: true,
-          exePath,
           backupPath: fs.existsSync(exePath + '.bak') ? exePath + '.bak' : undefined,
+          exePath,
         }
       }
 
@@ -113,6 +114,7 @@ export class SteamStubPlugin extends BaseDrmPlugin {
         return {
           success: true,
           message: 'No DRM detected (cached)',
+          drmType: 'SteamStub',
           hadDrm: false,
           exePath,
         }
@@ -124,7 +126,6 @@ export class SteamStubPlugin extends BaseDrmPlugin {
       const result = await removeSteamStub(exePath)
 
       if (result.success) {
-        // Create success marker
         try {
           fs.writeFileSync(exePath + '.ycore.drm-removed', new Date().toISOString(), 'utf-8')
         } catch {}
@@ -133,12 +134,12 @@ export class SteamStubPlugin extends BaseDrmPlugin {
         return {
           success: true,
           message: 'DRM removed successfully using native C++ module',
+          drmType: 'SteamStub',
           hadDrm: result.hadDrm,
-          exePath,
           backupPath: result.backupPath,
+          exePath,
         }
       } else if (!result.hadDrm) {
-        // No DRM found
         try {
           fs.writeFileSync(exePath + '.ycore.drm-free', new Date().toISOString(), 'utf-8')
         } catch {}
@@ -146,44 +147,42 @@ export class SteamStubPlugin extends BaseDrmPlugin {
         logger.info(`[SteamStub] No DRM found in: ${exePath}`, 'drm')
         return {
           success: true,
-          message: 'No SteamStub DRM detected — nothing to remove',
+          message: 'No SteamStub DRM detected',
+          drmType: 'SteamStub',
           hadDrm: false,
           exePath,
         }
       } else {
-        // Removal failed
         logger.error(`[SteamStub] Removal failed: ${result.detailedMessage}`, 'drm')
         return {
           success: false,
           message: `Failed to remove DRM: ${result.detailedMessage}`,
+          drmType: 'SteamStub',
           hadDrm: result.hadDrm,
           exePath,
-          error: {
-            code: 'REMOVAL_FAILED',
-            details: result.detailedMessage || 'Native C++ module failed',
-            recoverable: true,
-          },
         }
       }
     } catch (err) {
       logger.error(`[SteamStub] Removal operation failed: ${err instanceof Error ? err.message : 'unknown error'}`, 'drm')
       return {
         success: false,
-        message: `Removal operation failed: ${err instanceof Error ? err.message : 'unknown error'}`,
+        message: err instanceof Error ? err.message : 'Removal failed',
+        drmType: 'SteamStub',
         hadDrm: false,
         exePath,
-        error: {
-          code: 'REMOVAL_ERROR',
-          details: err instanceof Error ? err.message : 'unknown error',
-          recoverable: false,
-        },
       }
     }
   }
 
-  async restore(_exePath: string): Promise<boolean> {
-    logger.info('[SteamStub] Restore called but not implemented (native module handles backups)', 'drm')
-    return true
+  async restore?(_exePath: string, _backupPath: string): Promise<{ success: boolean; message: string }> {
+    return {
+      success: true,
+      message: 'Restore not implemented',
+    }
+  }
+
+  async cleanup?(): Promise<void> {
+    logger.info('[SteamStub] Cleanup called', 'drm')
   }
 }
 

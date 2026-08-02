@@ -1,12 +1,17 @@
 import { useState, useEffect } from 'react'
-import { ShieldOff, Search, Loader2, CheckCircle2, XCircle, AlertTriangle, Gamepad2 } from 'lucide-react'
-import { t } from '../lib/i18n'
+import { ShieldOff, Search, Loader2, CheckCircle2, XCircle, AlertTriangle, Gamepad2, Info, ShieldAlert, Users } from 'lucide-react'
+import { t, tf } from '../lib/i18n'
 import { useLibraryStore } from '../stores/useLibraryStore'
 import { useToastStore } from '../stores/useToastStore'
 import { usePageHeader } from '../components/layout/AppShell'
 import { getCoverUrl } from '../domain/utils'
 import { CoverImage } from '../components/ui/CoverImage'
 import { Card3D } from '../components/ui/Card3D'
+import { Modal } from '../components/ui/Modal'
+import { drmService } from '../services/drm.service'
+import type { DrmServiceContract } from '../../electron/common/ipc-contract'
+
+type DrmAssessment = Awaited<ReturnType<DrmServiceContract['assessGameAdvanced']>>
 
 type DrmStatus = 'idle' | 'checking' | 'processing' | 'success' | 'no-drm' | 'error' | 'already-removed'
 
@@ -20,6 +25,12 @@ export default function DrmRemoverPage() {
   const { showToast } = useToastStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [drmStates, setDrmStates] = useState<Record<string, GameDrmState>>({})
+  const [assessmentModal, setAssessmentModal] = useState<{
+    appId: string
+    name: string
+    loading: boolean
+    data: DrmAssessment | null
+  } | null>(null)
 
   usePageHeader(
     <div className="flex items-center w-full h-11">
@@ -92,6 +103,36 @@ export default function DrmRemoverPage() {
 
   const onCoverError = (appId: string) => {
     setCoverErrors((prev) => new Set(prev).add(appId))
+  }
+
+  const openAssessment = async (appId: string, name: string) => {
+    const displayName = name || `App ${appId}`
+    setAssessmentModal({ appId, name: displayName, loading: true, data: null })
+    try {
+      const data = await drmService.assessGameAdvanced(appId)
+      setAssessmentModal({ appId, name: displayName, loading: false, data })
+    } catch {
+      setAssessmentModal({ appId, name: displayName, loading: false, data: { success: false, appId } })
+    }
+  }
+
+  const contributeAssessmentResult = async (status: 'success' | 'partial' | 'failed') => {
+    if (!assessmentModal?.data?.drmDetection) return
+    const { appId, data } = assessmentModal
+    try {
+      await drmService.contributeResult(
+        appId,
+        data.drmDetection!.drmType,
+        'steamless',
+        status,
+      )
+      showToast('success', t('drm.assess.contributeSuccess'))
+      // Refresh stats after contributing
+      const stats = await drmService.getCommunityStats(appId)
+      setAssessmentModal((prev) => (prev ? { ...prev, data: prev.data ? { ...prev.data, communityStats: stats } : prev.data } : prev))
+    } catch {
+      showToast('error', t('drm.assess.contributeError'))
+    }
   }
 
   const renderStatusBadge = (appId: string) => {
@@ -209,12 +250,12 @@ export default function DrmRemoverPage() {
 
                     {/* Hover actions */}
                     <div
-                      className="absolute inset-0 z-20 flex flex-col justify-end opacity-0 group-hover/card:opacity-100 transition-all duration-300 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"
+                      className="absolute inset-0 z-20 flex flex-col justify-end gap-2 opacity-0 group-hover/card:opacity-100 transition-all duration-300 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
                         disabled={isProcessing || isDone}
-                        className={`pointer-events-auto flex items-center justify-center gap-2 mx-3 mb-4 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg ${
+                        className={`pointer-events-auto flex items-center justify-center gap-2 mx-3 px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg ${
                           isDone
                             ? 'bg-gray-600/50 text-gray-400 cursor-not-allowed'
                             : isProcessing
@@ -230,6 +271,13 @@ export default function DrmRemoverPage() {
                         )}
                         {isDone ? t('drm.alreadyRemoved') : t('drm.removeButton')}
                       </button>
+                      <button
+                        className="pointer-events-auto flex items-center justify-center gap-2 mx-3 mb-4 px-5 py-2 rounded-xl text-xs font-medium transition-all bg-white/10 text-white hover:bg-white/20"
+                        onClick={(e) => { e.stopPropagation(); openAssessment(game.appId, game.name) }}
+                      >
+                        <Info className="w-4 h-4" />
+                        {t('drm.assess.viewDetails')}
+                      </button>
                     </div>
                   </div>
                 </Card3D>
@@ -238,6 +286,113 @@ export default function DrmRemoverPage() {
           </div>
         )}
       </div>
+
+      <Modal
+        open={assessmentModal !== null}
+        onClose={() => setAssessmentModal(null)}
+        title={assessmentModal ? `${t('drm.assess.title')} — ${assessmentModal.name}` : undefined}
+        width="480px"
+      >
+        {assessmentModal && (
+          <div className="p-5 space-y-5 max-h-[70vh] overflow-y-auto">
+            {assessmentModal.loading ? (
+              <div className="flex items-center justify-center py-10 text-text-dim gap-2">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">{t('drm.assess.loading')}</span>
+              </div>
+            ) : !assessmentModal.data?.success ? (
+              <div className="flex items-center gap-2 text-sm text-red-400 py-6 justify-center">
+                <AlertTriangle className="w-5 h-5" />
+                {t('drm.assess.error')}
+              </div>
+            ) : (
+              <>
+                {/* ML signature detection */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">
+                    <ShieldOff className="w-3.5 h-3.5" />
+                    {t('drm.assess.mlSection')}
+                  </div>
+                  {assessmentModal.data.drmDetection?.detected ? (
+                    <div className="space-y-1">
+                      <p className="text-sm text-text-bright">
+                        {tf('drm.assess.mlDetected', {
+                          type: assessmentModal.data.drmDetection.drmType,
+                          confidence: Math.round(assessmentModal.data.drmDetection.confidence * 100),
+                        })}
+                      </p>
+                      {assessmentModal.data.drmDetection.recommendations.map((rec, i) => (
+                        <p key={i} className="text-xs text-text-muted">{rec}</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-text-muted">{t('drm.assess.mlNotDetected')}</p>
+                  )}
+                </div>
+
+                {/* Anti-cheat */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    {t('drm.assess.antiCheatSection')}
+                  </div>
+                  {assessmentModal.data.antiCheatDetection?.detected ? (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 space-y-1">
+                      <p className="text-sm text-red-400 font-medium">
+                        {tf('drm.assess.antiCheatDetected', { type: assessmentModal.data.antiCheatDetection.antiCheatType })}
+                      </p>
+                      {assessmentModal.data.antiCheatDetection.kernelMode && (
+                        <p className="text-xs text-red-300">{t('drm.assess.antiCheatKernel')}</p>
+                      )}
+                      {assessmentModal.data.antiCheatDetection.warnings.map((w, i) => (
+                        <p key={i} className="text-xs text-text-muted">{w}</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-text-muted">{t('drm.assess.antiCheatNone')}</p>
+                  )}
+                </div>
+
+                {/* Community (local) stats */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wide text-text-muted">
+                    <Users className="w-3.5 h-3.5" />
+                    {t('drm.assess.communitySection')}
+                  </div>
+                  <p className="text-[11px] text-text-dim mb-2">{t('drm.assess.communityNote')}</p>
+                  {assessmentModal.data.communityStats ? (
+                    <div className="space-y-1">
+                      <p className="text-sm text-text-bright">
+                        {tf('drm.assess.communityReports', { count: assessmentModal.data.communityStats.totalReports })}
+                      </p>
+                      <p className="text-xs text-text-muted">
+                        {tf('drm.assess.communitySuccessRate', { rate: assessmentModal.data.communityStats.successRate })}
+                      </p>
+                      <p className="text-xs text-text-muted">
+                        {tf('drm.assess.communityPreferredMethod', { method: assessmentModal.data.communityStats.preferredMethod })}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-text-muted">{t('drm.assess.communityNoData')}</p>
+                  )}
+
+                  {assessmentModal.data.drmDetection?.detected && (
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-green-500/15 text-green-400 hover:bg-green-500/25 transition-colors"
+                        onClick={() => contributeAssessmentResult('success')}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        {t('drm.assess.contributeButton')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

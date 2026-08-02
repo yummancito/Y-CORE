@@ -51,21 +51,31 @@ function getDllList(appRoot: string): DllInfo[] {
     })
   }
 
-  // DLL hook de Steam (siempre empaquetados en electron/dll/)
+  // DLL hook de Steam. dll-inject.ts (la fuente de verdad que realmente
+  // copia estos archivos a la carpeta de Steam) los lee desde
+  // native/opensteamtool/ relativo a app.getAppPath() — que Electron resuelve
+  // automáticamente a app.asar.unpacked/native/opensteamtool/ en modo
+  // empaquetado porque native/opensteamtool/** está en asarUnpack. Ni
+  // electron/dll/ ni <exe dir>/resources/... son la ruta real; ambas fueron
+  // intentos previos equivocados que hacían que el escaneo siempre reportara
+  // estos 3 DLLs como "faltantes" pese a existir.
+  const appPath = app.getAppPath()
+  const hookDllDir = path.join(appPath, 'native', 'opensteamtool')
+  logger.info(`[DefenderCheck] appPath=${appPath} hookDllDir=${hookDllDir} exists=${fs.existsSync(hookDllDir)}`, 'dll')
   list.push({
-    path: path.join(appRoot, 'electron', 'dll', 'OpenSteamTool.dll'),
-    name: 'OpenSteamTool.dll (hook Steam)',
+    path: path.join(hookDllDir, 'OpenSteamTool.dll'),
+    name: 'YCoreTool.dll (hook Steam)',
     critical: false,
     expectedAlways: true,
   })
   list.push({
-    path: path.join(appRoot, 'electron', 'dll', 'dwmapi.dll'),
+    path: path.join(hookDllDir, 'dwmapi.dll'),
     name: 'dwmapi.dll (DLL sideload)',
     critical: false,
     expectedAlways: true,
   })
   list.push({
-    path: path.join(appRoot, 'electron', 'dll', 'xinput1_4.dll'),
+    path: path.join(hookDllDir, 'xinput1_4.dll'),
     name: 'xinput1_4.dll (DLL sideload)',
     critical: false,
     expectedAlways: true,
@@ -244,7 +254,7 @@ export function showDefenderWarningIfNeeded(): boolean {
       'Para solucionarlo:',
       '  1. Abre Windows Security > Virus & threat protection',
       '  2. Ve a "Protection history"',
-      '  3. Busca alertas de "ycore" u "opensteamtool"',
+      '  3. Busca alertas de "ycore" o "YCoreTool"',
       '  4. Restaura los archivos ("Allow on device")',
       '  5. Ejecuta el script de exclusión para evitar que vuelva a ocurrir',
       '',

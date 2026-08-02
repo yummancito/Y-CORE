@@ -41,6 +41,10 @@ export interface RestartPrompt {
 interface V2TaskCompletion {
   reason: 'completed' | 'failed' | 'timeout' | 'not-found' | 'cancelled' | 'blocked-prereq'
   errorMessage?: string
+  /** true when completion came from a Steam-native install (setup done,
+   *  Steam owns the actual bytes) — the caller needs to prompt "restart
+   *  Steam to start downloading" instead of just reporting done. */
+  steamNative?: boolean
 }
 
 /**
@@ -119,6 +123,15 @@ async function installOneGameV2(opts: {
     throw new Error(started.error ?? 'V2 engine refused to enqueue task')
   }
   installService.addLog('INFO', `[V2] task ${started.taskId} enqueued for ${game.name}`)
+
+  // Steam-native installs finish their work (depot keys + ACF + Lua) inside
+  // startFromApi itself and hand the actual download off to Steam — they
+  // never register in the download-engine's task table, so polling for them
+  // there can never succeed. Treat the 'ready' marker as completion directly.
+  if (started.alreadyComplete) {
+    installService.addLog('INFO', `[V2] ${game.name} setup complete — Steam will handle the download`)
+    return { reason: 'completed', steamNative: true }
+  }
 
   // 5. Block on completion (success OR failure).
   const completion = await installService.waitForV2TaskComplete(started.taskId)
@@ -280,6 +293,7 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
             return
           }
           if (completion.reason === 'not-found') {
+            showToast('error', `No se pudo confirmar la descarga de ${item.name}. Intentá de nuevo.`, 8000)
             installService.addLog('WARN', `[V2] ${item.name} engine rotated task without history entry — skipping`)
             return
           }
@@ -347,8 +361,7 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
           return
         }
         if (completion.reason === 'not-found') {
-          // Engine rotated the task without a history entry — likely a
-          // cleanup race, not a real failure. Silently advance.
+          showToast('error', `No se pudo confirmar la descarga de ${item.name}. Intentá de nuevo.`, 8000)
           installService.addLog('WARN', `[V2] ${item.name} engine rotated task without history entry — skipping`)
           return
         }
@@ -363,6 +376,20 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
       try { await installService.reportDownloaded(item.appId) } catch { /* ok */ }
       consumeGame(item.appId)
       installService.addLog('INFO', `[V2] ${item.name} complete and reported`)
+      if (completion.steamNative) {
+        // Steam already restarted itself server-side (download.service.ts)
+        // so it can see the new appmanifest and start pulling bytes — this
+        // is just a status confirmation. The button stays as a manual
+        // retry in case that automatic restart silently failed.
+        onRestartPrompt({
+          title: 'Descarga en curso :3',
+          message: `${item.name} está configurado y Steam se reinició para empezar a descargarlo. Si no ves progreso en Steam, tocá reiniciar de nuevo.`,
+          confirmLabel: 'Reiniciar Steam',
+          onConfirm: () => {
+            window.steamtools?.restartSteam?.().catch(() => {})
+          },
+        })
+      }
     } catch (err: any) {
       const errorMsg = err.message || 'Unknown error'
       installService.addLog('ERROR', `[V2] install failed for appId=${item.appId}: ${errorMsg}`)

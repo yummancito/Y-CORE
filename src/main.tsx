@@ -37,9 +37,12 @@ function applySystemTheme(root: HTMLElement) {
 }
 
 // ── Apply default theme synchronously so React mounts with the right colors (no flash)
+// theme-dark already IS the strong-black Y-core palette — no second ct-* class
+// layered on top. The old theme-dark + ct-y-core combo relied on both classes
+// staying on <html> and CSS declaration order to pick a winner, which broke
+// whenever anything reordered/removed one of the two.
 const root = document.documentElement
 applySystemTheme(root)
-root.classList.add('ct-y-core')
 
 // Live system theme switcher — register BEFORE React mount so we don't miss
 // the very first transition if the user toggles while the app is booting.

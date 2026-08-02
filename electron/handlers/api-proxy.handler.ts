@@ -18,18 +18,20 @@ export function registerApiProxyHandlers() {
         return { success: false, error: 'Invalid URL' }
       }
 
-      logger.debug(`API Proxy: GET ${url}`, 'api-proxy')
+      const method = options?.method || 'GET'
+      logger.debug(`API Proxy: ${method} ${url}`, 'api-proxy')
 
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 10000) // 10s timeout
 
       const response = await fetch(url, {
-        method: 'GET',
+        method,
         headers: {
           'User-Agent': 'Y-Core/3.0',
           'Accept': 'application/json',
           ...options?.headers,
         },
+        body: options?.body,
         signal: controller.signal,
       })
 

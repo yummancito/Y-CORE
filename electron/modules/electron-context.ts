@@ -80,7 +80,7 @@ function fallbackUserData(): string {
   return path.join(localAppData, 'Y-core')
 }
 
-/** Subdirectorio donde se descargan los juegos (SteamCMD o cliente). */
+/** Subdirectorio donde se descargan los juegos. */
 export function getLibraryRoot(): string {
   return path.join(getUserDataDir(), 'Library')
 }
@@ -117,13 +117,11 @@ export function getAppPath(): string {
 // ============================================================
 
 /** Emite un evento IPC a todas las ventanas de Electron que sigan vivas.
- *  No-op en CLI puro — la CLI consume eventos directamente desde
- *  startSteamCmdInstall (futuro H1.8.b).
+ *  No-op en CLI puro.
  *
  *  Si `webContents.send` tira en una ventana destruida, se invoca `onError`
  *  con el error. Por defecto silencioso (matching el comportamiento
- *  histórico del logger). El caller decide si loguear (steamcmd-manager
- *  lo hace para no perder señal de debugging). */
+ *  histórico del logger). El caller decide si loguear. */
 export function emitToRenderers(
   eventName: string,
   payload: unknown,

@@ -104,7 +104,7 @@ function AppRoutes() {
 }
 
 export default function App() {
-  // Startup timing marker — visible in LogConsole
+  // Startup timing marker — visible in /logs
   window.steamtools?.addLog?.({ level: 'DEBUG', message: '[STARTUP] [A] App render' }).catch(() => {})
   const { toggle: toggleCommandPalette } = useCommandPaletteStore()
   const { open: openSteamError } = useSteamErrorStore()

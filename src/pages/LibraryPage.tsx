@@ -10,12 +10,14 @@ import {
   FolderOpen,
   AlertTriangle,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   Wrench,
   Wifi,
   Heart,
   Download,
   Shield,
+  X,
 } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { parseError } from '../lib/parse-error'
@@ -29,6 +31,8 @@ import { useSettingsStore } from '../stores/useSettingsStore'
 import { launchDedup } from '../lib/launch-deduper'
 import { useGameProcessStore, startProcessPolling, stopProcessPolling } from '../stores/useGameProcessStore'
 import { useLibraryV2Store } from '../stores/useLibraryV2Store'
+import { GameNotesPanel } from '../components/library/GameNotesPanel'
+import { FavoriteButton } from '../components/library/FavoriteButton'
 import type { InstalledGame } from '../domain/types'
 
 type PanelTab = 'overview' | 'actions' | 'notes'
@@ -295,7 +299,12 @@ function SortDropdown({
 export default function LibraryPage() {
   // ── Stores (showToast extraído con selector estable para evitar re-renders) ──
   const { searchQuery, sortBy, loadGames, setSearchQuery, setSortBy, loading, error } = useLibraryStore()
-  const games = useFilteredLibraryGames()
+  const gamesUnfiltered = useFilteredLibraryGames()
+  const { showFavoritesOnly, favorites } = useLibraryV2Store()
+  const games = useMemo(
+    () => (showFavoritesOnly ? gamesUnfiltered.filter((g) => !!favorites[g.appId]) : gamesUnfiltered),
+    [gamesUnfiltered, showFavoritesOnly, favorites],
+  )
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
   const showToast = useToastStore((s) => s.showToast)
   // V2-only: every install goes through the V2 engine. Query live state per
@@ -306,7 +315,6 @@ export default function LibraryPage() {
     (appId: string) => v3Tasks.find((t) => String(t.appId) === String(appId))?.state,
     [v3Tasks],
   )
-  const [downloadsPanelOpen, setDownloadsPanelOpen] = useState(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; game: InstalledGame } | null>(null)
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -320,21 +328,12 @@ export default function LibraryPage() {
   const initRef = useRef(false)
   const contextMenuRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
-  const prevHasDownloadsRef = useRef(false)
 
-  const { showFavoritesOnly, setShowFavoritesOnly } = useLibraryV2Store()
+  const setShowFavoritesOnly = useLibraryV2Store((s) => s.setShowFavoritesOnly)
 
   const [visibleGamesCount, setVisibleGamesCount] = useState(50)
   const sidebarGamesListRef = useRef<HTMLDivElement>(null)
   const loadingMoreGamesRef = useRef(false)
-
-  const downloadTasks = useDownloadEngineStore((s) => s.tasks)
-  const hasActiveDownloads = downloadTasks.some(
-    (tk) => tk.state === 'downloading' || tk.state === 'preparing' || tk.state === 'connecting',
-  )
-  const activeTask = downloadTasks.find(
-    (tk) => tk.state === 'downloading' || tk.state === 'preparing' || tk.state === 'connecting',
-  )
 
   // ── Effects ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -407,21 +406,6 @@ export default function LibraryPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-
-  useEffect(() => {
-    if (!downloadsPanelOpen) return
-    const close = () => setDownloadsPanelOpen(false)
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [downloadsPanelOpen])
-
-  useEffect(() => {
-    if (hasActiveDownloads && !prevHasDownloadsRef.current) {
-      setDownloadsPanelOpen(true)
-    }
-    prevHasDownloadsRef.current = hasActiveDownloads
-  }, [hasActiveDownloads])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -508,6 +492,36 @@ export default function LibraryPage() {
       showToast('info', t('library.verifyStart'))
     } else {
       showToast('error', parseError(result.error, 'library.verifyFailed'))
+    }
+  }, [showToast])
+
+  const handleRepairInstallation = useCallback(async (game: InstalledGame) => {
+    const result = await useDownloadEngineStore.getState().repairLocalInstallation(
+      game.appId,
+      game.installDir,
+    )
+    const diagnostic = result.result
+    if (!result.success || !diagnostic) {
+      showToast('error', result.error || 'No se pudo diagnosticar la instalación')
+      return
+    }
+
+    const repaired = diagnostic.repaired?.length ?? 0
+    const issues = diagnostic.issues ?? []
+    if (diagnostic.ok) {
+      showToast(
+        'success',
+        repaired > 0
+          ? `Fix completado: ${repaired} elemento(s) local(es) reparado(s).`
+          : 'Diagnóstico completado: la instalación local está consistente.',
+        7000,
+      )
+    } else {
+      showToast(
+        'warning',
+        `${repaired > 0 ? `Se repararon ${repaired} elemento(s). ` : ''}${issues.join(' · ')}. Los archivos del juego que falten requieren una reinstalación normal; no se aplicó ningún bypass.`,
+        10000,
+      )
     }
   }, [showToast])
 
@@ -648,6 +662,7 @@ export default function LibraryPage() {
             game={selectedGame}
             onLaunch={() => handleLaunchGame(selectedGame.appId)}
             onVerify={() => handleVerifyGame(selectedGame)}
+            onRepair={() => handleRepairInstallation(selectedGame)}
             onOpenLocation={() => handleOpenLocation(selectedGame)}
             onToggleOnlineFix={() => handleToggleOnlineFix(selectedGame)}
             onUninstall={() => handleDeleteGame(selectedGame)}
@@ -659,16 +674,6 @@ export default function LibraryPage() {
           </div>
         )}
 
-        {/* Sticky bottom download panel + bar */}
-        {downloadTasks.length > 0 && (
-          <DownloadBar
-            tasks={downloadTasks}
-            activeTask={activeTask}
-            hasActiveDownloads={hasActiveDownloads}
-            open={downloadsPanelOpen}
-            onToggle={() => setDownloadsPanelOpen((prev) => !prev)}
-          />
-        )}
       </main>
 
       {/* Scroll-to-top button */}
@@ -714,6 +719,15 @@ export default function LibraryPage() {
             className="flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-[12.5px] font-medium text-text-secondary hover:text-text-bright hover:bg-white/[0.05] transition-colors"
           >
             <Wrench className="w-3.5 h-3.5" /> Verificar
+          </button>
+          <button
+            onClick={() => {
+              handleRepairInstallation(contextMenu.game)
+              setContextMenu(null)
+            }}
+            className="flex items-center gap-2 w-full px-2.5 py-2 rounded-md text-[12.5px] font-medium text-text-secondary hover:text-text-bright hover:bg-white/[0.05] transition-colors"
+          >
+            <Wrench className="w-3.5 h-3.5" /> Reparar metadatos locales
           </button>
           <button
             onClick={() => {
@@ -824,6 +838,7 @@ const SidebarGameRow = memo(function SidebarGameRow({
           {game.playtime ? <span>{Math.round(game.playtime / 60)}h</span> : null}
         </p>
       </div>
+      {isSelected && <FavoriteButton appId={game.appId} size={13} />}
       {isSelected && installed && hovered && (
         <button
           onClick={(e) => {
@@ -875,6 +890,7 @@ const GameDetailPanel = memo(function GameDetailPanel({
   game,
   onLaunch,
   onVerify,
+  onRepair,
   onOpenLocation,
   onToggleOnlineFix,
   onUninstall,
@@ -882,6 +898,7 @@ const GameDetailPanel = memo(function GameDetailPanel({
   game: InstalledGame
   onLaunch: () => void
   onVerify: () => void
+  onRepair: () => void
   onOpenLocation: () => void
   onToggleOnlineFix: () => void
   onUninstall: () => void
@@ -930,6 +947,7 @@ const GameDetailPanel = memo(function GameDetailPanel({
   const locationTail = game.installDir ? game.installDir.split(/[\\/]/).slice(-2).join('/') : null
   const { showToast } = useToastStore()
   const [activeTab, setActiveTab] = useState<PanelTab>('overview')
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [onlinefixEnabled, setOnlinefixEnabled] = useState<boolean | null>(null)
   const [onlinefixBusy, setOnlinefixBusy] = useState(false)
   const [drmStatus, setDrmStatus] = useState<DrmStatus | null>(null)
@@ -1099,9 +1117,18 @@ const GameDetailPanel = memo(function GameDetailPanel({
             className="w-full h-full object-cover"
             onError={(e) => {
               const img = e.target as HTMLImageElement
-              if (!img.dataset.fallback) {
-                img.dataset.fallback = 'true'
+              // library_hero.jpg doesn't exist for every appId (older/smaller
+              // games) — fall through header.jpg → capsule_616x353.jpg before
+              // giving up. The old 2-step chain hid the <img> outright on the
+              // second failure, leaving the bare `background: var(--bg-card)`
+              // div visible — a flat black/near-black rectangle with nothing
+              // in it, which is exactly the "images don't load" symptom.
+              if (img.dataset.fallback === undefined) {
+                img.dataset.fallback = 'header'
                 img.src = `https://cdn.akamai.steamstatic.com/steam/apps/${game.appId}/header.jpg`
+              } else if (img.dataset.fallback === 'header') {
+                img.dataset.fallback = 'capsule'
+                img.src = `https://cdn.akamai.steamstatic.com/steam/apps/${game.appId}/capsule_616x353.jpg`
               } else {
                 img.style.display = 'none'
               }
@@ -1127,9 +1154,12 @@ const GameDetailPanel = memo(function GameDetailPanel({
               }}
               onError={(e) => {
                 const img = e.target as HTMLImageElement
-                if (!img.dataset.fallback) {
-                  img.dataset.fallback = 'true'
+                if (img.dataset.fallback === undefined) {
+                  img.dataset.fallback = 'header'
                   img.src = `https://cdn.akamai.steamstatic.com/steam/apps/${game.appId}/header.jpg`
+                } else if (img.dataset.fallback === 'header') {
+                  img.dataset.fallback = 'capsule'
+                  img.src = `https://cdn.akamai.steamstatic.com/steam/apps/${game.appId}/capsule_616x353.jpg`
                 } else {
                   img.style.display = 'none'
                 }
@@ -1205,6 +1235,7 @@ const GameDetailPanel = memo(function GameDetailPanel({
                 )}
                 {/* V2-only: no install-method badge needed; the dl-progress card
                     on the right side reflects V2 engine state live. */}
+                <FavoriteButton appId={game.appId} size={22} />
               </div>
             </div>
           </div>
@@ -1357,20 +1388,13 @@ const GameDetailPanel = memo(function GameDetailPanel({
                     className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory"
                     style={{ scrollbarWidth: 'thin' }}
                   >
-                    {steamDetails.screenshots.map((shot) => {
-                      const fullUrl = shot.path_full || shot.path_thumbnail
-                      return (
-                      <a
+                    {steamDetails.screenshots.map((shot, i) => (
+                      <button
                         key={shot.id}
-                        href={fullUrl}
-                        onClick={(e) => {
-                          // Route through Electron's external browser rather than opening
-                          // a renderer tab (consistent with how other links open in app).
-                          e.preventDefault()
-                          window.steamtools?.openExternal?.(fullUrl)
-                        }}
+                        type="button"
+                        onClick={() => setLightboxIndex(i)}
                         className="flex-shrink-0 snap-start group relative rounded-lg overflow-hidden border border-white/[0.06] hover:border-white/20 transition-colors cursor-zoom-in"
-                        title="Abrir captura en tamaño completo"
+                        title="Ver captura en tamaño completo"
                       >
                         <img
                           src={shot.path_thumbnail}
@@ -1380,9 +1404,8 @@ const GameDetailPanel = memo(function GameDetailPanel({
                           className="h-32 w-auto object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                           style={{ background: 'rgba(255,255,255,0.04)' }}
                         />
-                      </a>
-                      )
-                    })}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
@@ -1666,22 +1689,67 @@ const GameDetailPanel = memo(function GameDetailPanel({
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl">
                 <ActionButton icon={FolderOpen} label="Abrir carpeta" onClick={onOpenLocation} />
                 <ActionButton icon={Wrench} label="Verificar archivos" onClick={onVerify} />
+                <ActionButton icon={Wrench} label="Reparar metadatos locales" onClick={onRepair} />
                 <ActionButton icon={Trash2} label="Desinstalar" onClick={onUninstall} variant="danger" />
               </div>
             </div>
           </div>
         )}
         {activeTab === 'notes' && (
-          <div className="text-text-dim text-[14px] max-w-2xl">
-            <div className="rounded-xl border border-dashed border-white/[0.08] p-8 text-center">
-              <p className="mb-1 text-text-secondary">Sin notas guardadas todavía.</p>
-              <p className="text-[12px] text-text-dim">
-                Próximamente: editá tus propias notas desde el menú de Settings.
-              </p>
-            </div>
-          </div>
+          <GameNotesPanel appId={game.appId} />
         )}
       </div>
+
+      {/* Screenshot lightbox — in-app, matches GameDetailPage's pattern instead of opening a browser tab */}
+      {lightboxIndex !== null && steamDetails?.screenshots && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          style={{ background: 'rgba(5,5,7,0.92)', backdropFilter: 'blur(6px)' }}
+          onClick={() => setLightboxIndex(null)}
+        >
+          <button
+            onClick={() => setLightboxIndex(null)}
+            className="absolute top-5 right-5 w-[46px] h-[46px] rounded-full flex items-center justify-center cursor-pointer transition-colors"
+            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+          >
+            <X className="w-[22px] h-[22px]" />
+          </button>
+          {steamDetails.screenshots.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setLightboxIndex((prev) => (prev! - 1 + steamDetails.screenshots!.length) % steamDetails.screenshots!.length)
+              }}
+              className="absolute left-5 top-1/2 -translate-y-1/2 w-[52px] h-[52px] rounded-full flex items-center justify-center cursor-pointer transition-colors"
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+            >
+              <ChevronLeft className="w-[26px] h-[26px]" />
+            </button>
+          )}
+          <img
+            src={steamDetails.screenshots[lightboxIndex].path_full || steamDetails.screenshots[lightboxIndex].path_thumbnail}
+            alt=""
+            className="max-w-[90%] max-h-[90%] object-contain rounded-xl"
+            style={{ boxShadow: '0 24px 80px rgba(0,0,0,0.7)' }}
+            onClick={(e) => e.stopPropagation()}
+          />
+          {steamDetails.screenshots.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setLightboxIndex((prev) => (prev! + 1) % steamDetails.screenshots!.length)
+              }}
+              className="absolute right-5 top-1/2 -translate-y-1/2 w-[52px] h-[52px] rounded-full flex items-center justify-center cursor-pointer transition-colors"
+              style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}
+            >
+              <ChevronRight className="w-[26px] h-[26px]" />
+            </button>
+          )}
+          <span className="absolute bottom-6 left-1/2 -translate-x-1/2 text-sm font-mono" style={{ color: '#a1a1aa' }}>
+            {lightboxIndex + 1} / {steamDetails.screenshots.length}
+          </span>
+        </div>
+      )}
     </div>
   )
 })
@@ -1814,184 +1882,3 @@ const GalleryImage = memo(function GalleryImage({
   )
 })
 
-// ─── Sticky download bar ────────────────────────────────────────────
-const DownloadBar = memo(function DownloadBar({
-  tasks,
-  activeTask,
-  hasActiveDownloads,
-  open,
-  onToggle,
-}: {
-  tasks: any[]
-  activeTask: any
-  hasActiveDownloads: boolean
-  open: boolean
-  onToggle: () => void
-}) {
-  const pausedCount = tasks.filter((tk) => tk.state === 'paused').length
-  const queuedCount = tasks.filter((tk) => tk.state === 'queued').length
-  const statusParts: string[] = []
-  if (pausedCount > 0) statusParts.push(`${pausedCount} pausad${pausedCount !== 1 ? 'as' : 'a'}`)
-  if (queuedCount > 0) statusParts.push(`${queuedCount} en cola`)
-
-  return (
-    <div className="sticky bottom-0 left-0 right-0 z-40">
-      <div
-        className="overflow-hidden transition-all duration-300 ease-out"
-        style={{
-          maxHeight: open ? '400px' : '0px',
-          opacity: open ? 1 : 0,
-        }}
-      >
-        <div
-          className="p-4"
-          style={{
-            background: 'var(--bg-card)',
-            borderTop: '1px solid var(--border-color)',
-          }}
-        >
-          <div className="space-y-2 max-h-[340px] overflow-y-auto">
-            {tasks.map((task) => {
-              const isActive =
-                task.state === 'downloading' ||
-                task.state === 'preparing' ||
-                task.state === 'connecting'
-              const taskColor = isActive
-                ? 'var(--accent)'
-                : task.state === 'paused'
-                  ? 'var(--text-dim)'
-                  : task.state === 'completed'
-                    ? 'var(--green)'
-                    : task.state === 'failed'
-                      ? 'var(--red)'
-                      : 'var(--text-dim)'
-              return (
-                <div
-                  key={task.id}
-                  className="flex items-center gap-3 px-3 py-2 rounded-xl"
-                  style={{
-                    background: isActive ? 'rgba(0,120,242,0.06)' : 'rgba(255,255,255,0.02)',
-                  }}
-                >
-                  <div
-                    className="flex items-center justify-center w-8 h-8 rounded-lg"
-                    style={{
-                      background: isActive ? 'rgba(0,120,242,0.1)' : 'rgba(255,255,255,0.04)',
-                    }}
-                  >
-                    {isActive ? (
-                      <Loader2 className="w-4 h-4 animate-spin" style={{ color: taskColor }} />
-                    ) : task.state === 'completed' ? (
-                      <CheckCircle className="w-4 h-4" style={{ color: taskColor }} />
-                    ) : (
-                      <Download className="w-4 h-4" style={{ color: taskColor }} />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-text-bright truncate">{task.name}</p>
-                    <p className="text-[10px] font-mono text-text-dim capitalize">
-                      {task.state}
-                      {task.speedBytesPerSec > 0 ? ` · ${formatBytes(task.speedBytesPerSec)}/s` : ''}
-                    </p>
-                  </div>
-                  {isActive && task.bytesTotal > 0 && (
-                    <div className="w-24">
-                      <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden mb-0.5">
-                        <div
-                          className="h-full rounded-full"
-                          style={{
-                            width: `${Math.min(100, task.percent)}%`,
-                            background: 'var(--accent)',
-                          }}
-                        />
-                      </div>
-                      <p className="text-[9px] font-mono text-text-dim text-right">
-                        {task.percent.toFixed(0)}%
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      <div
-        className="flex items-center gap-3 px-6 py-3 cursor-pointer transition-all select-none"
-        style={{
-          background: 'linear-gradient(180deg, var(--bg-card), var(--bg-darker))',
-          borderTop: hasActiveDownloads
-            ? '1px solid rgba(0,120,242,0.25)'
-            : '1px solid var(--border-color)',
-        }}
-        onClick={onToggle}
-      >
-        <div
-          className="flex items-center justify-center w-9 h-9 rounded-xl"
-          style={{
-            background: hasActiveDownloads ? 'rgba(0,120,242,0.12)' : 'rgba(255,255,255,0.04)',
-          }}
-        >
-          {hasActiveDownloads ? (
-            <Loader2 className="w-[18px] h-[18px] animate-spin" style={{ color: 'var(--accent)' }} />
-          ) : (
-            <Download className="w-[18px] h-[18px] text-text-dim" />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          {hasActiveDownloads && activeTask ? (
-            <>
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-sm font-semibold text-text-bright truncate">
-                  {activeTask.name}
-                </span>
-                <span
-                  className="text-[11px] font-mono font-semibold"
-                  style={{ color: 'var(--accent)' }}
-                >
-                  {activeTask.percent.toFixed(0)}%
-                </span>
-                {activeTask.speedBytesPerSec > 0 && (
-                  <span className="text-[11px] font-mono text-text-dim">
-                    {formatBytes(activeTask.speedBytesPerSec)}/s
-                  </span>
-                )}
-              </div>
-              <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-300"
-                  style={{
-                    width: `${Math.min(100, activeTask.percent)}%`,
-                    background:
-                      'linear-gradient(90deg, var(--accent), var(--accent-hover))',
-                  }}
-                />
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-text-bright">
-                {tasks.length} tarea{tasks.length !== 1 ? 's' : ''}
-              </span>
-              {statusParts.length > 0 && (
-                <span className="text-[11px] text-text-dim">· {statusParts.join(' · ')}</span>
-              )}
-            </div>
-          )}
-        </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggle()
-          }}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all hover:brightness-110 text-white"
-          style={{ background: 'var(--accent)' }}
-        >
-          <Download className="w-[14px] h-[14px]" />
-          {open ? 'Cerrar' : 'Ver'}
-        </button>
-      </div>
-    </div>
-  )
-})

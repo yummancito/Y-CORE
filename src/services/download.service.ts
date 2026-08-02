@@ -66,6 +66,9 @@ export class DownloadService extends BaseService implements DownloadServiceContr
   async clearCache(): Promise<{ success: boolean; error?: string }> {
     return this.call('clearCache')
   }
+  async repairLocalInstallation(appId: string, installDir: string): Promise<{ success: boolean; result?: any; error?: string }> {
+    return this.call('repairLocalInstallation', appId, installDir)
+  }
 }
 
 export const downloadService = new DownloadService()

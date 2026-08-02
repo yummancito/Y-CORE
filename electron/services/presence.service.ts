@@ -20,7 +20,7 @@ import type {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const API_BASE = process.env.YCORE_API_URL || 'https://y-core-render-api-rxwd.onrender.com'
+const API_BASE = process.env.YCORE_API_URL || 'https://y-core-render-api-6jbv.onrender.com'
 const HEARTBEAT_INTERVAL_MS = 30000
 const API_TIMEOUT_MS = 10000
 

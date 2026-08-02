@@ -203,7 +203,7 @@ export function stripDepotsWithoutKeys(
   lua: string,
   mainAppId: string,
   depotKeys: { depot_id: string; key: string }[]
-): { strippedDepots: string[]; luaContent: string } {
+): { strippedDepots: string[]; luaContent: string; cleanedLua: string } {
   const keyedDepotIds = new Set(depotKeys.map((d) => d.depot_id))
   keyedDepotIds.add(mainAppId)
   const strippedDepots: string[] = []
@@ -232,7 +232,9 @@ export function stripDepotsWithoutKeys(
   }
 
   const luaContent = keepLines.join('\n').replace(/\n\s*\n/g, '\n').trim()
-  return { strippedDepots, luaContent }
+  // `cleanedLua` is retained as a compatibility alias for older callers/tests;
+  // `luaContent` is the canonical name used by the install path.
+  return { strippedDepots, luaContent, cleanedLua: luaContent }
 }
 
 export async function installGameCore(

@@ -261,7 +261,6 @@ export default {
   'installDock.pill.completeTip': 'Download complete.',
   'installDock.pill.downloading': 'Downloading',
   'installDock.pill.downloadingTip': 'Download in progress.',
-  'installDock.badge.steamcmdTip': 'Installing via SteamCMD.',
   'installDock.badge.steamclientTip': 'Installing via Steam client.',
   'installDock.badge.auto': 'Auto',
   'installDock.badge.autoTip': 'Automatic install method.',
@@ -442,7 +441,6 @@ export default {
 
   // Settings tabs
   'settings.tabAccount': 'Account',
-  'settings.tabContent': 'Content',
   'settings.tabLogs': 'Logs',
   'settings.tabPersonalization': 'Personalization',
 
@@ -478,14 +476,10 @@ export default {
   'signaturePending.joinBeta': 'Retry',
 
   // Content
-  'settings.content': 'Content',
-  'settings.contentDesc': 'Control what content is shown',
   'settings.showAdult': 'Show +18 content',
   'settings.showAdultDesc': 'Show games with adult content in the store',
   'settings.showTools': 'Show tools and SDKs',
   'settings.showToolsDesc': 'Include tools, dedicated servers and SDKs in results',
-  'settings.showAddGame': 'Show Add Game section',
-  'settings.showAddGameDesc': 'Show the option to manually add games in the sidebar menu',
 
   // Logs settings
   'settings.logsEnabled': 'Logs enabled',
@@ -537,6 +531,29 @@ export default {
   'drm.confirmTitle': 'Remove DRM?',
   'drm.confirmMessage': 'A backup of the original executable will be made. The game will be closed if open.',
   'drm.noGames': 'No installed games found',
+
+  // DRM — Assessment panel (Phase 3: ML detection + anti-cheat + community stats)
+  'drm.assess.title': 'DRM Analysis',
+  'drm.assess.viewDetails': 'View analysis',
+  'drm.assess.loading': 'Analyzing...',
+  'drm.assess.error': 'Could not analyze the game',
+  'drm.assess.mlSection': 'Signature detection',
+  'drm.assess.mlDetected': 'Detected: {type} ({confidence}% confidence)',
+  'drm.assess.mlNotDetected': 'No known DRM signatures detected',
+  'drm.assess.mlPacked': 'Executable appears to be packed/compressed',
+  'drm.assess.antiCheatSection': 'Anti-cheat',
+  'drm.assess.antiCheatDetected': 'Anti-cheat detected: {type}',
+  'drm.assess.antiCheatKernel': 'Kernel-level — cannot be disabled or removed',
+  'drm.assess.antiCheatNone': 'No anti-cheat detected',
+  'drm.assess.communitySection': 'Local stats',
+  'drm.assess.communityNote': 'These stats are local to this device only. There is no shared database between users.',
+  'drm.assess.communityReports': '{count} report(s) recorded on this device',
+  'drm.assess.communityNoData': 'No data recorded yet on this device',
+  'drm.assess.communitySuccessRate': 'Success rate: {rate}%',
+  'drm.assess.communityPreferredMethod': 'Most used method: {method}',
+  'drm.assess.contributeButton': 'Record result',
+  'drm.assess.contributeSuccess': 'Result recorded',
+  'drm.assess.contributeError': 'Could not record the result',
 
   // DRM Remover — Error Messages
   'drm.error.invalidAppId': 'Invalid application ID',
@@ -704,11 +721,8 @@ export default {
   'installMethod.ariaGroup': 'Available installation methods',
   'installMethod.recommended': 'RECOMMENDED',
   'installMethod.auto.title': 'Automatic',
-  'installMethod.auto.desc': 'SteamCMD if available, otherwise Steam client',
+  'installMethod.auto.desc': 'Choose the best available method',
   'installMethod.auto.tip': 'Automatic: choose the best method',
-  'installMethod.steamcmd.title': 'SteamCMD',
-  'installMethod.steamcmd.desc': 'Fast and efficient downloads (requires SteamCMD)',
-  'installMethod.steamcmd.tip': 'SteamCMD only',
   'installMethod.steampipe.title': 'Without Steam',
   'installMethod.steampipe.desc': 'Direct download from Steam CDN (no Steam required)',
   'installMethod.steampipe.tip': 'Download without Steam installed',
@@ -719,10 +733,8 @@ export default {
   'installMethod.steamclient.openSteamNote': '💡 Requires Steam installed and running',
   'installMethod.lastFallbackTitle': 'Previous method failed',
   'installMethod.dismissBanner': 'Dismiss notification',
-  'installMethod.fallbackReason.steamcmd-not-available': 'SteamCMD is not available. Install it from Settings or use another method.',
   'installMethod.fallbackReason.notAnonymous': 'This game requires real Steam authentication.',
   'installMethod.fallbackReason.stalled': 'Download stalled. Retry with another method.',
-  'installMethod.fallbackReason.bin-too-small': 'SteamCMD binary is too small or corrupted.',
   'installMethod.fallbackReason.spawn-failed': 'Failed to start download process.',
 
   // Settings extra

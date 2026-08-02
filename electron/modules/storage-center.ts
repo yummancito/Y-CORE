@@ -87,7 +87,7 @@ function getDriveInfo(dirPath: string): { totalBytes: number; freeBytes: number;
         }
       } catch {
         // Fallback: use `dir` to get free space
-        const result = execFileSync('cmd', ['/c', 'dir', dirPath], { timeout: 5000 })
+        const result = execFileSyncSafe('cmd', ['/c', 'dir', dirPath], { timeout: 5000 })
         const match = result.stdout?.toString().match(/(\d[\d,]*)\s+bytes\s+free/i)
         if (match) {
           const freeBytes = parseInt(match[1].replace(/,/g, ''), 10)
@@ -109,11 +109,12 @@ function getDriveInfo(dirPath: string): { totalBytes: number; freeBytes: number;
   }
 }
 
-function execFileSync(cmd: string, args: string[], opts: { timeout: number }): { stdout?: Buffer } {
+function execFileSyncSafe(cmd: string, args: string[], opts: { timeout: number }): { stdout?: Buffer } {
   try {
-    // Use child_process.execSync as fallback
-    const { execSync } = require('child_process')
-    const stdout = execSync(`"${cmd}" ${args.join(' ')}`, { timeout: opts.timeout, encoding: 'buffer' })
+    // execFileSync spawns argv directly (no shell), so path args with
+    // spaces or shell metacharacters (&, ;, |, `) can't break out or inject.
+    const { execFileSync: nodeExecFileSync } = require('child_process')
+    const stdout = nodeExecFileSync(cmd, args, { timeout: opts.timeout, encoding: 'buffer' })
     return { stdout }
   } catch {
     return {}

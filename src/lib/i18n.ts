@@ -327,7 +327,6 @@ const es: Dict = {
   'installDock.pill.completeTip': 'Descarga completada.',
   'installDock.pill.downloading': 'Descargando',
   'installDock.pill.downloadingTip': 'Descarga en curso.',
-  'installDock.badge.steamcmdTip': 'Instalación vía SteamCMD.',
   'installDock.badge.steamclientTip': 'Instalación vía cliente de Steam.',
   'installDock.badge.auto': 'Auto',
   'installDock.badge.autoTip': 'Método de instalación automático.',
@@ -509,7 +508,6 @@ const es: Dict = {
 
   // Settings tabs
   'settings.tabAccount': 'Cuenta',
-  'settings.tabContent': 'Contenido',
   'settings.tabLogs': 'Logs',
   'settings.tabPersonalization': 'Personalización',
 
@@ -545,14 +543,10 @@ const es: Dict = {
   'signaturePending.joinBeta': 'Reintentar',
 
   // Content
-  'settings.content': 'Contenido',
-  'settings.contentDesc': 'Controla qué contenido se muestra',
   'settings.showAdult': 'Mostrar contenido +18',
   'settings.showAdultDesc': 'Muestra juegos con contenido para adultos en la tienda',
   'settings.showTools': 'Mostrar herramientas y SDKs',
   'settings.showToolsDesc': 'Incluye herramientas, servidores dedicados y SDKs en los resultados',
-  'settings.showAddGame': 'Mostrar sección Añadir juego',
-  'settings.showAddGameDesc': 'Muestra la opción para añadir juegos manualmente en el menú lateral',
 
   // Logs settings
   'settings.logsEnabled': 'Logs activados',
@@ -680,11 +674,8 @@ const es: Dict = {
   'installMethod.ariaGroup': 'Métodos de instalación disponibles',
   'installMethod.recommended': 'RECOMENDADO',
   'installMethod.auto.title': 'Automático',
-  'installMethod.auto.desc': 'SteamCMD si está disponible, sino cliente Steam',
+  'installMethod.auto.desc': 'Elige el mejor método disponible',
   'installMethod.auto.tip': 'Automático: elige el mejor método',
-  'installMethod.steamcmd.title': 'SteamCMD',
-  'installMethod.steamcmd.desc': 'Descarga rápida y eficiente (requiere SteamCMD)',
-  'installMethod.steamcmd.tip': 'Solo SteamCMD',
   'installMethod.steampipe.title': 'Sin Steam',
   'installMethod.steampipe.desc': 'Descarga directa del CDN de Steam (no requiere Steam)',
   'installMethod.steampipe.tip': 'Descarga sin Steam instalado',
@@ -695,10 +686,8 @@ const es: Dict = {
   'installMethod.steamclient.openSteamNote': '💡 Requiere Steam instalado y ejecutándose',
   'installMethod.lastFallbackTitle': 'Método anterior falló',
   'installMethod.dismissBanner': 'Descartar notificación',
-  'installMethod.fallbackReason.steamcmd-not-available': 'SteamCMD no está disponible. Instálalo desde Configuración o usa otro método.',
   'installMethod.fallbackReason.notAnonymous': 'Este juego requiere autenticación real de Steam.',
   'installMethod.fallbackReason.stalled': 'La descarga se estancó. Reintenta con otro método.',
-  'installMethod.fallbackReason.bin-too-small': 'El binario de SteamCMD es muy pequeño o corrupto.',
   'installMethod.fallbackReason.spawn-failed': 'No se pudo iniciar el proceso de descarga.',
 
   // Settings extra
@@ -864,6 +853,29 @@ const es: Dict = {
   'drm.confirmTitle': '¿Eliminar DRM?',
   'drm.confirmMessage': 'Se hará una copia de seguridad del ejecutable original. El juego se cerrará si está abierto.',
   'drm.noGames': 'No se encontraron juegos instalados',
+
+  // DRM — Assessment panel (Phase 3: ML detection + anti-cheat + community stats)
+  'drm.assess.title': 'Análisis DRM',
+  'drm.assess.viewDetails': 'Ver análisis',
+  'drm.assess.loading': 'Analizando...',
+  'drm.assess.error': 'No se pudo analizar el juego',
+  'drm.assess.mlSection': 'Detección de firmas',
+  'drm.assess.mlDetected': 'Detectado: {type} ({confidence}% de confianza)',
+  'drm.assess.mlNotDetected': 'No se detectaron firmas de DRM conocidas',
+  'drm.assess.mlPacked': 'El ejecutable parece estar empaquetado/comprimido',
+  'drm.assess.antiCheatSection': 'Anti-cheat',
+  'drm.assess.antiCheatDetected': 'Anti-cheat detectado: {type}',
+  'drm.assess.antiCheatKernel': 'Nivel kernel — no se puede desactivar ni eliminar',
+  'drm.assess.antiCheatNone': 'No se detectó anti-cheat',
+  'drm.assess.communitySection': 'Estadísticas locales',
+  'drm.assess.communityNote': 'Estas estadísticas son solo de este dispositivo. No hay una base de datos compartida entre usuarios.',
+  'drm.assess.communityReports': '{count} reporte(s) registrado(s) en este dispositivo',
+  'drm.assess.communityNoData': 'Sin datos registrados todavía en este dispositivo',
+  'drm.assess.communitySuccessRate': 'Tasa de éxito: {rate}%',
+  'drm.assess.communityPreferredMethod': 'Método más usado: {method}',
+  'drm.assess.contributeButton': 'Registrar resultado',
+  'drm.assess.contributeSuccess': 'Resultado registrado',
+  'drm.assess.contributeError': 'No se pudo registrar el resultado',
 
   // Steam Error Monitor
   'steamError.title': 'Error de Steam detectado',

@@ -12,21 +12,9 @@ import type {
   LogEntry,
   LogConfig,
 } from '../../src/domain/types'
-import type {
-  ModInfo,
-  ModSearchQuery,
-  ModSearchResult,
-  ModInstallOptions,
-  ModInstallResult,
-  ModUninstallOptions,
-  ModUninstallResult,
-  ModToggleResult,
-  ModScanResult,
-  BackupInfo,
-  ModStatistics,
-  ModQueryResult,
-  CacheStats,
-} from './mod-types'
+import type { DetectionResult as MlDrmDetectionResult } from '../modules/drm-plugins/ml-stub-detector'
+import type { AntiCheatDetectionResult } from '../modules/drm-plugins/anticheat-plugin'
+import type { CommunityStats, CommunityEntry, ContributionResponse } from '../services/community-db.service'
 
 // ── Config Service ─────────────────────────────────────────────────────────
 
@@ -326,16 +314,32 @@ export interface OnlineRecoveryServiceContract {
 export interface DrmServiceContract {
   remove(appId: string): Promise<{ success: boolean; message: string; hadDrm: boolean }>
   status(appId: string): Promise<{ status: string; exePath?: string; message: string }>
-}
 
-// ── SteamCMD Service ────────────────────────────────────────────────────────
-
-export interface SteamCmdServiceContract {
-  start(opts: any): Promise<{ success: boolean; error?: string }>
-  cancel(appId: string): Promise<{ success: boolean; error?: string }>
-  isAvailable(): Promise<boolean>
-  fetch(): Promise<{ success: boolean; binPath?: string; error?: string }>
-  list(): Promise<any[]>
+  /**
+   * Phase 3: ML signature detection + anti-cheat flagging + locally-stored
+   * community stats for this appId. There is no shared/remote community —
+   * stats only reflect what THIS install has recorded via contributeResult.
+   */
+  assessGameAdvanced(appId: string): Promise<{
+    success: boolean
+    appId: string
+    exePath?: string
+    gameDir?: string
+    drmDetection?: MlDrmDetectionResult
+    antiCheatDetection?: AntiCheatDetectionResult
+    communityStats?: CommunityStats | null
+    message?: string
+    error?: string
+  }>
+  contributeResult(
+    appId: string,
+    drmType: string,
+    removalMethod: string,
+    successStatus: 'success' | 'partial' | 'failed',
+    notes?: string,
+  ): Promise<ContributionResponse>
+  getCommunityStats(appId: string): Promise<CommunityStats | null>
+  exportCommunityDatabase(): Promise<string | null>
 }
 
 // ── Storage Service ────────────────────────────────────────────────────────
@@ -664,37 +668,6 @@ export interface PluginServiceContract {
   executePluginCommand(pluginId: string, commandId: string, args?: unknown[]): Promise<unknown>
 }
 
-// ── Mods Service ──────────────────────────────────────────────────────────
-
-export interface ModsServiceContract {
-  // Search & Discovery
-  searchCatalog(query: ModSearchQuery): Promise<{ success: boolean; data?: ModSearchResult; error?: string }>
-  getDetails(fileId: string): Promise<{ success: boolean; data?: ModInfo; error?: string }>
-  listInstalled(gameAppId: string): Promise<{ success: boolean; data?: ModInfo[]; error?: string }>
-
-  // Installation
-  install(modDetails: any, options: ModInstallOptions): Promise<{ success: boolean; data?: ModInstallResult; error?: string }>
-  uninstall(options: ModUninstallOptions): Promise<{ success: boolean; data?: ModUninstallResult; error?: string }>
-  enable(modId: string): Promise<{ success: boolean; error?: string }>
-  disable(modId: string): Promise<{ success: boolean; error?: string }>
-  cancelInstall(modId: string): Promise<{ success: boolean; error?: string }>
-
-  // Security & Maintenance
-  scanMalware(options: any): Promise<{ success: boolean; data?: ModScanResult; error?: string }>
-  getBackups(modId: string): Promise<{ success: boolean; data?: BackupInfo[]; error?: string }>
-  restoreBackup(payload: { backupId: string; modId: string; installPath: string }): Promise<{ success: boolean; error?: string }>
-  checkConflicts(gameAppId: string): Promise<{ success: boolean; data?: any; error?: string }>
-
-  // Query & Statistics
-  searchInstalled(query: string, gameAppId?: string): Promise<{ success: boolean; data?: ModInfo[]; error?: string }>
-  queryMods(gameAppId: string, filters?: any): Promise<{ success: boolean; data?: ModQueryResult; error?: string }>
-  getStatistics(gameAppId: string): Promise<{ success: boolean; data?: ModStatistics; error?: string }>
-  getCacheStats(): Promise<{ success: boolean; data?: CacheStats; error?: string }>
-
-  // Cache Management
-  clearCache(): Promise<{ success: boolean; error?: string }>
-}
-
 // ── Maintenance Service ────────────────────────────────────────────────────
 
 export interface MaintenanceServiceContract {
@@ -776,13 +749,11 @@ export interface ServiceContracts {
   onlinefix: OnlineFixServiceContract
   drm: DrmServiceContract
   storage: StorageServiceContract
-  steamcmd: SteamCmdServiceContract
   runtimeDetect: RuntimeDetectServiceContract
   launchProfiles: LaunchProfileServiceContract
   saveManager: SaveManagerServiceContract
   gameProcess: GameProcessServiceContract
   maintenance: MaintenanceServiceContract
-  mods: ModsServiceContract
   plugin: PluginServiceContract
   remotePlay: RemotePlayServiceContract
   inputInjection: InputInjectionServiceContract
@@ -802,14 +773,6 @@ export type ServiceEvents = {
   'update-progress': { percent: number; transferred: number; total: number; bytesPerSecond: number }
   'update-downloaded': { version?: string }
   'update-error': { message: string }
-  'steamcmd:progress': any
-  'mods:install-progress': any
-  'mods:installed': ModInstallResult
-  'mods:uninstalled': ModUninstallResult
-  'mods:enabled': ModToggleResult
-  'mods:disabled': ModToggleResult
-  'mods:scan-complete': ModScanResult
-  'mods:conflict-detected': any
   /** WebRTC signaling message received from remote host/client (LAN) */
   'remotePlay:signal': SignalPayload & { from: string; port: number }
   /** WebSocket signaling message received via server relay (WAN) */

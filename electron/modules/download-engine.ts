@@ -294,6 +294,14 @@ interface InternalTask {
   workerPromise: Promise<void> | null
   /** Función para limpiar recursos del worker */
   cleanup: (() => void) | null
+  /**
+   * true mientras la tarea espera su retry backoff (task.state vuelve a
+   * 'queued' para que la UI la muestre en cola, pero sigue "ocupada"
+   * internamente). tryProcessQueue debe ignorarla para no arrancar un
+   * segundo worker concurrente sobre el mismo internal (ver bug: race
+   * condition de doble worker durante el backoff de reintento).
+   */
+  retryPending: boolean
 }
 
 // ============================================================================
@@ -352,6 +360,7 @@ export class DownloadEngine {
         lastEmittedBytes: 0,
         workerPromise: null,
         cleanup: null,
+        retryPending: false,
       })
     }
     // También reconstruir el historial en el Map (sin worker/cleanup, solo
@@ -369,6 +378,7 @@ export class DownloadEngine {
           lastEmittedBytes: 0,
           workerPromise: null,
           cleanup: null,
+          retryPending: false,
         })
       }
     }
@@ -411,7 +421,7 @@ export class DownloadEngine {
       id,
       appId: opts.appId,
       name: opts.name,
-      source: opts.source ?? 'steamcmd',
+      source: opts.source ?? 'direct',
       state: opts.prereqTaskId ? 'queued' : 'queued',
       priority: opts.priority ?? DownloadPriority.NORMAL,
       bytesDownloaded: 0,
@@ -449,6 +459,7 @@ export class DownloadEngine {
       lastEmittedBytes: 0,
       workerPromise: null,
       cleanup: null,
+      retryPending: false,
     }
 
     this.tasks.set(id, internal)
@@ -642,6 +653,9 @@ export class DownloadEngine {
     if (!internal) return false
     if (internal.task.state === 'downloading' || internal.task.state === 'verifying') return false
 
+    // A manual (re)start begins a fresh retry sequence — don't inherit a
+    // stale attempt count from a previous, unrelated failure run.
+    this.retryManager.reset(taskId)
     internal.task.state = 'queued'
     internal.task.lastUpdatedAt = Date.now()
     internal.speedTracker.reset()
@@ -883,6 +897,7 @@ export class DownloadEngine {
     const internal = this.tasks.get(taskId)
     if (!internal) return
 
+    this.retryManager.reset(taskId)
     internal.task.state = 'completed'
     internal.task.completedAt = Date.now()
     internal.task.lastUpdatedAt = Date.now()
@@ -981,6 +996,10 @@ export class DownloadEngine {
       const internal = this.tasks.get(task.id)
       if (!internal) continue
 
+      // Ya está esperando su retry backoff (ver startInternalTask) — no
+      // arrancar un segundo worker concurrente para la misma tarea.
+      if (internal.retryPending) continue
+
       // Saltar tareas con prereq no satisfecho. El evaluador de prereqs
       // mantiene `task.prereqState` actualizado — si está en 'pending',
       // la tarea espera. Si está en 'failed', la tarea ya estaría en
@@ -1058,6 +1077,10 @@ export class DownloadEngine {
           task.retryCount = attempt
           task.errorMessage = `Retry ${attempt}/${task.maxRetries}: ${err.message}`
           task.lastUpdatedAt = Date.now()
+          // task.state is 'queued' for the UI, but this task is still
+          // "owned" by this retry sequence — tryProcessQueue must not pick
+          // it up again and start a second concurrent worker for it.
+          internal.retryPending = true
           this.emitProgress(task)
           this.notifyQueueChanged()
 
@@ -1067,6 +1090,7 @@ export class DownloadEngine {
           )
 
           await new Promise(resolve => setTimeout(resolve, delay))
+          internal.retryPending = false
           if (!internal.abortController?.signal.aborted) {
             this.startInternalTask(internal)
           }

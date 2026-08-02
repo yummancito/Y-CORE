@@ -35,10 +35,10 @@ export function DonationModal({ open, onClose, onDismissForever }: DonationModal
           </div>
           <h3 className="text-xl font-bold text-white mb-2.5">¿Te gusta Y-core?</h3>
           <p className="text-sm leading-relaxed text-text-secondary mb-6" style={{ textWrap: 'pretty' }}>
-            Y-core es gratuito y lo mantiene una sola persona. Si te resulta útil, una pequeña donación ayuda a que siga vivo. Sin presión — puedes cerrar esto y no volverá a molestarte.
+            Recuerda que nuestra app es hecha por un único desarrollador (yumman). Tu apoyo ayuda mucho para mejorar la calidad de nuestra app ;3
           </p>
           <a
-            href="https://paypal.me/miguelbird"
+            href="https://paypal.me/miguelbird/2usd"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2.5 w-full py-3.5 rounded-xl text-[15px] font-bold text-white no-underline mb-2.5 transition-all hover:brightness-110"

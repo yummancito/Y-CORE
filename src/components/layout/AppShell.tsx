@@ -17,7 +17,6 @@ import { useErrorStore } from '../../stores/useErrorStore'
 import { useInstallProcessor, type RestartPrompt } from '../../hooks/useInstallProcessor'
 import { subscribe as subscribeLanguage } from '../../lib/i18n'
 import { HostRemotePlayAuto } from '../remote-play/HostRemotePlayAuto'
-import { LogConsole } from '../ui/LogConsole'
 
 // ── PageHeader context (kept for backward compat) ──
 
@@ -233,11 +232,6 @@ export function AppShell({ children }: AppShellProps) {
         <main className="flex-1 overflow-y-auto overflow-x-hidden relative z-[1]">
           {children}
         </main>
-
-        {/* Floating real-time log console — shows latest log entries from any page.
-            Resolves: "los logs no llegan en tiempo real". Auto-oculta tras 8s de
-            inactividad. Pin para mantener visible. */}
-        <LogConsole />
       </div>
     </PageHeaderContext.Provider>
   )

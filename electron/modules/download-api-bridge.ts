@@ -94,7 +94,7 @@ export class DownloadApiBridge {
       const task = engine.createTask({
         appId: opts.appId,
         name: opts.name,
-        source: opts.source ?? 'steamcmd',
+        source: opts.source ?? 'direct',
         priority: opts.priority ?? DownloadPriority.NORMAL,
         installDir: resolvedDir,
         depotKeys: opts.depotKeys,
@@ -132,9 +132,9 @@ export class DownloadApiBridge {
       ...(extraDepotKeys ?? []).map(k => ({ depotId: k.depot_id, key: k.decryption_key })),
     ]
 
-    // Deducir si el juego requiere steampipe o steamcmd
+    // Deducir si el juego requiere steampipe o descarga directa genérica
     const hasManifests = game.manifest_files.length > 0
-    const source: DownloadSource = hasManifests ? 'steampipe' : 'steamcmd'
+    const source: DownloadSource = hasManifests ? 'steampipe' : 'direct'
 
     const tasks = await this.startDownload({
       appId,

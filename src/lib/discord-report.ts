@@ -1,4 +1,8 @@
-const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1525821157188833280/rXukWP_pmTOVW1nRyMoYK0xV3lXGF-KxAo5KOHB1h6LF49OC609afayDpHExxdZSgs9K'
+// Sends crash/bug reports through the backend proxy (POST /api/support/report)
+// instead of hitting a Discord webhook directly from the renderer. A webhook
+// URL hardcoded here would ship inside the built app bundle to every user,
+// letting anyone extract it and post arbitrary messages to the channel.
+const API_BASE = import.meta.env.VITE_YCORE_API_URL || 'https://y-core-render-api-6jbv.onrender.com'
 
 export async function sendDiscordReport(
   title: string,
@@ -6,25 +10,13 @@ export async function sendDiscordReport(
   fields?: { name: string; value: string; inline?: boolean }[]
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const embed = {
-      title: title,
-      description: description,
-      color: 0x6366f1,
-      fields: fields || [],
-      timestamp: new Date().toISOString(),
-      footer: { text: 'Y-core Crash Report' },
-    }
-
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 10000)
 
-    const resp = await fetch(DISCORD_WEBHOOK_URL, {
+    const resp = await fetch(`${API_BASE}/api/support/report`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        embeds: [embed],
-        username: 'Y-core Bug Reporter',
-      }),
+      body: JSON.stringify({ title, description, fields: fields || [] }),
       signal: controller.signal,
     })
 
@@ -32,11 +24,11 @@ export async function sendDiscordReport(
 
     if (!resp.ok) {
       const text = await resp.text().catch(() => 'unknown error')
-      return { success: false, error: `Discord webhook failed: HTTP ${resp.status} - ${text}` }
+      return { success: false, error: `Report failed: HTTP ${resp.status} - ${text}` }
     }
 
     return { success: true }
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to send Discord report' }
+    return { success: false, error: err.message || 'Failed to send report' }
   }
 }

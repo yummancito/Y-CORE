@@ -43,7 +43,10 @@ export interface LocalSteamEmulatorDiagnostics {
 
 interface LocalSteamEmulatorBinding {
   version: () => string
-  shortSha: (out: (string | null)[]) => number
+  /** Native ABI: ycore_steam_short_sha(char* out_buf, int out_buf_len) — writes
+   *  the hex SHA-256 of the DLL into a caller-provided buffer (needs ≥65 bytes
+   *  for 64 hex chars + NUL). Returns 0 on success. */
+  shortSha: (outBuf: Buffer, outBufLen: number) => number
   init: () => number
   shutdown: () => void
   restartAppIfNecessary: () => number
@@ -159,13 +162,19 @@ function ensureLoaded(): boolean {
     const koffi = require('koffi')
     const lib = koffi.load(dllPath)
 
-    // short_sha retorna un string C en heap propio — disposable lo libera.
-    const freeStr = lib.func('void ycore_steam_free_string(void*)')
-    koffi.disposable('EmuStr', 'char*', freeStr)
-
+    // v5 native ABI (ycore_steam.h): short_sha COPIA el hash a un buffer que
+    // provee el caller — no devuelve un string en heap, así que NO hay función
+    // ycore_steam_free_string que bindear ni disposable que registrar. La
+    // versión previa de este binding exigía ycore_steam_free_string, que el
+    // DLL nunca exportó → koffi.load() fallaba → el emulador entero quedaba
+    // deshabilitado y los juegos abrían contra Steam real ("comprar el juego").
     binding = {
       version: lib.func('const char* ycore_steam_version()'),
-      shortSha: lib.func('int ycore_steam_short_sha(_Out_ EmuStr* out)'),
+      // `void*` (not `char*`) for the out buffer: koffi treats `char*` params
+      // as C strings by default, while a Node Buffer passed to `void*` is
+      // deterministically bound to the buffer's memory address and written
+      // in place. Same ABI (pointer), no ambiguity.
+      shortSha: lib.func('int ycore_steam_short_sha(void* out_buf, int out_buf_len)'),
       init: lib.func('int ycore_steam_init()'),
       shutdown: lib.func('void ycore_steam_shutdown()'),
       restartAppIfNecessary: lib.func('int ycore_steam_restart_app_if_necessary()'),
@@ -419,9 +428,11 @@ export function getLocalSteamEmulatorDiagnostics(): LocalSteamEmulatorDiagnostic
   let sha: string | null = null
   if (loaded && binding) {
     try {
-      const out: (string | null)[] = [null]
-      binding.shortSha(out)
-      sha = out[0]?.slice(0, 12) ?? null
+      const buf = Buffer.alloc(65)
+      const rc = binding.shortSha(buf, buf.length)
+      if (rc === 0) {
+        sha = buf.toString('utf8').replace(/\0.*$/, '').slice(0, 12) || null
+      }
     } catch {
       sha = null
     }

@@ -97,6 +97,12 @@ export default function StorePage() {
   const [browseError, setBrowseError] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
+  // Mirrors `hasMore` for loadMoreGames' closure without making hasMore a
+  // useCallback dependency — every setHasMore() during infinite scroll would
+  // otherwise recreate loadMoreGames, which recreates the scroll effect below,
+  // which fires an immediate checkNearBottom() and can chain into a runaway
+  // fetch loop that saturates the main thread (looks like "scroll frozen").
+  const hasMoreRef = useRef(false)
   const [showScrollTop, setShowScrollTop] = useState(false)
   const [hideInstalled, setHideInstalled] = useState(true)
   const [sort, setSort] = useState<SortKey>('name')
@@ -112,6 +118,28 @@ export default function StorePage() {
   useEffect(() => {
     loadSettings()
   }, [loadSettings])
+
+  // Donation prompt on first launch. Same "read config, check flag, show
+  // once, persist immediately" pattern as TourOverlay's first-run check —
+  // window.steamtools.writeConfig({ donationDismissed: true }) fires as soon
+  // as the user closes/donates so a killed process still counts as seen.
+  useEffect(() => {
+    let cancelled = false
+    const timer = setTimeout(() => {
+      const cfg = window.steamtools?.readConfig?.()
+      Promise.resolve(cfg)
+        .then((c: any) => {
+          if (cancelled) return
+          if (c && c.donationDismissed === true) return
+          setShowDonation(true)
+        })
+        .catch(() => {})
+    }, 3000)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [])
 
   const { showToast } = useToastStore()
   const { games: installedGames } = useLibraryStore()
@@ -183,7 +211,9 @@ export default function StorePage() {
       if (requestId !== browseRequestIdRef.current) return // a newer request already won
       const games = resp.games ? filterGames(resp.games.map(gameSummaryToMerged)) : []
       loadOffsetRef.current = resp.games?.length ?? 0
-      setHasMore((resp.games?.length ?? 0) > 0)
+      const stillHasMoreInitial = (resp.games?.length ?? 0) > 0
+      hasMoreRef.current = stillHasMoreInitial
+      setHasMore(stillHasMoreInitial)
       setAllGames(games)
       setBrowseError(null)
       if (games.length > 0) {
@@ -200,14 +230,16 @@ export default function StorePage() {
   }, [filterGames, showAdult, sort, showToast])
 
   const loadMoreGames = useCallback(async () => {
-    if (loadingMoreRef.current || !hasMore) return
+    if (loadingMoreRef.current || !hasMoreRef.current) return
     loadingMoreRef.current = true
     setLoadingMore(true)
     try {
       const resp = await listGames({ sort, limit: 60, offset: loadOffsetRef.current })
       const newGames = resp.games ? filterGames(resp.games.map(gameSummaryToMerged)) : []
       loadOffsetRef.current += resp.games?.length ?? 0
-      setHasMore((resp.games?.length ?? 0) > 0)
+      const stillHasMore = (resp.games?.length ?? 0) > 0
+      hasMoreRef.current = stillHasMore
+      setHasMore(stillHasMore)
       if (newGames.length > 0) {
         setAllGames(prev => {
           const merged = dedupeByAppId([...prev, ...newGames])
@@ -218,12 +250,20 @@ export default function StorePage() {
         setVisibleCount(prev => prev + 20)
       }
     } catch (err: any) {
+      // A failed page load must stop pagination — otherwise hasMore stays
+      // true from its last successful value, the scroll listener keeps
+      // seeing "near bottom" (nothing new rendered), and loadMoreGames()
+      // fires again on every scroll tick forever. No error banner shows
+      // for this because it's a toast, so it looks like the store just
+      // froze/hit an invisible limit instead of an actual failed request.
+      hasMoreRef.current = false
+      setHasMore(false)
       showToast('error', `${t('store.failedLoad')}: ${parseError(err)}`)
     } finally {
       loadingMoreRef.current = false
       setLoadingMore(false)
     }
-  }, [hasMore, filterGames, sort, showToast])
+  }, [filterGames, sort, showAdult, showToast])
 
   // Reset pagination + clear cache when the user changes Sort (otherwise old
   // cached rows from a previous sort would still display).
@@ -264,8 +304,14 @@ export default function StorePage() {
       scrollTimeout = setTimeout(checkNearBottom, 200)
     }
 
-    // Immediate check in case user is already at bottom
-    checkNearBottom()
+    // Debounced initial check (in case the user is already at the bottom) —
+    // NOT synchronous. loadMoreGames is now stable across page loads, so this
+    // effect only re-runs when hasMore flips or sort/filters actually change;
+    // calling checkNearBottom() immediately on every re-run used to chain
+    // into a runaway fetch loop (each load flips hasMore → effect re-runs →
+    // immediate check while still near the bottom → loads again) that
+    // saturated the main thread and made the page look frozen/unscrollable.
+    scrollTimeout = setTimeout(checkNearBottom, 200)
 
     main.addEventListener('scroll', onScroll, { passive: true })
 
@@ -677,7 +723,10 @@ export default function StorePage() {
       <DonationModal
         open={showDonation}
         onClose={() => setShowDonation(false)}
-        onDismissForever={() => setShowDonation(false)}
+        onDismissForever={() => {
+          setShowDonation(false)
+          window.steamtools?.writeConfig?.({ donationDismissed: true }).catch?.(() => {})
+        }}
       />
     </div>
   )

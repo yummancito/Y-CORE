@@ -8,9 +8,9 @@
 //
 // Style matches the inline DefenderCard family in SettingsPage:
 //   • bg-white/[0.03] + border-white/[0.06] for neutral containers
-//   • bg-green-500/[0.06] / border-green-500/20 — OK
-//   • bg-red-500/[0.06]   / border-red-500/20   — failure
-//   • bg-amber-500/[0.06] / border-amber-500/20 — partial / warning
+//   • bg-status-success/[0.06] / border-status-success/20 — OK
+//   • bg-status-error/[0.06]   / border-status-error/20   — failure
+//   • bg-status-warning/[0.06] / border-status-warning/20 — partial / warning
 //   • Text: text-text-bright (titles), text-text-dim (hints), text-text-secondary
 // ============================================================================
 
@@ -128,10 +128,10 @@ export function EmulatorDiagnosticsCard() {
     const { data } = status
     if (status.kind === 'ok') {
       return (
-        <div className="flex items-center gap-3 p-3 rounded-xl border bg-green-500/[0.06] border-green-500/20">
-          <ShieldCheck className="w-5 h-5 text-green-400 shrink-0" />
+        <div className="flex items-center gap-3 p-3 rounded-xl border bg-status-success/[0.06] border-status-success/20">
+          <ShieldCheck className="w-5 h-5 text-status-success shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-green-400">
+            <p className="text-xs font-semibold text-status-success">
               Emulador nativo disponible
             </p>
             <p className="text-[11px] text-text-dim mt-0.5">
@@ -144,10 +144,10 @@ export function EmulatorDiagnosticsCard() {
     }
     if (status.kind === 'warn') {
       return (
-        <div className="flex items-center gap-3 p-3 rounded-xl border bg-amber-500/[0.06] border-amber-500/20">
-          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+        <div className="flex items-center gap-3 p-3 rounded-xl border bg-status-warning/[0.06] border-status-warning/20">
+          <AlertTriangle className="w-5 h-5 text-status-warning shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-amber-300">
+            <p className="text-xs font-semibold text-status-warning">
               Datos parciales
             </p>
             <p className="text-[11px] text-text-dim mt-0.5 line-clamp-2">
@@ -158,10 +158,10 @@ export function EmulatorDiagnosticsCard() {
       )
     }
     return (
-      <div className="flex items-center gap-3 p-3 rounded-xl border bg-red-500/[0.06] border-red-500/20">
-        <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />
+      <div className="flex items-center gap-3 p-3 rounded-xl border bg-status-error/[0.06] border-status-error/20">
+        <ShieldAlert className="w-5 h-5 text-status-error shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold text-red-400">
+          <p className="text-xs font-semibold text-status-error">
             No se pudo cargar ycore_steam.dll
           </p>
           <p className="text-[11px] text-text-dim mt-0.5 whitespace-pre-wrap line-clamp-3">
@@ -182,10 +182,10 @@ export function EmulatorDiagnosticsCard() {
 
     if (matched === total) {
       return (
-        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-green-500/[0.04] border border-green-500/15">
-          <Folder className="w-4 h-4 text-green-400 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-status-success/[0.04] border border-status-success/15">
+          <Folder className="w-4 h-4 text-status-success shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-green-300">
+            <p className="text-xs font-semibold text-status-success">
               Layer 3 scaffold será consumido
             </p>
             <p className="text-[11px] text-text-dim mt-0.5">
@@ -200,10 +200,10 @@ export function EmulatorDiagnosticsCard() {
 
     if (matched === 0) {
       return (
-        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/[0.04] border border-amber-500/15">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-status-warning/[0.04] border border-status-warning/15">
+          <AlertTriangle className="w-4 h-4 text-status-warning shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-amber-300">
+            <p className="text-xs font-semibold text-status-warning">
               Layer 3 scaffold = bytes muertos
             </p>
             <p className="text-[11px] text-text-dim mt-0.5">
@@ -218,10 +218,10 @@ export function EmulatorDiagnosticsCard() {
     }
 
     return (
-      <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/[0.04] border border-amber-500/15">
-        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-2 p-2.5 rounded-lg bg-status-warning/[0.04] border border-status-warning/15">
+        <AlertTriangle className="w-4 h-4 text-status-warning shrink-0 mt-0.5" />
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold text-amber-300">
+          <p className="text-xs font-semibold text-status-warning">
             Layer 3 parcial ({matched}/{total})
           </p>
           <p className="text-[11px] text-text-dim mt-0.5">
@@ -263,7 +263,7 @@ export function EmulatorDiagnosticsCard() {
                 <span
                   className={
                     e.address.startsWith('→')
-                      ? 'text-amber-400 truncate'
+                      ? 'text-status-warning truncate'
                       : 'text-text-dim shrink-0 hidden md:inline'
                   }
                   title={e.address}
