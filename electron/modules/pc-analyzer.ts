@@ -336,7 +336,7 @@ function analyzeNative(): PcAnalyzerReport['native'] {
   return {
     available: nativeDiag.isAvailable ?? false,
     dllPath: nativeDiag.dllPath ?? null,
-    version: nativeDiag.version ?? null,
+    version: nativeDiag.dllVersion ?? null,
     failureReason: nativeDiag.failureReason ?? null,
   }
 }
