@@ -1097,11 +1097,13 @@ if (gotTheLock) {
     }
   })
 
-  // Auto-updater — check for updates silently on startup (production only)
+  // Auto-updater — check for updates silently on startup (production only).
+  // allowDowngrade stays at its default (false): with auto-update ON by
+  // default, a release published with a lower version number must never
+  // silently downgrade installed clients.
   if (app.isPackaged) {
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
-    autoUpdater.allowDowngrade = true
 
     autoUpdater.on('update-available', (info: { version?: string }) => {
       logger.info(`Update available: ${info.version ?? 'unknown'}`, 'updater')
@@ -1149,21 +1151,20 @@ if (gotTheLock) {
       })
     }
 
-    // ── TEST BUILD (v4.2.5 RC): automatic update checks are DISABLED so a
-    // test PC keeps this exact build and can't be auto-downgraded to an older
-    // GitHub release (allowDowngrade=true above). Manual update via
-    // app:installUpdate / app:manualDownloadUpdate stays functional, but with
-    // no checkForUpdates() nothing is ever downloaded or installed on its own.
-    // Re-enable for the stable release by exporting Y_CORE_ENABLE_AUTO_UPDATE=1
-    // or by restoring the two calls below.
-    const AUTO_UPDATE_ENABLED = process.env.Y_CORE_ENABLE_AUTO_UPDATE === '1'
-    if (AUTO_UPDATE_ENABLED) {
-      // Check on startup, then periodically (the app runs long in the tray)
+    // Auto-update runs BY DEFAULT on packaged builds: check on startup, then
+    // periodically (the app runs long in the tray). The 4.2.x test builds had
+    // this gated OFF so a test PC kept its exact build; that shipped versions
+    // never self-updated, which is why users saw "la app no se actualiza".
+    // Disable only explicitly with Y_CORE_DISABLE_AUTO_UPDATE=1 (controlled
+    // rollout / test build). Manual update via app:installUpdate and
+    // app:manualDownloadUpdate stays functional either way.
+    const AUTO_UPDATE_DISABLED = process.env.Y_CORE_DISABLE_AUTO_UPDATE === '1'
+    if (!AUTO_UPDATE_DISABLED) {
       checkForUpdates()
       const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000 // 4 hours
       setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL)
     } else {
-      logger.info('[updater] Auto-update checks disabled (test build); set Y_CORE_ENABLE_AUTO_UPDATE=1 to enable', 'updater')
+      logger.info('[updater] Auto-update checks disabled (Y_CORE_DISABLE_AUTO_UPDATE=1)', 'updater')
     }
 
     ipcMain.handle('app:installUpdate', () => {
