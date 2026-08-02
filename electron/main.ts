@@ -104,8 +104,8 @@ import { getEmulatorDiagnostics } from './modules/emulator-diagnostics'
 import { analyzePc } from './modules/pc-analyzer'
 import { checkToolchain, buildEmulator, tryAutoBuildOnce } from './modules/build-emulator'
 import { tryInstallCmake } from './modules/install-toolchain'
-import { isSteamRunning, getSteamPath } from './modules/steam-helpers'
-import { revalidateHookIfUpdated } from './modules/dll-inject'
+import { isSteamRunning } from './modules/steam-helpers'
+import { startHookAutoRepair } from './modules/hook-auto-repair'
 import { isLocalSteamEmulatorAvailable } from './modules/local-steam-emulator'
 import { configService as backendConfigService } from './services/config.service'
 // (Round-11 dead-code block removed)
@@ -285,53 +285,20 @@ if (gotTheLock) {
   // When Steam updates, steamclient64.dll's internal signatures change and
   // the previously-installed YCoreTool/OpenSteamTool hook becomes stale:
   // the hook gets removed as incompatible and Steam stops faking ownership,
-  // so every game flips to "Comprar" in the Steam library. This background
-  // kick-off re-installs a compatible hook (silently, only when the user has
-  // previously consented — see last_build_id.txt) and retries periodically
-  // while Steam is closed, so games go back to "Play/Jugar" without the user
-  // having to touch Settings → Steam → Verify.
-  ;(async () => {
-    try {
-      const steamPath = getSteamPath()
-      if (!steamPath) return
-      // Bounded retry: once per minute up to 30 attempts (30 min), then give
-      // up quietly so a broken/crashing hook can't cause an install→remove
-      // thrash loop. The user can always trigger a manual Verify in
-      // Settings → Steam which runs the full non-silent flow.
-      const MAX_RETRIES = 30
-      const RETRY_MS = 60 * 1000
-      let attempts = 0
-      let quitSignaled = false
-      const onQuit = () => { quitSignaled = true }
-      app.on('before-quit', onQuit)
-      const tryRevalidate = async (): Promise<boolean> => {
-        if (quitSignaled) return true
-        attempts++
-        try {
-          const ok = await revalidateHookIfUpdated(steamPath)
-          if (ok) logger.info('[hook-revalidation] Steam ownership hook is up to date', 'steam')
-          return ok
-        } catch (err: any) {
-          logger.warn(`[hook-revalidation] check failed: ${err?.message ?? err}`, 'steam')
-          return false
-        }
-      }
-      await tryRevalidate()
-      // If Steam is running or the new signature isn't cached yet, retry
-      // periodically until healthy or the attempt budget is exhausted.
-      const retryTimer = setInterval(async () => {
-        if (quitSignaled || attempts >= MAX_RETRIES) {
-          clearInterval(retryTimer)
-          return
-        }
-        const ok = await tryRevalidate()
-        if (ok) clearInterval(retryTimer)
-      }, RETRY_MS)
-      retryTimer.unref?.()
-    } catch (err: any) {
-      logger.warn(`[hook-revalidation] startup check failed: ${err?.message ?? err}`, 'steam')
-    }
-  })()
+  // so every game flips to "Comprar" in the Steam library.
+  //
+  // Round-13: replaced the old bounded retry (30 attempts × 1 min, then
+  // permanent give-up — hook stayed broken if Steam was closed >30 min or
+  // updated while Y-Core was running) with hook-auto-repair.ts: a continuous
+  // background watchdog that silently reinstalls a compatible hook whenever
+  // it is missing/stale (full trio check, avoiding false negatives), skips
+  // healthy installs (false-positive guard), defers while Steam runs (never
+  // force-closes it — "que no pase nada malo"), and never shows UI.
+  try {
+    startHookAutoRepair()
+  } catch (err: any) {
+    logger.warn(`[hook-auto-repair] startup failure: ${err?.message ?? err}`, 'steam')
+  }
 
   // Install permission handler here — NOT at module-top. In this Electron
   // version session.defaultSession is only safe to receive after app is

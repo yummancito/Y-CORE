@@ -19,8 +19,9 @@ import {
   isSteamRunning,
 } from './steam-helpers'
 import { checkSteamVerification } from './dll-inject'
-import { getLocalSteamEmulatorDiagnostics } from './local-steam-emulator'
 import { getNativeDiagnostics } from './ycore-native'
+import { getEmulatorDiagnostics } from './emulator-diagnostics'
+import { getHookAutoRepairState } from './hook-auto-repair'
 import { checkToolchain } from './build-emulator'
 import { scanDlls } from './defender-check'
 
@@ -184,10 +185,12 @@ async function analyzeSteam(): Promise<PcAnalyzerReport['steam']> {
         const content = fs.readFileSync(configPath, 'utf-8')
         configVdf.exists = true
         configVdf.sizeBytes = Buffer.byteLength(content, 'utf-8')
-      // Check for Depots section robustly — look for the VDF key pattern
-      const depotIdx = content.indexOf('"Depots"')
-      // Also verify it's a proper VDF section (followed by {)
-      configVdf.hasDepotsSection = depotIdx >= 0 && /"Depots"\s*\{/.test(content.slice(Math.max(0, depotIdx - 5), depotIdx + 12))
+        // Check for Depots section robustly — Steam writes it as lowercase
+        // "depots" inside InstallConfigStore.Software.Valve.Steam (see
+        // depot-keys.ts injectDepotKeysIntoVdfContent, which also uses
+        // lowercase), so match case-insensitively and require a real VDF
+        // section (header followed by an opening brace).
+        configVdf.hasDepotsSection = /"depots"\s*\{/i.test(content)
         if (configVdf.hasDepotsSection) {
           const depotMatches = content.match(/"DecryptionKey"/g)
           configVdf.depotCount = depotMatches ? depotMatches.length : 0
@@ -319,15 +322,17 @@ function analyzeHook(): PcAnalyzerReport['hook'] {
 // Emulator + Native + Toolchain sections
 // ============================================================================
 
-function analyzeEmulator(): PcAnalyzerReport['emulator'] {
-  const diag = getLocalSteamEmulatorDiagnostics()
+async function analyzeEmulator(): Promise<PcAnalyzerReport['emulator']> {
+  // Use the async PE parser (emulator-diagnostics.ts) so the report shows the
+  // real DLL size and export count instead of hardcoded stubs.
+  const diag = await getEmulatorDiagnostics()
   return {
-    available: diag.isAvailable,
+    available: diag.dllPath !== null && diag.koffiError === null,
     dllPath: diag.dllPath,
     version: diag.version,
-    dllSizeMB: null, // computed below if path exists
-    failureReason: diag.failureReason,
-    exportCount: 0,
+    dllSizeMB: diag.dllSizeBytes != null ? formatMB(diag.dllSizeBytes) : null,
+    failureReason: diag.parseError || diag.koffiError || null,
+    exportCount: diag.exportCount,
   }
 }
 
@@ -400,14 +405,31 @@ function collectIssues(sections: {
   }
   if (!sections.steam.configVdf.hasDepotsSection) {
     issues.push({ severity: 'warning', message: 'config.vdf no tiene sección Depots. Las depot keys no se pueden inyectar.' })
-  }
-  if (sections.steam.configVdf.exists && sections.steam.configVdf.depotCount === 0) {
+  } else if (sections.steam.configVdf.exists && sections.steam.configVdf.depotCount === 0) {
+    // Only meaningful when the section actually exists (else-if avoids the
+    // contradictory pair of issues the analyzer used to emit).
     issues.push({ severity: 'info', message: 'config.vdf tiene sección Depots pero sin claves. Normal si no has descargado juegos aún.' })
   }
 
   // Hook
   if (!sections.hook.installed) {
-    issues.push({ severity: 'warning', message: `Hook DLLs faltantes: ${sections.hook.missingDlls.join(', ')}. Los juegos pueden aparecer como "Comprar" en Steam.` })
+    // With the background auto-repair watchdog (hook-auto-repair.ts), a
+    // missing hook + recorded consent is a PENDING repair, not a real
+    // alarm — the watchdog silently reinstalls it as soon as Steam closes.
+    // Only warn loudly when nothing will fix it automatically (no consent).
+    if (sections.hook.hookConsent) {
+      const repairState = getHookAutoRepairState()
+      const pending =
+        repairState.lastStatus === 'deferred' ||
+        repairState.lastStatus === 'install-failed' ||
+        repairState.lastStatus === 'repaired'
+      issues.push({
+        severity: 'info',
+        message: `Hook ausente (${sections.hook.missingDlls.join(', ')}). La reparación automática en segundo plano está ${pending ? `en curso (estado: ${repairState.lastStatus})` : 'activa'} y lo reinstalará al cerrar Steam.`,
+      })
+    } else {
+      issues.push({ severity: 'warning', message: `Hook DLLs faltantes: ${sections.hook.missingDlls.join(', ')}. Los juegos pueden aparecer como "Comprar" en Steam.` })
+    }
   }
   if (!sections.hook.hookConsent && sections.hook.installed) {
     issues.push({ severity: 'info', message: 'Consentimiento del hook no registrado (hook_consent.txt). La reinstalación silenciosa no funcionará.' })
@@ -426,9 +448,15 @@ function collectIssues(sections: {
     issues.push({ severity: 'info', message: 'ycore.dll (nativo FFI) no disponible. Fallback JS activo.' })
   }
 
-  // Toolchain
+  // Toolchain — cmake only matters to REBUILD the emulator. If the shipped
+  // ycore_steam.dll is present and loadable, a missing cmake is just info.
   if (!sections.toolchain.cmakeFound) {
-    issues.push({ severity: 'warning', message: 'cmake no encontrado. No se puede compilar ycore_steam.dll automáticamente.' })
+    issues.push({
+      severity: sections.emulator.available ? 'info' : 'warning',
+      message: sections.emulator.available
+        ? 'cmake no encontrado. La compilación automática de ycore_steam.dll no estará disponible (usando la DLL incluida).'
+        : 'cmake no encontrado. No se puede compilar ycore_steam.dll automáticamente.',
+    })
   }
 
   // Defender
@@ -449,7 +477,7 @@ function collectIssues(sections: {
 export async function analyzePc(): Promise<PcAnalyzerReport> {
   const steam = await analyzeSteam()
   const hook = analyzeHook()
-  const emulator = analyzeEmulator()
+  const emulator = await analyzeEmulator()
   const native = analyzeNative()
   const toolchain = analyzeToolchain()
   const defender = analyzeDefender()

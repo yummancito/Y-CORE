@@ -54,7 +54,7 @@ function removeDirectoryRecursive(dirPath: string): void {
 
 const LAST_BUILD_ID_FILE = path.join('ycoretool', 'last_build_id.txt')
 
-function readLastBuildId(steamPath: string): string | null {
+export function readLastBuildId(steamPath: string): string | null {
   try {
     const p = path.join(steamPath, LAST_BUILD_ID_FILE)
     if (fs.existsSync(p)) {
@@ -91,7 +91,7 @@ function writeHookConsent(steamPath: string): void {
   } catch {}
 }
 
-function hasHookConsent(steamPath: string): boolean {
+export function hasHookConsent(steamPath: string): boolean {
   try {
     return fs.existsSync(path.join(steamPath, HOOK_CONSENT_FILE))
   } catch {
@@ -102,7 +102,7 @@ function hasHookConsent(steamPath: string): boolean {
 /** Hook DLL names installHookDll may deploy (YCoreTool preferred, legacy names included). */
 const HOOK_DLL_NAMES = ['YCoreTool.dll', 'steamtools_hook.dll', 'OpenSteamTool.dll']
 
-function hookPresent(steamPath: string): boolean {
+export function hookPresent(steamPath: string): boolean {
   return HOOK_DLL_NAMES.some((n) => fs.existsSync(path.join(steamPath, n)))
 }
 
