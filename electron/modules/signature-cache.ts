@@ -19,6 +19,28 @@ export function getSignatureCachePath(steamPath: string, channel: SignatureChann
   return path.join(steamPath, 'ycoretool', channel, component, `${sha256}.toml`)
 }
 
+// OpenSteamTool was renamed from YCoreTool. Since 1.4.x the DLL reads its
+// local spec cache from <Steam>\opensteamtool\{channel}\{component}\<sha>.toml
+// and its config from <Steam>\opensteamtool.toml (confirmed from strings
+// inside OpenSteamTool.dll). Older Y-Core builds wrote everything under
+// <Steam>\ycoretool\..., which the 1.4.x hook never reads — so even though
+// Y-Core downloaded the specs, the hook found nothing, never hooked
+// steamclient64.dll/steamui.dll, and Steam kept showing "Comprar" (the game
+// was never faked as owned). We now write BOTH the legacy and the hook paths
+// so the currently-deployed hook always finds its specs without needing the
+// remote mirrors (raw.githubusercontent / cdn.jsdelivr), which are blocked or
+// DNS-failing on many networks.
+export function getHookSignatureCachePath(steamPath: string, channel: SignatureChannel, component: string, sha256: string): string {
+  return path.join(steamPath, 'opensteamtool', channel, component, `${sha256}.toml`)
+}
+
+export function getAllSignatureCachePaths(steamPath: string, channel: SignatureChannel, component: string, sha256: string): string[] {
+  return [
+    getHookSignatureCachePath(steamPath, channel, component, sha256),
+    getSignatureCachePath(steamPath, channel, component, sha256),
+  ]
+}
+
 export function getSteamDllPath(steamPath: string, component: string): string {
   const dllName = component === 'steamui' ? 'steamui.dll' : 'steamclient64.dll'
   return path.join(steamPath, dllName)
@@ -55,9 +77,17 @@ export async function ensureSignatureCached(
   }
 
   const sha256 = sha256OfFile(dllPath)
-  const cachePath = getSignatureCachePath(steamPath, channel, component, sha256)
+  const cachePaths = getAllSignatureCachePaths(steamPath, channel, component, sha256)
 
-  if (fs.existsSync(cachePath)) {
+  const existing = cachePaths.find((p) => fs.existsSync(p))
+  if (existing) {
+    // Backfill the other path (migration ycoretool → opensteamtool) so the
+    // 1.4.x hook always finds its local spec without hitting the remote.
+    for (const p of cachePaths) {
+      if (p !== existing && !fs.existsSync(p)) {
+        try { ensureDir(p); fs.copyFileSync(existing, p) } catch {}
+      }
+    }
     logger.info(`Signature cache hit for ${channel}/${component}/${sha256}`, 'signature-cache')
     return { ok: true, status: 'cached', component, sha256, channel }
   }
@@ -74,8 +104,12 @@ export async function ensureSignatureCached(
 
   if (result.status === 200) {
     try {
-      ensureDir(cachePath)
-      fs.writeFileSync(cachePath, result.body, 'utf-8')
+      // Write to BOTH cache locations: legacy ycoretool\ + the opensteamtool\
+      // path the current 1.4.x hook actually reads.
+      for (const p of cachePaths) {
+        ensureDir(p)
+        fs.writeFileSync(p, result.body, 'utf-8')
+      }
       logger.info(`${channel} signature downloaded and cached for ${component}/${sha256}`, 'signature-cache')
       return { ok: true, status: 'downloaded', component, sha256, channel }
     } catch (err: any) {

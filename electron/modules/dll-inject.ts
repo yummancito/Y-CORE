@@ -75,6 +75,37 @@ function writeLastBuildId(steamPath: string, buildId: string | null): void {
   } catch {}
 }
 
+// Dedicated consent marker. last_build_id.txt is also written on FAILURE
+// paths (unsupported build, signature retry), so it can NOT be used as proof
+// the user ever accepted the hook dialog. This file is written only on a
+// successful install, so silent revalidation never background-installs DLLs
+// into Steam without prior consent.
+const HOOK_CONSENT_FILE = path.join('ycoretool', 'hook_consent.txt')
+
+function writeHookConsent(steamPath: string): void {
+  try {
+    const p = path.join(steamPath, HOOK_CONSENT_FILE)
+    const dir = path.dirname(p)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(p, '1', 'utf-8')
+  } catch {}
+}
+
+function hasHookConsent(steamPath: string): boolean {
+  try {
+    return fs.existsSync(path.join(steamPath, HOOK_CONSENT_FILE))
+  } catch {
+    return false
+  }
+}
+
+/** Hook DLL names installHookDll may deploy (YCoreTool preferred, legacy names included). */
+const HOOK_DLL_NAMES = ['YCoreTool.dll', 'steamtools_hook.dll', 'OpenSteamTool.dll']
+
+function hookPresent(steamPath: string): boolean {
+  return HOOK_DLL_NAMES.some((n) => fs.existsSync(path.join(steamPath, n)))
+}
+
 const FAILED_SIGS_FILE = path.join('ycoretool', 'failed_signatures.json')
 
 function readFailedSignatures(steamPath: string): string[] {
@@ -121,9 +152,24 @@ function removeHookDlls(steamPath: string): void {
     path.join(steamPath, 'dwmapi.dll'),
     path.join(steamPath, 'xinput1_4.dll'),
     path.join(steamPath, 'ycoretool.toml'),
+    // OpenSteamTool 1.4.x renamed its config file; remove both names.
+    path.join(steamPath, 'opensteamtool.toml'),
   ]
   for (const f of candidates) restoreOrDelete(f)
   logger.warn('Removed incompatible hook DLLs to recover Steam', 'dll-inject')
+}
+
+// OpenSteamTool was renamed from YCoreTool and the 1.4.x DLL reads its
+// config from <Steam>\opensteamtool.toml (not ycoretool.toml). Write BOTH
+// names so the currently-deployed hook always picks up the config regardless
+// of which build is installed.
+function copyHookConfig(steamPath: string, ostDir: string): void {
+  const tomlSrc = path.join(ostDir, 'ycoretool.toml')
+  if (!fs.existsSync(tomlSrc)) return
+  try {
+    fs.copyFileSync(tomlSrc, path.join(steamPath, 'ycoretool.toml'))
+    fs.copyFileSync(tomlSrc, path.join(steamPath, 'opensteamtool.toml'))
+  } catch {}
 }
 
 function delay(ms: number): Promise<void> {
@@ -176,10 +222,14 @@ async function ensureIpcSideChannel(steamPath: string): Promise<void> {
     }
     await ensureAllChannelsCached(steamPath)
     for (const r of ipcMissing) {
-      const dir = path.join(steamPath, 'ycoretool', 'ipc', r.component)
-      const target = path.join(dir, `${r.sha256}.toml`)
-      if (fs.existsSync(target)) continue
-      copyAnyIpcToml(dir, target)
+      // Check BOTH cache roots: legacy ycoretool\ and the opensteamtool\
+      // path the 1.4.x hook actually reads.
+      for (const base of ['opensteamtool', 'ycoretool']) {
+        const dir = path.join(steamPath, base, 'ipc', r.component)
+        const target = path.join(dir, `${r.sha256}.toml`)
+        if (fs.existsSync(target)) continue
+        copyAnyIpcToml(dir, target)
+      }
     }
   } catch (err: any) {
     logger.warn(`ensureIpcSideChannel error: ${err.message}`, 'dll-inject')
@@ -291,6 +341,10 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
     //   try { fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true }) } catch {}
     // }
     writeLastBuildId(steamPath, currentBuildId)
+    // Migration: existing installs (hook files present but no marker, since
+    // hook_consent.txt is new) — backfill the consent marker so silent
+    // revalidation can auto-heal after future Steam updates.
+    writeHookConsent(steamPath)
     return { success: true, installed: false }
   }
 
@@ -341,12 +395,11 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
       fs.copyFileSync(hookPath, destHook)
       fs.copyFileSync(dwmapiPath, destDwmapi)
       fs.copyFileSync(xinputPath, destXinput)
-      const tomlSrc = path.join(ostDir, 'ycoretool.toml')
-      const tomlDst = path.join(steamPath, 'ycoretool.toml')
-      if (fs.existsSync(tomlSrc)) fs.copyFileSync(tomlSrc, tomlDst)
+      copyHookConfig(steamPath, ostDir)
       // NOTE: Steamless copy removed (native module only)
       // if (fs.existsSync(steamlessSrcDir)) fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true })
       writeLastBuildId(steamPath, currentBuildId)
+      writeHookConsent(steamPath)
       monitorAndRemediateHook(steamPath, signatureResults, currentBuildId).catch((err: any) => {
         logger.error(`monitorAndRemediateHook error: ${err.message}`, 'dll-inject')
       })
@@ -356,22 +409,33 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
     }
   }
 
+  // Silent revalidation is only safe when the user already consented to the
+  // hook. Consent = the dedicated marker written on a successful install OR
+  // hook DLLs already present in the Steam folder (implied consent — they
+  // were actually deployed, and reinstalling carries the same risk the user
+  // already accepted; this also covers existing users who predate the
+  // hook_consent.txt marker). Without consent we must never background-
+  // install DLLs into Steam. With consent, skip the dialog and reinstall —
+  // this is the auto-heal path after a Steam client update removes the hook.
+  const previouslyInstalled = hasHookConsent(steamPath) || hookPresent(steamPath)
   if (opts.silent) {
-    return { success: false, installed: false, unsupportedBuild: true, error: 'Silent revalidation requires an existing hook; skipping dialog.' }
-  }
+    if (!previouslyInstalled) {
+      return { success: false, installed: false, unsupportedBuild: true, error: 'Silent revalidation requires prior hook consent; skipping install.' }
+    }
+  } else {
+    const response = await dialog.showMessageBox(state.mainWindow!, {
+      type: 'warning',
+      buttons: ['Cancelar', 'Instalar y reiniciar Steam'],
+      defaultId: 1,
+      cancelId: 0,
+      title: 'Y-core',
+      message: `Se instalará ${hookName}.dll, dwmapi.dll y xinput1_4.dll en tu carpeta de Steam (modo ${mode}).\n\nUsa bajo tu propio riesgo. Se recomienda usar una cuenta alterna.`,
+      detail: 'Si cancelas, es posible que el juego no funcione correctamente.',
+    })
 
-  const response = await dialog.showMessageBox(state.mainWindow!, {
-    type: 'warning',
-    buttons: ['Cancelar', 'Instalar y reiniciar Steam'],
-    defaultId: 1,
-    cancelId: 0,
-    title: 'Y-core',
-    message: `Se instalará ${hookName}.dll, dwmapi.dll y xinput1_4.dll en tu carpeta de Steam (modo ${mode}).\n\nUsa bajo tu propio riesgo. Se recomienda usar una cuenta alterna.`,
-    detail: 'Si cancelas, es posible que el juego no funcione correctamente.',
-  })
-
-  if (response.response === 0) {
-    return { success: false, error: 'errors.hook.userCancelled', installed: false }
+    if (response.response === 0) {
+      return { success: false, error: 'errors.hook.userCancelled', installed: false }
+    }
   }
 
   try {
@@ -386,9 +450,7 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
     fs.copyFileSync(hookPath, destHook)
     fs.copyFileSync(dwmapiPath, destDwmapi)
     fs.copyFileSync(xinputPath, destXinput)
-    const tomlSrc = path.join(ostDir, 'ycoretool.toml')
-    const tomlDst = path.join(steamPath, 'ycoretool.toml')
-    if (fs.existsSync(tomlSrc)) fs.copyFileSync(tomlSrc, tomlDst)
+    copyHookConfig(steamPath, ostDir)
     // NOTE: Steamless copy removed (native module only)
     // if (fs.existsSync(steamlessSrcDir)) fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true })
 
@@ -397,6 +459,7 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
     }
 
     writeLastBuildId(steamPath, currentBuildId)
+    writeHookConsent(steamPath)
     monitorAndRemediateHook(steamPath, signatureResults, currentBuildId).catch((err: any) => {
       logger.error(`monitorAndRemediateHook error: ${err.message}`, 'dll-inject')
     })
@@ -429,18 +492,35 @@ export async function revalidateHookIfUpdated(steamPath: string, mode: 'release'
   try {
     const current = getSteamBuildId()
     const last = readLastBuildId(steamPath)
-    const hookPresent = fs.existsSync(path.join(steamPath, 'YCoreTool.dll')) || fs.existsSync(path.join(steamPath, 'steamtools_hook.dll'))
-    const needsRevalidation = (!!current && !!last && current !== last) || (!!current && !last && hookPresent)
-    if (!needsRevalidation) return false
+    const hasHook = hookPresent(steamPath)
+
+    // Revalidate when the Steam build changed OR the hook DLLs are missing
+    // entirely (Defender quarantine, manual cleanup, or removal by a failed
+    // signature check). A missing/stale hook = Steam stops faking ownership
+    // and every game flips to "Comprar" in the library.
+    const buildChanged = !!current && !!last && current !== last
+    const needsRevalidation = buildChanged || (!!current && !hasHook)
+    if (!needsRevalidation) {
+      // Hook present + build matches → healthy, nothing to do.
+      return true
+    }
+
+    // Missing hook + never consented → nothing we can install silently; this
+    // is a terminal state for the background retry (the user must install a
+    // game or run Settings → Steam → Verify to consent via the dialog).
+    if (!hasHook && !hasHookConsent(steamPath)) {
+      logger.info('[hook-revalidation] hook missing but no prior consent; skipping silent install', 'dll-inject')
+      return true
+    }
 
     if (await isSteamRunning()) {
       logger.info('Steam running during hook revalidation; will revalidate on next launch', 'dll-inject')
-      return false
+      return false // still pending — caller should retry later
     }
 
-    logger.info(`Steam build changed since last hook install (last=${last}, current=${current}); revalidating`, 'dll-inject')
+    logger.info(`Steam hook out of date (buildChanged=${buildChanged}, hasHook=${hasHook}, last=${last}, current=${current}); revalidating`, 'dll-inject')
     await installHookDll(steamPath, mode, { silent: true })
-    return true
+    return hookPresent(steamPath)
   } catch (err: any) {
     logger.error(`revalidateHookIfUpdated error: ${err.message}`, 'dll-inject')
     return false

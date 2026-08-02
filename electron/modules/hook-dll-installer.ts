@@ -11,16 +11,21 @@ import { getSteamPath, closeSteamProcess } from './steam-helpers'
  */
 async function downloadIpcSpec(steamPath: string, sha256: string): Promise<boolean> {
   return new Promise((resolve) => {
-    const ipcDir = path.join(steamPath, 'ycoretool', 'ipc', 'steamclient')
-    const ipcFile = path.join(ipcDir, `${sha256}.toml`)
+    // OpenSteamTool 1.4.x reads specs from <Steam>\opensteamtool\ipc\...
+    // (renamed from ycoretool\). Write BOTH roots so any deployed build works.
+    const ipcRoots = [
+      path.join(steamPath, 'opensteamtool', 'ipc', 'steamclient'),
+      path.join(steamPath, 'ycoretool', 'ipc', 'steamclient'),
+    ]
 
     // Si ya existe, no descargar
-    if (fs.existsSync(ipcFile)) {
+    if (ipcRoots.some((dir) => fs.existsSync(path.join(dir, `${sha256}.toml`)))) {
       logger.info(`[hook-dll-installer] IPC spec already exists`, 'installer')
       return resolve(true)
     }
 
     // Crear directorio si no existe
+    const ipcDir = ipcRoots[0]
     if (!fs.existsSync(ipcDir)) {
       try {
         fs.mkdirSync(ipcDir, { recursive: true })
@@ -40,17 +45,23 @@ async function downloadIpcSpec(steamPath: string, sha256: string): Promise<boole
         return resolve(false)
       }
 
-      const file = fs.createWriteStream(ipcFile)
+      const file = fs.createWriteStream(path.join(ipcDir, `${sha256}.toml`))
       res.pipe(file)
 
       file.on('finish', () => {
         file.close()
+        // Mirror to the legacy root as well
+        try {
+          const legacyFile = path.join(ipcRoots[1], `${sha256}.toml`)
+          if (!fs.existsSync(path.dirname(legacyFile))) fs.mkdirSync(path.dirname(legacyFile), { recursive: true })
+          fs.copyFileSync(path.join(ipcDir, `${sha256}.toml`), legacyFile)
+        } catch {}
         logger.info(`[hook-dll-installer] Downloaded IPC spec successfully`, 'installer')
         resolve(true)
       })
 
       file.on('error', (err: any) => {
-        fs.unlink(ipcFile, () => {})
+        fs.unlink(path.join(ipcDir, `${sha256}.toml`), () => {})
         logger.warn(`[hook-dll-installer] File write error: ${err.message}`, 'installer')
         resolve(false)
       })
@@ -186,10 +197,11 @@ export async function installHookDllSilent(): Promise<{ success: boolean; inject
       logger.error(`[hook-dll-installer] Failed to copy xinput1_4.dll: ${err.message}`, 'installer')
     }
 
-    // PASO 5: Copiar configuración TOML
+    // PASO 5: Copiar configuración TOML (ambos nombres: legacy y 1.4.x)
     if (fs.existsSync(srcTomlPath)) {
       try {
         fs.copyFileSync(srcTomlPath, dstTomlPath)
+        fs.copyFileSync(srcTomlPath, path.join(steamPath, 'opensteamtool.toml'))
         logger.info(`[hook-dll-installer] Installed ycoretool.toml`, 'installer')
         injected++
       } catch (err: any) {

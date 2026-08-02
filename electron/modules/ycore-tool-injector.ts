@@ -89,10 +89,12 @@ export function injectYCoreTool(): { success: boolean; injected: number; error?:
       }
     }
 
-    // Copiar ycoretool.toml (configuración)
+    // Copiar ycoretool.toml (configuración) — también como opensteamtool.toml
+    // porque OpenSteamTool 1.4.x (renombrado) lee la config con ese nombre.
     if (fs.existsSync(srcTomlPath)) {
       try {
         fs.copyFileSync(srcTomlPath, dstTomlPath)
+        fs.copyFileSync(srcTomlPath, path.join(steamPath, 'opensteamtool.toml'))
         logger.info(`[ycore-tool-injector] Injected ycoretool.toml`, 'injector')
         injected++
       } catch (err: any) {
@@ -101,8 +103,12 @@ export function injectYCoreTool(): { success: boolean; injected: number; error?:
     }
 
     // Copiar recursivamente directorio ipc/ (IPC specs para diferentes versiones de steamclient)
+    // a AMBAS raíces: legacy ycoretool/ y la que lee el hook 1.4.x (opensteamtool/).
     const srcIpcDir = path.join(dllDir, 'ipc')
-    const dstIpcDir = path.join(steamPath, 'ycoretool', 'ipc')
+    const dstIpcDirs = [
+      path.join(steamPath, 'opensteamtool', 'ipc'),
+      path.join(steamPath, 'ycoretool', 'ipc'),
+    ]
     if (fs.existsSync(srcIpcDir)) {
       try {
         const copyDirRecursive = (src: string, dst: string) => {
@@ -118,8 +124,8 @@ export function injectYCoreTool(): { success: boolean; injected: number; error?:
             }
           }
         }
-        copyDirRecursive(srcIpcDir, dstIpcDir)
-        logger.info(`[ycore-tool-injector] Injected ycoretool/ipc/ directory`, 'injector')
+        for (const dst of dstIpcDirs) copyDirRecursive(srcIpcDir, dst)
+        logger.info(`[ycore-tool-injector] Injected ipc/ directory (opensteamtool + ycoretool)`, 'injector')
         injected++
       } catch (err: any) {
         logger.warn(`[ycore-tool-injector] Failed to copy ipc/ directory: ${err.message}`, 'injector')
