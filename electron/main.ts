@@ -909,11 +909,13 @@ if (gotTheLock) {
 
   registerStoreHandlers(invalidateGamesCache)
 
-  // No splash screen — go directly to main window (both dev and production)
-  // Splash was removed to improve startup UX
+  // Always show splash to display update progress
+  // Splash shows "Cargando Y-core..." and update status
+  // It closes automatically when updates finish
+  createSplashWindow()
   createWindow()
   createTray()
-  logger.info(`App initialized (splash disabled - direct launch)`, 'app')
+  logger.info(`App initialized (splash shown for updates)`, 'app')
 
   // ── Round-11: emulator toolchain check + auto-build kick-off ─────────────
   // Best-effort, never blocks the splash. If cmake + MSVC are present and
@@ -1147,6 +1149,13 @@ if (gotTheLock) {
       for (const win of BrowserWindow.getAllWindows()) {
         try { win.webContents.send('update:status', { status: 'ready', version: info.version }) } catch {}
       }
+      // Close splash after 2 seconds (update is ready)
+      setTimeout(() => {
+        const splashWindows = BrowserWindow.getAllWindows().filter(w => w.getTitle().includes('Splash') || w.getTitle().includes('Cargando'))
+        splashWindows.forEach(w => {
+          try { w.close() } catch {}
+        })
+      }, 2000)
     })
 
     autoUpdater.on('update-not-available', (info: { version?: string }) => {
@@ -1155,6 +1164,13 @@ if (gotTheLock) {
       for (const win of BrowserWindow.getAllWindows()) {
         try { win.webContents.send('update:status', { status: 'none' }) } catch {}
       }
+      // Close splash after 2 seconds (no update needed)
+      setTimeout(() => {
+        const splashWindows = BrowserWindow.getAllWindows().filter(w => w.getTitle().includes('Splash') || w.getTitle().includes('Cargando'))
+        splashWindows.forEach(w => {
+          try { w.close() } catch {}
+        })
+      }, 2000)
     })
 
     autoUpdater.on('error', (err: Error) => {
