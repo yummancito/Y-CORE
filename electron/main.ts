@@ -1111,28 +1111,15 @@ if (gotTheLock) {
 
     autoUpdater.on('update-available', (info: { version?: string }) => {
       logger.info(`Update available: ${info.version ?? 'unknown'}`, 'updater')
-      for (const win of BrowserWindow.getAllWindows()) {
-        try { win.webContents.send('update-available', info) } catch {}
-      }
     })
 
     autoUpdater.on('download-progress', (progress: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => {
-      for (const win of BrowserWindow.getAllWindows()) {
-        try { win.webContents.send('update-progress', {
-          percent: progress.percent,
-          transferred: progress.transferred,
-          total: progress.total,
-          bytesPerSecond: progress.bytesPerSecond,
-        }) } catch {}
-      }
+      logger.info(`Download progress: ${progress.percent.toFixed(0)}%`, 'updater')
     })
 
-    autoUpdater.on('update-downloaded', async (info: { version?: string }) => {
+    autoUpdater.on('update-downloaded', (info: { version?: string }) => {
       logger.info(`Update downloaded: ${info.version ?? 'unknown'} — will install on next quit`, 'updater')
-      for (const win of BrowserWindow.getAllWindows()) {
-        try { win.webContents.send('update-downloaded', info) } catch {}
-      }
-      // Auto-install on app quit (no dialog needed)
+      // Auto-install on app quit (silent, no user interaction)
     })
 
     autoUpdater.on('checking-for-update', () => {
