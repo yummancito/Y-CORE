@@ -178,13 +178,15 @@ export const downloadService = {
       // a false success with nothing actually downloaded.
       logger.info(`[DownloadService] Setup complete. Restarting Steam so it picks up the new appmanifest...`, 'services')
 
-      // PASO 3: Patch game folder with Goldberg Lite (post-download)
-      // Se ejecuta en background después de que Steam se reinicia
-      setImmediate(async () => {
+      // PASO 3: Esperar a que Steam cree la carpeta, luego patchear con Goldberg
+      // Se ejecuta en background después de que Steam se reinicia y descarga
+      setTimeout(async () => {
         try {
+          logger.info(`[DownloadService] Esperando carpeta del juego para patching...`, 'services')
+
           const acfPath = path.join(steamPath, 'steamapps', `appmanifest_${appId}.acf`)
           if (!fs.existsSync(acfPath)) {
-            logger.warn(`[DownloadService] ACF no encontrado para patching: ${acfPath}`, 'services')
+            logger.warn(`[DownloadService] ACF no encontrado: ${acfPath}`, 'services')
             return
           }
 
@@ -192,7 +194,7 @@ export const downloadService = {
           const parsed = parseVdf(acfContent)
           const installDir = parsed['AppState']?.['installdir'] as string
           if (!installDir) {
-            logger.warn(`[DownloadService] installdir no encontrado en ACF para ${appId}`, 'services')
+            logger.warn(`[DownloadService] installdir no encontrado en ACF`, 'services')
             return
           }
 
@@ -207,21 +209,21 @@ export const downloadService = {
           }
 
           if (!gameFolder) {
-            logger.warn(`[DownloadService] Game folder no encontrado para ${appId}`, 'services')
+            logger.info(`[DownloadService] Carpeta aún no existe (probablemente descargando...)`, 'services')
             return
           }
 
-          logger.info(`[DownloadService] Patching game folder con Goldberg: ${gameFolder}`, 'services')
+          logger.info(`[DownloadService] Aplicando Goldberg patch a: ${gameFolder}`, 'services')
           const patchResult = await patchGameFolderWithGoldberg(gameFolder, String(appId))
           if (patchResult.success) {
-            logger.info(`[DownloadService] Goldberg patch exitoso para ${appId}`, 'services')
+            logger.info(`[DownloadService] ✓ Goldberg patch exitoso para ${appId}`, 'services')
           } else {
             logger.warn(`[DownloadService] Goldberg patch falló: ${patchResult.error}`, 'services')
           }
         } catch (err: any) {
-          logger.error(`[DownloadService] Error patching con Goldberg: ${err?.message}`, 'services')
+          logger.error(`[DownloadService] Error en Goldberg patching: ${err?.message}`, 'services')
         }
-      })
+      }, 5000)  // Esperar 5 segundos a que la carpeta se cree
 
       try {
         const closeResult = await closeSteamProcess()
