@@ -1,0 +1,205 @@
+═══════════════════════════════════════════════════════════════════════════════
+                    Y-CORE v4.3.27 "COMPRAR" BUG FIX
+                              SUMMARY REPORT
+═══════════════════════════════════════════════════════════════════════════════
+
+PROJECT:     Y-CORE - Steam Game Manager
+ISSUE:       Games show "Comprar" instead of "Descargar" on other PCs
+STATUS:      ✅ RESOLVED & VERIFIED
+DATE:        03/08/2026
+COMMIT:      7c83499
+RELEASE:     v4.3.27-fix
+
+═══════════════════════════════════════════════════════════════════════════════
+                              THE PROBLEM
+═══════════════════════════════════════════════════════════════════════════════
+
+SYMPTOM:
+  User A downloads game X with Y-core on PC-A ✅
+  User A goes to PC-B, launches Steam
+  Game X shows [COMPRAR] button instead of [JUGAR] ❌
+  Clicking "Jugar" → "No hay licencias" error ❌
+
+AFFECTED VERSIONS:
+  v4.3.0 through v4.3.26 (all intermediate versions had the bug)
+
+ROOT CAUSE:
+  ❌ lua_content (depot manifest information) was NOT being passed through
+    the install pipeline from the API to the backend
+
+  ❌ Without lua_content, the ACF file has EMPTY InstalledDepots block
+
+  ❌ Steam sees empty InstalledDepots → "No depots to install"
+    → Shows "Comprar" instead of "Descargar"
+
+═══════════════════════════════════════════════════════════════════════════════
+                              THE SOLUTION
+═══════════════════════════════════════════════════════════════════════════════
+
+CHANGES:      Only 3 lines of code added (0 lines removed)
+FILES:        2 files modified
+COMPLEXITY:   Low (simple parameter forwarding)
+BREAKING:     No breaking changes
+
+MODIFIED FILES:
+  1. src/services/install.service.ts
+     - Added luaContent?: string parameter to startV2Download()
+     - Forward luaContent in downloadService.startFromApi() call
+
+  2. src/hooks/useInstallProcessor.ts
+     - Pass game.lua_content to startV2Download()
+
+  3. electron/services/download.service.ts
+     - NO changes (was already correct, just needed input)
+
+COMMIT MESSAGE:
+  "fix: pasar luaContent para llenar InstalledDepots (sin bump version)"
+
+═══════════════════════════════════════════════════════════════════════════════
+                            HOW IT WORKS NOW
+═══════════════════════════════════════════════════════════════════════════════
+
+DATA FLOW:
+  Y-core API /install
+    ↓ (lua_content: "setManifestid(1942280, '123abc...')")
+  useInstallProcessor.ts
+    ↓ (game.lua_content)
+  startV2Download({ luaContent: game.lua_content })
+    ↓ (via IPC)
+  download.service.ts startFromApi({ luaContent: '...' })
+    ↓
+  installGameCore(appId, name, luaContent, depotKeys)
+    ↓
+  createAppManifestFromLua(luaContent) ← PARSES HERE
+    ↓ (extracts: depot ID, manifest ID)
+  buildAppManifestAcf() ← BUILDS HERE
+    ↓
+  appmanifest_1942280.acf with InstalledDepots FILLED ✅
+    ↓
+  Steam reads ACF → Sees depots → Shows "DESCARGAR" ✅
+
+RESULT:
+  ✅ ACF has InstalledDepots block with depot IDs and manifest IDs
+  ✅ Steam recognizes game as downloadable
+  ✅ Shows "Descargar" button instead of "Comprar"
+  ✅ User can download game from other PC
+  ✅ Game launches without "No hay licencias" error
+
+═══════════════════════════════════════════════════════════════════════════════
+                             VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+TESTING COMPLETED:
+  ✅ TypeScript compilation (no errors)
+  ✅ Windows Defender (clean, no virus flags)
+  ✅ Download game on PC-A (Amogus 3D, Brotato)
+  ✅ Check Steam on PC-B (shows "Descargar" not "Comprar")
+  ✅ Launch game from Steam on PC-B (works!)
+  ✅ Auto-update from v4.3.27 (works!)
+
+USER CONFIRMATION: ✅ "FUNCIONA CARAJO FUNCIONA"
+
+═══════════════════════════════════════════════════════════════════════════════
+                             DEPLOYMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+RELEASE:      v4.3.27-fix
+DOWNLOAD:     https://github.com/yummancito/Y-CORE/releases/tag/v4.3.27-fix
+FILE:         Y-core-Setup-4.3.27.exe
+SIZE:         1.3 MB
+SHA512:       bb1a83e646f68208469c3020dfee6b08d48186af4e5d2b6909ccd4368ba105becc46ac58cef814a4278d3d0dff739335269e492d0af5a1dce33b8f8524994098
+
+AUTO-UPDATE:  ✅ Enabled
+  - Users running v4.3.27 will auto-update
+  - latest.yml points to v4.3.27-fix
+  - No manual action required for users
+
+═══════════════════════════════════════════════════════════════════════════════
+                             DOCUMENTATION
+═══════════════════════════════════════════════════════════════════════════════
+
+Three detailed documents created:
+
+1. FIX_COMPRAR_BUG.md
+   - Executive summary of the issue and fix
+   - Before/after ACF structure comparison
+   - Simple explanation for users
+
+2. ARCHITECTURE_INSTALL_FLOW.md
+   - Detailed technical architecture
+   - Full code flow with examples
+   - Regex patterns for Lua parsing
+   - Key files and functions reference
+
+3. CHANGELOG_COMPRAR_FIX.md
+   - Formal changelog entry
+   - Test results table
+   - Historical context (why v3.0.1 didn't have bug)
+   - Deployment instructions
+
+═══════════════════════════════════════════════════════════════════════════════
+                          TECHNICAL DETAILS
+═══════════════════════════════════════════════════════════════════════════════
+
+LUA CONTENT FORMAT:
+  Input:  "setManifestid(1942280, "123abc456def789ghi012jklmno345pqr")"
+  Parsed: depotId="1942280", manifestId="123abc456def789ghi012jklmno345pqr"
+  Result: Added to InstalledDepots block in ACF
+
+ACF BEFORE (❌ BUG):
+  "InstalledDepots"
+  {
+  }
+  → Steam interprets: No depots → Shows "Comprar"
+
+ACF AFTER (✅ FIXED):
+  "InstalledDepots"
+  {
+    "1942280"
+    {
+      "manifest" "123abc456def789ghi012jklmno345pqr"
+      "size"     "1234567890"
+    }
+  }
+  → Steam interprets: Has depots → Shows "Descargar"
+
+═══════════════════════════════════════════════════════════════════════════════
+                            KEY FILES
+═══════════════════════════════════════════════════════════════════════════════
+
+src/services/install.service.ts
+  Line 69-76: startV2Download() function signature
+  Line 78-85: Forward luaContent to IPC
+
+src/hooks/useInstallProcessor.ts
+  Line 114-121: Pass game.lua_content to startV2Download()
+
+electron/services/download.service.ts
+  Line 161: Receive opts.luaContent in startFromApi()
+
+electron/modules/manifest-sync.ts
+  Line 240-370: installGameCore() orchestrator
+
+electron/modules/acf.ts
+  Line 215-265: createAppManifestFromLua() Lua parser
+  Line 144-213: buildAppManifestAcf() VDF generator
+
+═══════════════════════════════════════════════════════════════════════════════
+                            NEXT STEPS
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Code implemented
+✅ Tested and verified
+✅ Released to GitHub
+✅ Documentation complete
+✅ Auto-update working
+
+MONITORING:
+  Watch for edge cases with custom or non-standard Lua files
+  Monitor GitHub issues for any related problems
+  Keep documentation updated
+
+═══════════════════════════════════════════════════════════════════════════════
+
+Generated: 03/08/2026 15:30 UTC
+Status: READY FOR PRODUCTION ✅
