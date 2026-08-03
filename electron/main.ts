@@ -1127,8 +1127,16 @@ if (gotTheLock) {
       }
     })
 
-    autoUpdater.on('update-downloaded', (info: { version?: string }) => {
+    autoUpdater.on('update-downloaded', async (info: { version?: string }) => {
       logger.info(`Update downloaded: ${info.version ?? 'unknown'}`, 'updater')
+      // Pre-emptively close Steam to avoid file lock conflicts during installation
+      try {
+        const { closeSteamProcess } = await import('./modules/steam-helpers')
+        await closeSteamProcess()
+        logger.info('Steam closed in preparation for update installation', 'updater')
+      } catch (err: any) {
+        logger.warn(`Could not pre-close Steam: ${err?.message}`, 'updater')
+      }
       for (const win of BrowserWindow.getAllWindows()) {
         try { win.webContents.send('update-downloaded', info) } catch {}
       }
@@ -1173,10 +1181,24 @@ if (gotTheLock) {
       logger.info('[updater] Auto-update checks disabled (Y_CORE_DISABLE_AUTO_UPDATE=1)', 'updater')
     }
 
-    ipcMain.handle('app:installUpdate', () => {
+    ipcMain.handle('app:installUpdate', async () => {
       logger.info('User requested update install — forcing clean exit before installer', 'updater')
       setIsQuitting(true)
-      // Destroy every window (bypassing the minimize-to-tray 'close' guard) and
+
+      // PASO 1: Cerrar Steam si está corriendo (evita conflictos de bloqueo de archivos)
+      try {
+        const { closeSteamProcess } = await import('./modules/steam-helpers')
+        const closeResult = await closeSteamProcess()
+        if (closeResult.success) {
+          logger.info('Steam closed successfully before update', 'updater')
+        } else {
+          logger.warn(`Could not close Steam: ${closeResult.error}`, 'updater')
+        }
+      } catch (err: any) {
+        logger.warn(`Error closing Steam during update: ${err?.message}`, 'updater')
+      }
+
+      // PASO 2: Destroy every window (bypassing the minimize-to-tray 'close' guard) and
       // the tray so the process fully exits and releases the running .exe lock.
       // Otherwise the NSIS installer hangs waiting for the file handle, and the
       // relaunched app collides with the previous single-instance lock.
