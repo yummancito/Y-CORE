@@ -1,6 +1,6 @@
 {
   "name": "y-core",
-  "version": "4.3.12",
+  "version": "4.3.13",
   "description": "Y-core - Steam game management tool",
   "main": "dist-electron/main.js",
   "author": "Y-core",
@@ -137,11 +137,14 @@
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": false,
+      "perMachine": true,
       "allowToChangeInstallationDirectory": true,
       "differentialPackage": false,
       "artifactName": "${productName}-Setup-${version}.${ext}",
-      "include": "build/installer.nsh"
+      "include": "build/installer.nsh",
+      "installerIcon": "public/logo.ico",
+      "uninstallerIcon": "public/logo.ico",
+      "installerHeaderIcon": "public/logo.ico"
     },
     "afterPack": "scripts/fix-exe.js",
     "publish": {
