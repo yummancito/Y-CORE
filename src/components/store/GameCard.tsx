@@ -1,5 +1,5 @@
 import { useState, useMemo, memo } from 'react'
-import { Package, Play, Loader2, Download, ChevronRight } from 'lucide-react'
+import { Package, Play, Loader2, Download, ChevronRight, Wrench } from 'lucide-react'
 import { t } from '../../lib/i18n'
 import { CoverImage } from '../ui/CoverImage'
 import { Card3D } from '../ui/Card3D'
@@ -28,7 +28,7 @@ export function getDefaultGameImageUrl(game: MergedGame): string | null {
 }
 
 export const GameCard = memo(function GameCard({
-  game, onInstall, installing, onSelect, isRecommended, src, isInstalled, subline,
+  game, onInstall, installing, onSelect, isRecommended, src, isInstalled, subline, onRepair,
 }: {
   game: MergedGame
   onInstall: (g: MergedGame) => void
@@ -38,6 +38,7 @@ export const GameCard = memo(function GameCard({
   src?: string | null
   isInstalled?: boolean
   subline?: string
+  onRepair?: (g: MergedGame) => void
 }) {
   const [failed, setFailed] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
@@ -159,6 +160,15 @@ export const GameCard = memo(function GameCard({
             )}
             {installing === game.app_id ? t('store.installing') : isInstalled ? t('library.play') : t('store.install')}
           </button>
+          {isInstalled && onRepair && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRepair(game); }}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-[11px] font-semibold text-text-bright transition-all cursor-pointer bg-amber-600/40 hover:bg-amber-600/60 border border-amber-500/30 hover:border-amber-500/60"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              {t('library.repair')}
+            </button>
+          )}
           <span className="flex items-center gap-1 text-xs font-semibold text-text-bright">
             {t('store.seeDetails')}
             <ChevronRight className="w-3.5 h-3.5" />
