@@ -276,15 +276,19 @@ export async function patchGameFolderWithGoldberg(
       path.resolve(path.join(__dirname, '..', '..', 'resources', 'native', 'steam_api.dll')),
     ]
 
+    logger.info(`[patchGameFolderWithGoldberg] Buscando en: ${candidateGoldbergPaths.join(' | ')}`, 'emulator')
+
     let goldbergDll64 = ''
     for (const p of candidateGoldbergPaths) {
       if (fs.existsSync(p)) {
         goldbergDll64 = p
+        logger.info(`[patchGameFolderWithGoldberg] ENCONTRADO: ${p}`, 'emulator')
         break
       }
     }
 
     if (!goldbergDll64) {
+      logger.error(`[patchGameFolderWithGoldberg] steam_api64.dll NO ENCONTRADA`, 'emulator')
       return { success: false, error: `Goldberg steam_api64.dll no encontrada en: ${candidateGoldbergPaths.join(' | ')}` }
     }
 
