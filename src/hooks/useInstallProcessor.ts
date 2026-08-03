@@ -116,6 +116,7 @@ async function installOneGameV2(opts: {
     name: game.name,
     manifestFiles,
     depotKeys,
+    luaContent: game.lua_content,
     priority: 1, // NORMAL — engine constant; keyed by DownloadPriority enum on the
                   // other side.
   })

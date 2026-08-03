@@ -71,6 +71,7 @@ async function startV2Download(opts: {
   name: string
   manifestFiles: { depotId: string; manifestId: string }[]
   depotKeys: { depotId: string; key: string }[]
+  luaContent?: string
   priority?: number
   source?: 'steam-native' | 'direct' | 'api_proxy' | 'torrent'
 }): Promise<{ success: boolean; taskId?: string; alreadyComplete?: boolean; error?: string }> {
@@ -80,6 +81,7 @@ async function startV2Download(opts: {
       name: opts.name,
       manifestFiles: opts.manifestFiles,
       depotKeys: opts.depotKeys,
+      luaContent: opts.luaContent,
       priority: opts.priority,
       source: opts.source ?? 'steam-native',
     })
