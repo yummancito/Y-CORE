@@ -252,7 +252,7 @@ export function getLocalSteamEmulatorVersion(): string | null {
  */
 /**
  * Patch game folder with Goldberg Lite (superior to ycore_steam.dll)
- * Downloads Goldberg steam_api64.dll and steam_api.dll if needed
+ * Copies steam_api64.dll + steam_api.dll + steam_settings directory
  */
 export async function patchGameFolderWithGoldberg(
   gameFolder: string,
@@ -268,6 +268,32 @@ export async function patchGameFolderWithGoldberg(
   }
 
   try {
+    // Find Goldberg steam_api64.dll
+    const candidateGoldbergPaths = [
+      path.join(process.resourcesPath, 'native', 'steam_api64.dll'),
+      path.join(process.resourcesPath, 'native', 'steam_api.dll'),
+      path.resolve(path.join(__dirname, '..', '..', 'resources', 'native', 'steam_api64.dll')),
+      path.resolve(path.join(__dirname, '..', '..', 'resources', 'native', 'steam_api.dll')),
+    ]
+
+    let goldbergDll64 = ''
+    for (const p of candidateGoldbergPaths) {
+      if (fs.existsSync(p)) {
+        goldbergDll64 = p
+        break
+      }
+    }
+
+    if (!goldbergDll64) {
+      return { success: false, error: `Goldberg steam_api64.dll no encontrada en: ${candidateGoldbergPaths.join(' | ')}` }
+    }
+
+    // Copy Goldberg DLL as steam_api64.dll
+    const dst64 = path.join(gameFolder, 'steam_api64.dll')
+    fs.copyFileSync(goldbergDll64, dst64)
+    logger.info(`[patchGameFolder] Copied Goldberg to ${dst64}`, 'emulator')
+
+    // Create steam_appid.txt
     const appIdFile = path.join(gameFolder, 'steam_appid.txt')
     if (!fs.existsSync(appIdFile)) {
       fs.writeFileSync(appIdFile, String(appId), 'utf-8')
@@ -287,7 +313,7 @@ export async function patchGameFolderWithGoldberg(
     dropIfMissing('disable_overlay.txt', '1\n')
     dropIfMissing('appid.txt', String(appId).trim() + '\n')
 
-    logger.info(`[patchGameFolder] Goldberg layout configured for ${appId}`, 'emulator')
+    logger.info(`[patchGameFolder] Goldberg Lite configured for ${appId}`, 'emulator')
 
     return {
       success: true,
