@@ -387,7 +387,8 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
     try {
       const closeResult = await closeSteamProcess()
       if (!closeResult.success) {
-        return { success: true, installed: false }
+        logger.warn(`installHookDll: closeSteamProcess failed during DLL update: ${closeResult.error}`, 'dll-inject')
+        return { success: false, installed: false, error: `Cannot update DLLs while Steam is running: ${closeResult.error}` }
       }
       backupExistingFile(destHook)
       backupExistingFile(destDwmapi)
@@ -405,7 +406,8 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
       })
       return { success: true, installed: true }
     } catch (err: any) {
-      return { success: true, installed: false }
+      logger.error(`installHookDll: DLL copy failed (DLLs already exist path). Error: ${err?.message ?? err}`, 'dll-inject')
+      return { success: false, installed: false, error: `DLL replacement failed: ${err?.message ?? 'unknown error'}` }
     }
   }
 
@@ -441,7 +443,8 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
   try {
     const closeResult = await closeSteamProcess()
     if (!closeResult.success) {
-      return { success: false, error: closeResult.error, installed: false }
+      logger.error(`installHookDll: closeSteamProcess failed: ${closeResult.error}`, 'dll-inject')
+      return { success: false, error: `Failed to close Steam: ${closeResult.error}`, installed: false }
     }
 
     backupExistingFile(destHook)
@@ -484,7 +487,8 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
 
     return { success: true, installed: true }
   } catch (err: any) {
-    return { success: false, error: err.message, installed: false }
+    logger.error(`installHookDll: copy/write phase failed. Error: ${err?.message ?? err}. Steam: ${steamPath}`, 'dll-inject')
+    return { success: false, error: `DLL installation failed: ${err?.message ?? 'unknown'}`, installed: false }
   }
 }
 
@@ -519,8 +523,15 @@ export async function revalidateHookIfUpdated(steamPath: string, mode: 'release'
     }
 
     logger.info(`Steam hook out of date (buildChanged=${buildChanged}, hasHook=${hasHook}, last=${last}, current=${current}); revalidating`, 'dll-inject')
-    await installHookDll(steamPath, mode, { silent: true })
-    return hookPresent(steamPath)
+    const installResult = await installHookDll(steamPath, mode, { silent: true })
+    if (!installResult.success && installResult.error) {
+      throw new Error(`Hook installation failed: ${installResult.error}`)
+    }
+    const present = hookPresent(steamPath)
+    if (!present) {
+      throw new Error(`Hook DLLs not present after install attempt. This usually means Defender quarantine, permission denied, or disk space issue.`)
+    }
+    return true
   } catch (err: any) {
     logger.error(`revalidateHookIfUpdated error: ${err.message}`, 'dll-inject')
     return false

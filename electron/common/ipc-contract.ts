@@ -112,6 +112,23 @@ export interface DownloadServiceContract {
   checkDiskSpace(dirPath: string, requiredBytes: number): Promise<{ success: boolean; available?: number; message?: string; error?: string }>
   getCacheStats(): Promise<{ success: boolean; stats?: any; error?: string }>
   clearCache(): Promise<{ success: boolean; error?: string }>
+  /** Diagnose and repair only local ACF/Lua/manifest metadata. */
+  repairLocalInstallation(appId: string, installDir: string): Promise<{
+    success: boolean
+    result?: {
+      appId: string
+      ok: boolean
+      gameDir: string | null
+      acfPresent: boolean
+      luaPresent: boolean
+      referencedManifestCount: number
+      presentManifestCount: number
+      missingManifests: string[]
+      repaired: string[]
+      issues: string[]
+    }
+    error?: string
+  }>
 }
 
 // ── Log Service ────────────────────────────────────────────────────────────

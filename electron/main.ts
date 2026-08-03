@@ -266,6 +266,32 @@ if (gotTheLock) {
   app.whenReady().then(async () => {
     console.log('[STARTUP] [M] app.whenReady() started')
 
+  // AGGRESSIVE STARTUP: close Steam + run hook repair immediately while app loads (non-blocking)
+  // User experience: app starts, Steam closes, hook gets repaired, all ready in seconds
+  ;(async () => {
+    try {
+      logger.info('[startup-aggressive] Closing Steam and triggering immediate hook repair…', 'steam')
+      const { closeSteamProcess } = await import('./modules/steam-helpers')
+      const { runHookAutoRepairPass } = await import('./modules/hook-auto-repair')
+
+      // Close Steam (must complete; repair can't work while Steam is running)
+      const closeResult = await closeSteamProcess()
+      if (!closeResult.success) {
+        logger.warn(`[startup-aggressive] Steam close failed (${closeResult.error}); skipping repair this startup`, 'steam')
+        return
+      }
+
+      // Trigger immediate hook repair pass (don't wait for 60s interval)
+      const result = await runHookAutoRepairPass().catch((err: any) => {
+        logger.warn(`[startup-aggressive] repair pass failed: ${err?.message ?? err}`, 'steam')
+        return 'install-failed'
+      })
+      logger.info(`[startup-aggressive] hook repair pass complete (status: ${result})`, 'steam')
+    } catch (err: any) {
+      logger.warn(`[startup-aggressive] failed: ${err?.message ?? err}`, 'steam')
+    }
+  })()
+
   // Auto-update OpenSteamTool DLLs (non-blocking, runs in background).
   // Needed because Steam client updates change steamclient.dll's internal
   // signatures/offsets — this keeps the hook DLLs compatible after Steam updates.
@@ -1139,7 +1165,9 @@ if (gotTheLock) {
     const AUTO_UPDATE_DISABLED = process.env.Y_CORE_DISABLE_AUTO_UPDATE === '1'
     if (!AUTO_UPDATE_DISABLED) {
       checkForUpdates()
-      const UPDATE_CHECK_INTERVAL = 4 * 60 * 60 * 1000 // 4 hours
+      const UPDATE_CHECK_INTERVAL = process.env.Y_CORE_UPDATE_CHECK_INTERVAL
+        ? parseInt(process.env.Y_CORE_UPDATE_CHECK_INTERVAL, 10)
+        : 30 * 60 * 1000 // 30 minutes (default; was 4 hours, reduced for faster testing/rollout)
       setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL)
     } else {
       logger.info('[updater] Auto-update checks disabled (Y_CORE_DISABLE_AUTO_UPDATE=1)', 'updater')

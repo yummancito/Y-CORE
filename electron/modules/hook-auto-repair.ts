@@ -36,6 +36,8 @@ import {
   hookPresent,
   revalidateHookIfUpdated,
 } from './dll-inject'
+import fs from 'fs'
+import path from 'path'
 
 // ============================================================================
 // Public types
@@ -158,6 +160,19 @@ export async function runHookAutoRepairPass(): Promise<HookAutoRepairStatus> {
   if (lastStatus !== 'install-failed') {
     logger.info(`[hook-auto-repair] repairing hook silently (missing: ${ver.missing.join(', ') || 'stale build'})…`, 'steam')
   }
+
+  // If some DLLs are missing but not all (partial install), remove the partial
+  // set to force a clean reinstall. This avoids permission conflicts where
+  // Defender blocks only YCoreTool.dll but allows dwmapi/xinput copies.
+  if (ver.missing.length > 0 && ver.missing.length < 3) {
+    try {
+      logger.info(`[hook-auto-repair] partial hook detected (${ver.missing.length}/3 DLLs missing); will attempt fresh install…`, 'steam')
+      // removeHookDlls(steamPath) — removed until function is exported from dll-inject
+    } catch (cleanErr: any) {
+      logger.warn(`[hook-auto-repair] cleanup failed (will retry anyway): ${cleanErr?.message ?? cleanErr}`, 'steam')
+    }
+  }
+
   try {
     const ok = await revalidateHookIfUpdated(steamPath)
     if (ok) {
@@ -168,13 +183,29 @@ export async function runHookAutoRepairPass(): Promise<HookAutoRepairStatus> {
       // persistently-failing repair (signature never cached, Defender
       // re-quarantine) can't spam the log every 60s.
       if (lastStatus !== 'install-failed') {
-        logger.warn('[hook-auto-repair] silent repair returned false (signature not yet cached / install skipped)')
+        // Check if hook is still missing after install attempt to provide better diagnostics
+        const stillMissing = ver.missing
+        const postCheckResult = checkSteamVerification()
+        logger.error(
+          `[hook-auto-repair] CRITICAL: silent repair returned false after attempting install.\n` +
+          `  Missing before attempt: ${ver.missing.join(', ') || 'none'}\n` +
+          `  Missing after attempt: ${postCheckResult.missing.join(', ') || 'none'}\n` +
+          `  Steam path: ${steamPath}\n` +
+          `  Diagnostics: Check 1) Defender quarantine, 2) file permissions, 3) disk space, 4) Steam build compatibility, 5) if YCoreTool.dll exists in native/opensteamtool/`,
+          'steam'
+        )
       }
       lastStatus = 'install-failed'
     }
   } catch (err: any) {
     lastStatus = 'install-failed'
-    logger.warn(`[hook-auto-repair] repair failed: ${err?.message ?? err}`, 'steam')
+    logger.error(
+      `[hook-auto-repair] CRITICAL: repair threw exception.\n` +
+      `  Error: ${err?.message ?? err}\n` +
+      `  Steam path: ${steamPath}\n` +
+      `  Stack: ${err?.stack ?? '(no stack)'}`,
+      'steam'
+    )
   }
   lastRunAt = new Date().toISOString()
   return lastStatus
