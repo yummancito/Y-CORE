@@ -268,56 +268,104 @@ export async function patchGameFolderWithGoldberg(
   }
 
   try {
-    // Find Goldberg steam_api64.dll
-    const candidateGoldbergPaths = [
-      path.join(process.resourcesPath, 'native', 'steam_api64.dll'),
-      path.join(process.resourcesPath, 'native', 'steam_api.dll'),
-      path.resolve(path.join(__dirname, '..', '..', 'resources', 'native', 'steam_api64.dll')),
-      path.resolve(path.join(__dirname, '..', '..', 'resources', 'native', 'steam_api.dll')),
-    ]
+    // 1. Buscar steam_api64.dll/steam_api.dll EXISTENTES en el juego (como en v3.0.1)
+    const findSteamApiDlls = (dir: string): { dll64: string | null; dll32: string | null } => {
+      let dll64: string | null = null
+      let dll32: string | null = null
 
-    logger.info(`[patchGameFolderWithGoldberg] Buscando en: ${candidateGoldbergPaths.join(' | ')}`, 'emulator')
+      const root64 = path.join(dir, 'steam_api64.dll')
+      const root32 = path.join(dir, 'steam_api.dll')
+      if (fs.existsSync(root64)) dll64 = root64
+      if (fs.existsSync(root32)) dll32 = root32
 
-    let goldbergDll64 = ''
-    for (const p of candidateGoldbergPaths) {
-      if (fs.existsSync(p)) {
-        goldbergDll64 = p
-        logger.info(`[patchGameFolderWithGoldberg] ENCONTRADO: ${p}`, 'emulator')
-        break
+      if (!dll64 || !dll32) {
+        const searchDir = (searchPath: string, depth: number) => {
+          if (depth > 4 || (dll64 && dll32)) return
+          let entries: fs.Dirent[] = []
+          try { entries = fs.readdirSync(searchPath, { withFileTypes: true }) } catch { return }
+          for (const entry of entries) {
+            const fullPath = path.join(searchPath, entry.name)
+            if (entry.isDirectory()) {
+              searchDir(fullPath, depth + 1)
+            } else if (entry.isFile()) {
+              const lower = entry.name.toLowerCase()
+              if (lower === 'steam_api64.dll' && !dll64) dll64 = fullPath
+              if (lower === 'steam_api.dll' && !dll32) dll32 = fullPath
+            }
+          }
+        }
+        searchDir(dir, 0)
+      }
+
+      return { dll64, dll32 }
+    }
+
+    const { dll64: dll64Path, dll32: dll32Path } = findSteamApiDlls(gameFolder)
+    if (!dll64Path && !dll32Path) {
+      return { success: false, error: 'No steam_api(64).dll encontrado en carpeta del juego' }
+    }
+
+    // 2. Encontrar Goldberg en resources (como v3.0.1)
+    const resourcesPath = app.isPackaged
+      ? path.join(process.resourcesPath, 'native')
+      : path.resolve(path.join(__dirname, '..', '..', 'resources', 'native'))
+
+    const goldbergDll64 = path.join(resourcesPath, 'steam_api64.dll')
+    const goldbergDll32 = path.join(resourcesPath, 'steam_api.dll')
+
+    const results: string[] = []
+
+    // 3. Parchear 64-bit (renombrar original a _o.dll, copiar Goldberg)
+    if (dll64Path) {
+      const dllDir = path.dirname(dll64Path)
+      const renamedOriginal = path.join(dllDir, 'steam_api64_o.dll')
+
+      if (!fs.existsSync(renamedOriginal)) {
+        fs.renameSync(dll64Path, renamedOriginal)
+        results.push('Renamed steam_api64.dll → steam_api64_o.dll')
+      }
+
+      if (fs.existsSync(goldbergDll64)) {
+        fs.copyFileSync(goldbergDll64, dll64Path)
+        results.push('Installed Goldberg steam_api64.dll')
       }
     }
 
-    if (!goldbergDll64) {
-      logger.error(`[patchGameFolderWithGoldberg] steam_api64.dll NO ENCONTRADA`, 'emulator')
-      return { success: false, error: `Goldberg steam_api64.dll no encontrada en: ${candidateGoldbergPaths.join(' | ')}` }
+    // 4. Parchear 32-bit
+    if (dll32Path) {
+      const dllDir = path.dirname(dll32Path)
+      const renamedOriginal = path.join(dllDir, 'steam_api_o.dll')
+
+      if (!fs.existsSync(renamedOriginal)) {
+        fs.renameSync(dll32Path, renamedOriginal)
+        results.push('Renamed steam_api.dll → steam_api_o.dll')
+      }
+
+      if (fs.existsSync(goldbergDll32)) {
+        fs.copyFileSync(goldbergDll32, dll32Path)
+        results.push('Installed Goldberg steam_api.dll')
+      }
     }
 
-    // Copy Goldberg DLL as steam_api64.dll
-    const dst64 = path.join(gameFolder, 'steam_api64.dll')
-    fs.copyFileSync(goldbergDll64, dst64)
-    logger.info(`[patchGameFolder] Copied Goldberg to ${dst64}`, 'emulator')
+    // 5. Crear steam_settings/ (como v3.0.1)
+    const configDir = dll64Path ? path.dirname(dll64Path) : (dll32Path ? path.dirname(dll32Path) : gameFolder)
+    const steamSettingsDir = path.join(configDir, 'steam_settings')
+    fs.mkdirSync(steamSettingsDir, { recursive: true })
 
-    // Create steam_appid.txt
-    const appIdFile = path.join(gameFolder, 'steam_appid.txt')
-    if (!fs.existsSync(appIdFile)) {
-      fs.writeFileSync(appIdFile, String(appId), 'utf-8')
+    fs.writeFileSync(path.join(steamSettingsDir, 'force_account_name.txt'), 'YCorePlayer\n', 'utf-8')
+    fs.writeFileSync(path.join(steamSettingsDir, 'offline.txt'), '1\n', 'utf-8')
+    fs.writeFileSync(path.join(steamSettingsDir, 'disable_overlay.txt'), '1\n', 'utf-8')
+    fs.writeFileSync(path.join(steamSettingsDir, 'appid.txt'), String(appId).trim() + '\n', 'utf-8')
+    results.push('Created steam_settings/')
+
+    // 6. Crear steam_appid.txt en raíz del juego
+    const steamAppIdPath = path.join(gameFolder, 'steam_appid.txt')
+    if (!fs.existsSync(steamAppIdPath)) {
+      fs.writeFileSync(steamAppIdPath, String(appId), 'utf-8')
+      results.push('Created steam_appid.txt')
     }
 
-    // Create steam_settings directory for Goldberg config
-    const settingsDir = path.join(gameFolder, 'steam_settings')
-    fs.mkdirSync(settingsDir, { recursive: true })
-
-    const dropIfMissing = (name: string, contents: string) => {
-      const p = path.join(settingsDir, name)
-      if (!fs.existsSync(p)) fs.writeFileSync(p, contents, 'utf-8')
-    }
-
-    dropIfMissing('force_account_name.txt', 'YCorePlayer\n')
-    dropIfMissing('offline.txt', '1\n')
-    dropIfMissing('disable_overlay.txt', '1\n')
-    dropIfMissing('appid.txt', String(appId).trim() + '\n')
-
-    logger.info(`[patchGameFolder] Goldberg Lite configured for ${appId}`, 'emulator')
+    logger.info(`[patchGameFolderWithGoldberg] ✓ Patched ${appId}: ${results.join(', ')}`, 'emulator')
 
     return {
       success: true,
