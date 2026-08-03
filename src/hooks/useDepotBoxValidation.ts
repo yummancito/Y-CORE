@@ -5,7 +5,6 @@
 // ============================================================================
 
 import { useState, useCallback } from 'react'
-import { logger } from '../lib/logger'
 
 interface GameFix {
   type: 'onlinefix' | 'betafix' | 'nosteam'
@@ -29,7 +28,7 @@ export function useDepotBoxValidation() {
     setLoading(true)
     setError(null)
     try {
-      const result = await window.steamtools?.gateway?.call('depotbox:getGameInfo', appId)
+      const result = (await window.steamtools?.gateway?.call('depotbox:getGameInfo', appId)) as any
       if (!result?.success || !result.game) {
         setError(result?.error || 'Could not fetch game info')
         return null
@@ -42,7 +41,7 @@ export function useDepotBoxValidation() {
       }
     } catch (err: any) {
       setError(err.message || 'Unknown error')
-      logger.error(`[DepotBox] getGameInfo failed: ${err.message}`)
+      console.error(`[DepotBox] getGameInfo failed: ${err.message}`)
       return null
     } finally {
       setLoading(false)
@@ -53,7 +52,7 @@ export function useDepotBoxValidation() {
     setLoading(true)
     setError(null)
     try {
-      const result = await window.steamtools?.gateway?.call('depotbox:getGameFixes', appId)
+      const result = (await window.steamtools?.gateway?.call('depotbox:getGameFixes', appId)) as any
       if (!result?.success) {
         setError(result?.error || 'Could not fetch fixes')
         return null
@@ -61,7 +60,7 @@ export function useDepotBoxValidation() {
       return (result.fixes || []) as GameFix[]
     } catch (err: any) {
       setError(err.message || 'Unknown error')
-      logger.error(`[DepotBox] checkGameFixes failed: ${err.message}`)
+      console.error(`[DepotBox] checkGameFixes failed: ${err.message}`)
       return null
     } finally {
       setLoading(false)
@@ -73,7 +72,7 @@ export function useDepotBoxValidation() {
       setLoading(true)
       setError(null)
       try {
-        const result = await window.steamtools?.gateway?.call('depotbox:validateGameDepots', appId, depotIds)
+        const result = (await window.steamtools?.gateway?.call('depotbox:validateGameDepots', appId, depotIds)) as any
         if (!result?.success) {
           setError(result?.error || 'Validation failed')
           return null
@@ -84,7 +83,7 @@ export function useDepotBoxValidation() {
         }
       } catch (err: any) {
         setError(err.message || 'Unknown error')
-        logger.error(`[DepotBox] validateGameDepots failed: ${err.message}`)
+        console.error(`[DepotBox] validateGameDepots failed: ${err.message}`)
         return null
       } finally {
         setLoading(false)
@@ -97,7 +96,7 @@ export function useDepotBoxValidation() {
     setLoading(true)
     setError(null)
     try {
-      const result = await window.steamtools?.gateway?.call('depotbox:findBestFix', appId)
+      const result = (await window.steamtools?.gateway?.call('depotbox:findBestFix', appId)) as any
       if (!result?.success) {
         setError(result?.error || 'Could not find fixes')
         return null
@@ -105,7 +104,7 @@ export function useDepotBoxValidation() {
       return (result.fix || null) as GameFix | null
     } catch (err: any) {
       setError(err.message || 'Unknown error')
-      logger.error(`[DepotBox] findBestFix failed: ${err.message}`)
+      console.error(`[DepotBox] findBestFix failed: ${err.message}`)
       return null
     } finally {
       setLoading(false)
