@@ -113,7 +113,7 @@ export const fixInstallerService = {
       return {
         success: true,
         message,
-        filesApplied,
+        filesApplied: appliedFiles,
       }
     } catch (err: any) {
       const errorMsg = err.message || 'Unknown error'
