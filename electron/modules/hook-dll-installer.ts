@@ -121,6 +121,20 @@ export async function installHookDllSilent(): Promise<{ success: boolean; inject
     // ycore_steam.dll se inyecta como steam_api64.dll (hijack del loader)
     const dstSteamDll = path.join(steamPath, 'steam_api64.dll')
 
+    // Localizar ycore_steam.dll en la instalación de Y-core
+    let srcSteamDll = ''
+    const steamDllCandidates = [
+      path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'Y-core', 'resources', 'native', 'ycore_steam.dll'),
+      path.join(appRoot, 'resources', 'native', 'ycore_steam.dll'),
+      path.join(appRoot, 'native', 'ycore_steam', 'build', 'Release', 'ycore_steam.dll'),
+    ]
+    for (const candidate of steamDllCandidates) {
+      if (fs.existsSync(candidate)) {
+        srcSteamDll = candidate
+        break
+      }
+    }
+
     // Verificar que existen los archivos fuente
     if (!fs.existsSync(srcHookPath) || !fs.existsSync(srcDwmapiPath) || !fs.existsSync(srcXinputPath)) {
       logger.warn(`[hook-dll-installer] Source DLLs not found in ${ostDir}`, 'installer')
@@ -195,6 +209,19 @@ export async function installHookDllSilent(): Promise<{ success: boolean; inject
       injected++
     } catch (err: any) {
       logger.error(`[hook-dll-installer] Failed to copy xinput1_4.dll: ${err.message}`, 'installer')
+    }
+
+    // PASO 4b: Copiar ycore_steam.dll (emulador Steam que YCoreTool necesita)
+    if (srcSteamDll) {
+      try {
+        fs.copyFileSync(srcSteamDll, dstSteamDll)
+        logger.info(`[hook-dll-installer] Installed ycore_steam.dll (as steam_api64.dll)`, 'installer')
+        injected++
+      } catch (err: any) {
+        logger.error(`[hook-dll-installer] Failed to copy ycore_steam.dll: ${err.message}`, 'installer')
+      }
+    } else {
+      logger.warn(`[hook-dll-installer] ycore_steam.dll not found (YCoreTool may not emulate ownership correctly)`, 'installer')
     }
 
     // PASO 5: Copiar configuración TOML (ambos nombres: legacy y 1.4.x)
