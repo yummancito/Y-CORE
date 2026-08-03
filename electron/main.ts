@@ -1107,7 +1107,7 @@ if (gotTheLock) {
   // silently downgrade installed clients.
   if (app.isPackaged) {
     autoUpdater.autoDownload = true
-    autoUpdater.autoInstallOnAppQuit = true
+    autoUpdater.autoInstallOnAppQuit = false
 
     autoUpdater.on('update-available', (info: { version?: string }) => {
       logger.info(`Update available: ${info.version ?? 'unknown'}`, 'updater')
@@ -1129,16 +1129,41 @@ if (gotTheLock) {
 
     autoUpdater.on('update-downloaded', async (info: { version?: string }) => {
       logger.info(`Update downloaded: ${info.version ?? 'unknown'}`, 'updater')
-      // Pre-emptively close Steam to avoid file lock conflicts during installation
-      try {
-        const { closeSteamProcess } = await import('./modules/steam-helpers')
-        await closeSteamProcess()
-        logger.info('Steam closed in preparation for update installation', 'updater')
-      } catch (err: any) {
-        logger.warn(`Could not pre-close Steam: ${err?.message}`, 'updater')
-      }
       for (const win of BrowserWindow.getAllWindows()) {
         try { win.webContents.send('update-downloaded', info) } catch {}
+      }
+      // Show a dialog asking user to restart manually instead of auto-installing
+      const response = await dialog.showMessageBox({
+        type: 'info',
+        title: 'Actualización disponible',
+        message: `Y-core ${info.version ?? 'nueva versión'} está lista para instalar`,
+        detail: 'Por favor cierra todas las ventanas y reinicia Y-core para completar la actualización.',
+        buttons: ['Reinstaliar ahora', 'Más tarde'],
+        defaultId: 0,
+      })
+      if (response.response === 0) {
+        logger.info('User requested restart for update installation', 'updater')
+        setIsQuitting(true)
+        try {
+          const windows = BrowserWindow.getAllWindows()
+          for (const w of windows) {
+            if (w.isDestroyed()) continue
+            try {
+              w.removeAllListeners('close')
+              w.destroy()
+            } catch (err: any) {
+              logger.warn(`Failed to destroy window: ${err?.message}`, 'updater')
+            }
+          }
+        } catch (err: any) {
+          logger.warn(`Failed to destroy all windows: ${err?.message}`, 'updater')
+        }
+        if (state.tray) {
+          try { state.tray.destroy() } catch {}
+        }
+        setTimeout(() => {
+          autoUpdater.quitAndInstall(false, true)
+        }, 500)
       }
     })
 
