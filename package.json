@@ -129,28 +129,17 @@
     ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
+        "nsis"
       ],
-      "signAndEditExecutable": false,
-      "certificateFile": null,
-      "certificatePassword": null,
-      "signingHashAlgorithms": [
-        "sha256"
-      ],
-      "sign": null,
-      "timeStampServer": "http://timestamp.comodoca.com"
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
-      "perMachine": true,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": true,
       "differentialPackage": false,
       "artifactName": "${productName}-Setup-${version}.${ext}",
-      "include": "build/installer.nsh",
-      "installerIcon": "public/logo.ico",
-      "uninstallerIcon": "public/logo.ico",
-      "installerHeaderIcon": "public/logo.ico"
+      "include": "build/installer.nsh"
     },
     "afterPack": "scripts/fix-exe.js",
     "publish": {
