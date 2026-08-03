@@ -95,6 +95,8 @@ import { registerCloudSyncHandlers } from './handlers/cloud-sync'
 import { registerOnlineHandlers } from './handlers/online.handler'
 import { registerApiProxyHandlers } from './handlers/api-proxy.handler'
 import { registerDepotboxHandlers } from './handlers/depotbox.handler'
+import { registerFixDownloaderHandlers } from './handlers/fix-downloader.handler'
+import { registerGameResetHandlers } from './handlers/game-reset.handler'
 // Steampipe removed — now using Steam-native downloads instead
 import { registerDownloadHandlers } from './modules/download-ipc'
 import { startAcfWatcher } from './modules/manifest-sync'
@@ -700,6 +702,8 @@ if (gotTheLock) {
   registerOnlineHandlers()
   registerApiProxyHandlers()
   registerDepotboxHandlers()
+  registerFixDownloaderHandlers()
+  registerGameResetHandlers()
 
   // Diagnóstico de DLLs vs Windows Defender — disponible para el renderer
   ipcMain.handle('app:defenderCheck', () => {

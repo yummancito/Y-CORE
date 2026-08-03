@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ChevronLeft, ChevronRight, Download, Play, X,
-  Heart, Loader2, AlertCircle,
+  Heart, Loader2, AlertCircle, Wrench, RotateCcw,
 } from 'lucide-react'
 import { t } from '../lib/i18n'
 import { useToastStore } from '../stores/useToastStore'
@@ -48,6 +48,8 @@ export default function GameDetailPage() {
   const [portraitFailed, setPortraitFailed] = useState(false)
   const [videoPlaying, setVideoPlaying] = useState(false)
   const [videoError, setVideoError] = useState(false)
+  const [searchingFix, setSearchingFix] = useState(false)
+  const [resettingGame, setResettingGame] = useState(false)
 
   usePageHeader(
     details ? (
@@ -196,6 +198,63 @@ export default function GameDetailPage() {
       )
     }
   }, [appId, showToast])
+
+  const handleResetGame = useCallback(async () => {
+    if (!appId) return
+    setResettingGame(true)
+    try {
+      const result = await (window as any).ipcRenderer?.invoke('game:reset-for-download', appId)
+      if (result?.success) {
+        showToast('success', '✅ Juego marcado para descargar - abre Steam para comenzar')
+      } else {
+        showToast('error', `Error: ${result?.message || 'Unknown error'}`)
+      }
+    } catch (err: any) {
+      showToast('error', `Error resetting game: ${err.message}`)
+    } finally {
+      setResettingGame(false)
+    }
+  }, [appId, showToast])
+
+  const handleSearchFix = useCallback(async () => {
+    if (!appId) return
+    setSearchingFix(true)
+    try {
+      const apiKey = process.env.VITE_DEPOTBOX_API_KEY || ''
+      const response = await fetch(`https://depotbox.org/api/game-fixes?q=${appId}&tag=online,bypass`, {
+        headers: { 'X-API-Key': apiKey }
+      })
+      const data = await response.json()
+      if (data.games && data.games.length > 0 && data.games[0].fixes && data.games[0].fixes.length > 0) {
+        const fix = data.games[0].fixes[0]
+        const gameName = data.games[0].name
+        showToast('success', `Fix encontrado: ${gameName}`)
+        setConfirmDialog({
+          title: 'Fix disponible',
+          message: `Se encontró un fix online para ${gameName}\n\n¿Descargar e instalar?`,
+          onConfirm: async () => {
+            try {
+              const result = await (window as any).ipcRenderer?.invoke('fix:download-and-apply', appId, fix.id)
+              if (result?.success) {
+                showToast('success', '✅ Fix instalado correctamente')
+              } else {
+                showToast('error', `Error: ${result?.message || 'Unknown error'}`)
+              }
+            } catch (err: any) {
+              showToast('error', `Error installing fix: ${err.message}`)
+            }
+          },
+          variant: 'warning'
+        })
+      } else {
+        showToast('info', 'No se encontraron fixes disponibles para este juego')
+      }
+    } catch (err) {
+      showToast('error', 'Error al buscar fixes: ' + (err as Error).message)
+    } finally {
+      setSearchingFix(false)
+    }
+  }, [appId, showToast, setConfirmDialog])
 
   if (loading) {
     return (
@@ -367,17 +426,55 @@ export default function GameDetailPage() {
             </div>
             <div className="flex gap-3.5 flex-wrap items-center">
               {isInstalled ? (
-                <button
-                  onClick={handlePlay}
-                  className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-base font-bold text-white border-none transition-all hover:brightness-110 hover:-translate-y-px"
-                  style={{
-                    background: 'linear-gradient(135deg,#3BB2F7,#2A8FD1)',
-                    boxShadow: '0 8px 24px rgba(59,178,247,0.35)',
-                  }}
-                >
-                  <Play className="w-5 h-5" />
-                  {t('library.play')}
-                </button>
+                <>
+                  <button
+                    onClick={handlePlay}
+                    className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-base font-bold text-white border-none transition-all hover:brightness-110 hover:-translate-y-px"
+                    style={{
+                      background: 'linear-gradient(135deg,#3BB2F7,#2A8FD1)',
+                      boxShadow: '0 8px 24px rgba(59,178,247,0.35)',
+                    }}
+                  >
+                    <Play className="w-5 h-5" />
+                    {t('library.play')}
+                  </button>
+                  <button
+                    onClick={handleSearchFix}
+                    disabled={searchingFix}
+                    className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-base font-bold text-white border-none transition-all hover:brightness-110 hover:-translate-y-px disabled:opacity-60 disabled:cursor-default"
+                    style={{
+                      background: 'rgba(168,85,247,0.3)',
+                      border: '1px solid rgba(168,85,247,0.5)',
+                      boxShadow: '0 4px 12px rgba(168,85,247,0.2)',
+                    }}
+                    title="Buscar e instalar fixes (bypass, online, etc.)"
+                  >
+                    {searchingFix ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Wrench className="w-5 h-5" />
+                    )}
+                    Fix
+                  </button>
+                  <button
+                    onClick={handleResetGame}
+                    disabled={resettingGame}
+                    className="flex items-center gap-2.5 px-8 py-3.5 rounded-xl text-base font-bold text-white border-none transition-all hover:brightness-110 hover:-translate-y-px disabled:opacity-60 disabled:cursor-default"
+                    style={{
+                      background: 'rgba(59,178,247,0.2)',
+                      border: '1px solid rgba(59,178,247,0.4)',
+                      boxShadow: '0 4px 12px rgba(59,178,247,0.15)',
+                    }}
+                    title="Reiniciar descarga - el juego aparecerá como 'Instalar' en Steam"
+                  >
+                    {resettingGame ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-5 h-5" />
+                    )}
+                    Reiniciar
+                  </button>
+                </>
               ) : (
                 <button
                   onClick={handleInstall}
@@ -402,6 +499,7 @@ export default function GameDetailPage() {
                       ? t('store.queued')
                       : t('store.install')}
                 </button>
+                </>
               )}
               <button
                 onClick={() => setFavorited(!favorited)}
