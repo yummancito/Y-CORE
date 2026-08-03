@@ -1107,19 +1107,20 @@ if (gotTheLock) {
   // silently downgrade installed clients.
   if (app.isPackaged) {
     autoUpdater.autoDownload = true
-    autoUpdater.autoInstallOnAppQuit = true
+    autoUpdater.autoInstallOnAppQuit = false
 
     autoUpdater.on('update-available', (info: { version?: string }) => {
-      logger.info(`Update available: ${info.version ?? 'unknown'}`, 'updater')
+      logger.info(`Update available: ${info.version ?? 'unknown'} — downloading silently`, 'updater')
+      // No notifications sent to UI - completely silent
     })
 
-    autoUpdater.on('download-progress', (progress: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => {
-      logger.info(`Download progress: ${progress.percent.toFixed(0)}%`, 'updater')
+    autoUpdater.on('download-progress', (_progress: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => {
+      // Silent download - no progress notifications
     })
 
     autoUpdater.on('update-downloaded', (info: { version?: string }) => {
-      logger.info(`Update downloaded: ${info.version ?? 'unknown'} — will install on next quit`, 'updater')
-      // Auto-install on app quit (silent, no user interaction)
+      logger.info(`Update downloaded: ${info.version ?? 'unknown'} — will auto-install on quit`, 'updater')
+      // Silent install - no dialogs or messages to UI
     })
 
     autoUpdater.on('checking-for-update', () => {
@@ -1330,6 +1331,15 @@ app.on('before-quit', async () => {
   saveUsername()
   stopSteamLogWatcher()
   shutdownDiscordRpc()
+
+  // Install update if available (silent install on quit)
+  if (app.isPackaged) {
+    try {
+      autoUpdater.quitAndInstall(false, true)
+    } catch {
+      // quitAndInstall might fail if no update is pending - that's ok
+    }
+  }
 })
 
 app.on('window-all-closed', () => {
