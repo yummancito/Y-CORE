@@ -496,18 +496,21 @@ export default function LibraryPage() {
   }, [showToast])
 
   const handleRepairInstallation = useCallback(async (game: InstalledGame) => {
-    const result = await useDownloadEngineStore.getState().repairLocalInstallation(
+    // Step 1: Intenta reparación local primero
+    showToast('info', 'Diagnosticando instalación local...')
+    const localResult = await useDownloadEngineStore.getState().repairLocalInstallation(
       game.appId,
       game.installDir,
     )
-    const diagnostic = result.result
-    if (!result.success || !diagnostic) {
-      showToast('error', result.error || 'No se pudo diagnosticar la instalación')
+    const diagnostic = localResult.result
+    if (!localResult.success || !diagnostic) {
+      showToast('error', localResult.error || 'No se pudo diagnosticar la instalación')
       return
     }
 
     const repaired = diagnostic.repaired?.length ?? 0
     const issues = diagnostic.issues ?? []
+
     if (diagnostic.ok) {
       showToast(
         'success',
@@ -516,10 +519,55 @@ export default function LibraryPage() {
           : 'Diagnóstico completado: la instalación local está consistente.',
         7000,
       )
-    } else {
+      return // Reparación local exitosa
+    }
+
+    // Step 2: Si hay problemas, buscar fix en DepotBox
+    showToast('info', `Buscando fixes en DepotBox para ${game.name}...`)
+    try {
+      const depotboxResult = (await window.steamtools?.gateway?.call(
+        'depotbox:getGameFixes',
+        game.appId
+      )) as any
+
+      if (!depotboxResult?.success || !depotboxResult.fixes || depotboxResult.fixes.length === 0) {
+        showToast(
+          'warning',
+          `${repaired > 0 ? `Se repararon ${repaired} elemento(s). ` : ''}No hay fixes disponibles en DepotBox para este juego.`,
+          10000,
+        )
+        return
+      }
+
+      // Encontró fixes - instalar el mejor
+      const bestFix = depotboxResult.fixes[0] // Ya viene ordenado por prioridad
+      showToast('info', `Descargando ${bestFix.downloadName || bestFix.filename}...`)
+
+      // Step 3: Descargar e instalar el fix
+      const installResult = (await window.steamtools?.gateway?.call(
+        'fix-installer:downloadAndApply',
+        bestFix.id,
+        game.installDir,
+        bestFix.type || 'online'
+      )) as any
+
+      if (installResult?.success) {
+        showToast(
+          'success',
+          `✅ Fix instalado exitosamente!\n${installResult.message}\nAhora puedes jugar ${game.name} sin problemas.`,
+          10000,
+        )
+      } else {
+        showToast(
+          'error',
+          `No se pudo descargar el fix: ${installResult?.error || 'Error desconocido'}`,
+          10000,
+        )
+      }
+    } catch (err: any) {
       showToast(
-        'warning',
-        `${repaired > 0 ? `Se repararon ${repaired} elemento(s). ` : ''}${issues.join(' · ')}. Los archivos del juego que falten requieren una reinstalación normal; no se aplicó ningún bypass.`,
+        'error',
+        `Error buscando fixes: ${err.message}`,
         10000,
       )
     }
