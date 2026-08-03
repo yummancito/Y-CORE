@@ -100,6 +100,9 @@ function candidateDllPaths(): string[] {
   paths.push(
     path.join(root, 'native', 'ycore_steam', 'build', 'Release', 'ycore_steam.dll'),
   )
+  // Also check Program Files for perMachine installations
+  paths.push(path.join('C:\\Program Files\\Y-core\\resources\\native', 'ycore_steam.dll'))
+  paths.push(path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Y-core\\resources\\native', 'ycore_steam.dll'))
   return paths
 }
 

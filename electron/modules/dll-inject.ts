@@ -303,6 +303,21 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
   const destDwmapi = path.join(steamPath, 'dwmapi.dll')
   const destXinput = path.join(steamPath, 'xinput1_4.dll')
 
+  // Localizar ycore_steam.dll (emulador Steam que YCoreTool necesita)
+  let srcSteamDll = ''
+  const steamDllCandidates = [
+    path.join(appRoot, 'resources', 'native', 'ycore_steam.dll'),
+    path.join(appRoot, 'native', 'ycore_steam', 'build', 'Release', 'ycore_steam.dll'),
+    path.join('C:\\Program Files\\Y-core\\resources\\native', 'ycore_steam.dll'),
+  ]
+  for (const candidate of steamDllCandidates) {
+    if (fs.existsSync(candidate)) {
+      srcSteamDll = candidate
+      break
+    }
+  }
+  const destSteamDll = path.join(steamPath, 'ycore_steam.dll')
+
   if (!fs.existsSync(hookPath)) {
     return { success: false, error: 'errors.hook.notFound', installed: false }
   }
@@ -393,9 +408,14 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
       backupExistingFile(destHook)
       backupExistingFile(destDwmapi)
       backupExistingFile(destXinput)
+      if (srcSteamDll) backupExistingFile(destSteamDll)
       fs.copyFileSync(hookPath, destHook)
       fs.copyFileSync(dwmapiPath, destDwmapi)
       fs.copyFileSync(xinputPath, destXinput)
+      if (srcSteamDll) {
+        fs.copyFileSync(srcSteamDll, destSteamDll)
+        logger.info(`Copied ycore_steam.dll to Steam folder`, 'dll-inject')
+      }
       copyHookConfig(steamPath, ostDir)
       // NOTE: Steamless copy removed (native module only)
       // if (fs.existsSync(steamlessSrcDir)) fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true })
@@ -450,9 +470,14 @@ export async function installHookDll(steamPath: string, mode: 'release' | 'debug
     backupExistingFile(destHook)
     backupExistingFile(destDwmapi)
     backupExistingFile(destXinput)
+    if (srcSteamDll) backupExistingFile(destSteamDll)
     fs.copyFileSync(hookPath, destHook)
     fs.copyFileSync(dwmapiPath, destDwmapi)
     fs.copyFileSync(xinputPath, destXinput)
+    if (srcSteamDll) {
+      fs.copyFileSync(srcSteamDll, destSteamDll)
+      logger.info(`Copied ycore_steam.dll to Steam folder`, 'dll-inject')
+    }
     copyHookConfig(steamPath, ostDir)
     // NOTE: Steamless copy removed (native module only)
     // if (fs.existsSync(steamlessSrcDir)) fs.cpSync(steamlessSrcDir, destSteamlessDir, { recursive: true })
