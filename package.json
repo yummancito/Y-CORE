@@ -134,7 +134,12 @@
       ],
       "signAndEditExecutable": false,
       "certificateFile": null,
-      "certificatePassword": null
+      "certificatePassword": null,
+      "signingHashAlgorithms": [
+        "sha256"
+      ],
+      "sign": null,
+      "timeStampServer": "http://timestamp.comodoca.com"
     },
     "nsis": {
       "oneClick": false,
