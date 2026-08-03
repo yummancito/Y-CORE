@@ -511,45 +511,6 @@ export async function smartManifestSync(
 }
 
 export function startAcfWatcher(): void {
-  const steamAppsPath = getSteamAppsPath()
-  const scriptsDir = getLuaScriptsDir()
-  if (!steamAppsPath || !scriptsDir) return
-
-  let isRunning = false
-
-  const check = async () => {
-    if (isRunning) return
-    isRunning = true
-    try {
-      if (!fs.existsSync(steamAppsPath) || !fs.existsSync(scriptsDir)) return
-
-      const luaFiles = (await fs.promises.readdir(scriptsDir)).filter(f => f.toLowerCase().endsWith('.lua'))
-      for (const luaFile of luaFiles) {
-        const appId = path.basename(luaFile, '.lua')
-        const acfPath = path.join(steamAppsPath, `appmanifest_${appId}.acf`)
-        const luaPath = path.join(scriptsDir, luaFile)
-        if (!fs.existsSync(acfPath) || !fs.existsSync(luaPath)) continue
-
-        try {
-          const content = await fs.promises.readFile(acfPath, 'utf-8')
-          if (shouldRepairAcf(content)) {
-            const luaContent = await fs.promises.readFile(luaPath, 'utf-8')
-            const depotSizes = extractDepotSizesFromLua(luaContent)
-            const fixed = patchAcfForDownload(content, depotSizes)
-            await fs.promises.writeFile(acfPath, fixed, 'utf-8')
-            logger.info(`ACF watcher repaired appmanifest_${appId}.acf`, 'acfwatcher')
-          }
-        } catch (err: any) {
-          logger.warn(`ACF watcher failed for ${appId}: ${err.message}`, 'acfwatcher')
-        }
-      }
-    } catch (err: any) {
-      logger.warn(`ACF watcher error: ${err.message}`, 'acfwatcher')
-    } finally {
-      isRunning = false
-    }
-  }
-
-  check()
-  setInterval(check, 5000)
+  // ACF watcher disabled - manifest repair only on manual user action (right-click verify)
+  logger.info('ACF watcher disabled (manifest-sync is manual-only)', 'manifest-sync')
 }
