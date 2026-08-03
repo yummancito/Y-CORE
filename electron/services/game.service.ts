@@ -17,7 +17,7 @@ import {
 } from '../modules/steam-helpers'
 import { configService } from './config.service'
 import { launchGameFromDir } from '../modules/game-process'
-import { patchGameFolder } from '../modules/local-steam-emulator'
+import { patchGameFolder, patchGameFolderWithGoldberg } from '../modules/local-steam-emulator'
 import { removeGameDrm } from '../modules/drm-remover'
 
 // Module-level cache for successful Steam Store API responses.
@@ -318,7 +318,7 @@ export const gameService = {
       //    false — in both cases we can't trust steam_api64.dll to satisfy
       //    the game's Steam probe. Fall back to launching through the real
       //    Steam Client instead of surfacing an internal DLL error to the user.
-      const patch = patchGameFolder(fullGameDir, String(appId))
+      const patch = await patchGameFolderWithGoldberg(fullGameDir, String(appId))
       if (patch.success !== true) {
         logger.warn(
           `[game.service] native launch: emulador no disponible para ${appId} (${patch.error}); intentando fallback a Steam Client`,

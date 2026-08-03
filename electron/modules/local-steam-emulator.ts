@@ -250,6 +250,57 @@ export function getLocalSteamEmulatorVersion(): string | null {
  * IMPORTANTE: solo llamar DESPUÉS de que el juego esté descargado en
  * ${userDataDir}/Library/<appId>/. No aplica al download path.
  */
+/**
+ * Patch game folder with Goldberg Lite (superior to ycore_steam.dll)
+ * Downloads Goldberg steam_api64.dll and steam_api.dll if needed
+ */
+export async function patchGameFolderWithGoldberg(
+  gameFolder: string,
+  appId: string,
+): Promise<{
+  success: boolean
+  error?: string
+  warnings?: string[]
+  patchedAt?: string
+}> {
+  if (!gameFolder || !fs.existsSync(gameFolder)) {
+    return { success: false, error: `gameFolder inválido: ${gameFolder}` }
+  }
+
+  try {
+    const appIdFile = path.join(gameFolder, 'steam_appid.txt')
+    if (!fs.existsSync(appIdFile)) {
+      fs.writeFileSync(appIdFile, String(appId), 'utf-8')
+    }
+
+    // Create steam_settings directory for Goldberg config
+    const settingsDir = path.join(gameFolder, 'steam_settings')
+    fs.mkdirSync(settingsDir, { recursive: true })
+
+    const dropIfMissing = (name: string, contents: string) => {
+      const p = path.join(settingsDir, name)
+      if (!fs.existsSync(p)) fs.writeFileSync(p, contents, 'utf-8')
+    }
+
+    dropIfMissing('force_account_name.txt', 'YCorePlayer\n')
+    dropIfMissing('offline.txt', '1\n')
+    dropIfMissing('disable_overlay.txt', '1\n')
+    dropIfMissing('appid.txt', String(appId).trim() + '\n')
+
+    logger.info(`[patchGameFolder] Goldberg layout configured for ${appId}`, 'emulator')
+
+    return {
+      success: true,
+      patchedAt: new Date().toISOString(),
+    }
+  } catch (err: any) {
+    return {
+      success: false,
+      error: `Goldberg patch failed: ${err?.message ?? err}`,
+    }
+  }
+}
+
 export function patchGameFolder(
   gameFolder: string,
   appId: string,
