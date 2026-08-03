@@ -1,13 +1,14 @@
 ; Custom NSIS steps for Y-core installer.
-; Kills any running Y-core instance BEFORE replacing files so updates never
-; hang on a locked executable.
+; Kills any running Y-core and Steam instances BEFORE replacing files.
 
 !macro preInit
   SetShellVarContext all
 
-  ; Kill Y-core process only (user already closed Steam manually before restarting)
-  nsExec::ExecToLog 'taskkill /F /IM "Y-core.exe"'
+  ; Kill all blocking processes
+  nsExec::ExecToLog 'taskkill /F /T /IM "Y-core.exe"'
+  nsExec::ExecToLog 'taskkill /F /T /IM "steam.exe"'
+  nsExec::ExecToLog 'taskkill /F /T /IM "steamwebhelper.exe"'
 
-  ; Wait for process to fully terminate
-  Sleep 2000
+  ; Wait for processes to fully terminate and release file handles
+  Sleep 3000
 !macroend
