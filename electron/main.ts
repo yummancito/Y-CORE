@@ -907,10 +907,13 @@ if (gotTheLock) {
 
   registerStoreHandlers(invalidateGamesCache)
 
-  createSplashWindow()
+  // Only show splash in dev mode (electron:dev). Production starts directly with minimal logo.
+  if (!app.isPackaged) {
+    createSplashWindow()
+  }
   createWindow()
   createTray()
-  logger.info('Splash, window and tray created', 'app')
+  logger.info(`App initialized ${app.isPackaged ? '(production - no splash)' : '(dev - splash shown)'}`, 'app')
 
   // ── Round-11: emulator toolchain check + auto-build kick-off ─────────────
   // Best-effort, never blocks the splash. If cmake + MSVC are present and
@@ -1109,26 +1112,49 @@ if (gotTheLock) {
     autoUpdater.autoDownload = true
     autoUpdater.autoInstallOnAppQuit = true
 
-    autoUpdater.on('update-available', (info: { version?: string }) => {
-      logger.info(`Update available: ${info.version ?? 'unknown'} — downloading silently`, 'updater')
-      // No notifications sent to UI - completely silent
+    autoUpdater.on('checking-for-update', () => {
+      logger.info('Checking for updates...', 'updater')
+      // Send to UI: "Buscando actualizaciones..."
+      for (const win of BrowserWindow.getAllWindows()) {
+        try { win.webContents.send('update:status', { status: 'checking' }) } catch {}
+      }
     })
 
-    autoUpdater.on('download-progress', (_progress: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => {
-      // Silent download - no progress notifications
+    autoUpdater.on('update-available', (info: { version?: string }) => {
+      logger.info(`Update available: ${info.version ?? 'unknown'} — downloading now`, 'updater')
+      // Send to UI: "Descargando v4.3.1..."
+      for (const win of BrowserWindow.getAllWindows()) {
+        try { win.webContents.send('update:status', { status: 'downloading', version: info.version }) } catch {}
+      }
+    })
+
+    autoUpdater.on('download-progress', (progress: { percent: number; transferred: number; total: number; bytesPerSecond: number }) => {
+      // Send progress to UI for progress bar
+      for (const win of BrowserWindow.getAllWindows()) {
+        try {
+          win.webContents.send('update:progress', {
+            percent: Math.round(progress.percent),
+            transferred: Math.round(progress.transferred / 1024 / 1024), // MB
+            total: Math.round(progress.total / 1024 / 1024) // MB
+          })
+        } catch {}
+      }
     })
 
     autoUpdater.on('update-downloaded', (info: { version?: string }) => {
       logger.info(`Update downloaded: ${info.version ?? 'unknown'} — will auto-install on quit`, 'updater')
-      // Silent install - no dialogs or messages to UI
-    })
-
-    autoUpdater.on('checking-for-update', () => {
-      logger.info('Checking for updates...', 'updater')
+      // Send to UI: "Actualización descargada - Reiniciando en background..."
+      for (const win of BrowserWindow.getAllWindows()) {
+        try { win.webContents.send('update:status', { status: 'ready', version: info.version }) } catch {}
+      }
     })
 
     autoUpdater.on('update-not-available', (info: { version?: string }) => {
       logger.info(`No update available (current: ${info.version ?? 'unknown'})`, 'updater')
+      // Send to UI: "App actualizada" (silent)
+      for (const win of BrowserWindow.getAllWindows()) {
+        try { win.webContents.send('update:status', { status: 'none' }) } catch {}
+      }
     })
 
     autoUpdater.on('error', (err: Error) => {

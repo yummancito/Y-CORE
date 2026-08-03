@@ -379,16 +379,10 @@ export function useInstallProcessor(onRestartPrompt: (prompt: RestartPrompt) => 
       installService.addLog('INFO', `[V2] ${item.name} complete and reported`)
       if (completion.steamNative) {
         // Steam already restarted itself server-side (download.service.ts)
-        // so it can see the new appmanifest and start pulling bytes — this
-        // is just a status confirmation. The button stays as a manual
-        // retry in case that automatic restart silently failed.
-        onRestartPrompt({
-          title: 'Descarga en curso :3',
-          message: `${item.name} está configurado y Steam se reinició para empezar a descargarlo. Si no ves progreso en Steam, tocá reiniciar de nuevo.`,
-          confirmLabel: 'Reiniciar Steam',
-          onConfirm: () => {
-            window.steamtools?.restartSteam?.().catch(() => {})
-          },
+        // Auto-restart without dialogs (seamless user experience)
+        installService.addLog('INFO', `[V2] Auto-restarting Steam in background for ${item.name}`)
+        window.steamtools?.restartSteam?.().catch((err) => {
+          installService.addLog('WARN', `[V2] Auto-restart failed: ${err?.message}, user can manually restart`)
         })
       }
     } catch (err: any) {
