@@ -10,10 +10,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { logger } from '../logger'
-import { exec } from 'child_process'
-import { promisify } from 'util'
+const AdmZip = require('adm-zip')
 
-const execAsync = promisify(exec)
 const DEPOTBOX_API = 'https://depotbox.org/api'
 const DEPOTBOX_API_KEY = process.env.DEPOTBOX_API_KEY || ''
 
@@ -182,7 +180,8 @@ export const fixInstallerService = {
   },
 
   /**
-   * Extrae archivo RAR/ZIP
+   * Extrae archivo ZIP (RAR se descarta - DepotBox entrega en ZIP)
+   * NO usa child_process ni shell execution (Defender safe)
    */
   async extractArchive(archivePath: string, outputDir: string): Promise<{ success: boolean; error?: string }> {
     try {
@@ -192,27 +191,27 @@ export const fixInstallerService = {
 
       const ext = path.extname(archivePath).toLowerCase()
 
-      if (ext === '.rar') {
-        // Usar WinRAR si está disponible
-        const winrarPath = 'C:\\Program Files\\WinRAR\\UnRAR.exe'
-        if (fs.existsSync(winrarPath)) {
-          await execAsync(`"${winrarPath}" x "${archivePath}" "${outputDir}"`)
-          logger.info(`[FixInstaller] Extracted RAR with WinRAR`, 'fix-installer')
+      // Solo soportar ZIP (safe, no shell execution)
+      if (ext === '.zip') {
+        try {
+          const zip = new AdmZip(archivePath)
+          zip.extractAllTo(outputDir, true)
+          logger.info(`[FixInstaller] Extracted ZIP with adm-zip`, 'fix-installer')
           return { success: true }
-        } else {
-          logger.warn(`[FixInstaller] WinRAR not found, trying 7-Zip`, 'fix-installer')
-          // Intentar con 7-Zip
-          await execAsync(`7z x "${archivePath}" -o"${outputDir}"`)
-          logger.info(`[FixInstaller] Extracted RAR with 7-Zip`, 'fix-installer')
-          return { success: true }
+        } catch (zipErr: any) {
+          logger.error(`[FixInstaller] ZIP extraction failed: ${zipErr.message}`, 'fix-installer')
+          return {
+            success: false,
+            error: `Failed to extract ZIP: ${zipErr.message}`,
+          }
         }
-      } else if (ext === '.zip') {
-        // Para ZIP, usar módulo nativo
-        const AdmZip = require('adm-zip')
-        const zip = new AdmZip(archivePath)
-        zip.extractAllTo(outputDir, true)
-        logger.info(`[FixInstaller] Extracted ZIP`, 'fix-installer')
-        return { success: true }
+      } else if (ext === '.rar') {
+        // RAR no es soportado - Defender bloqueará WinRAR/7z execution
+        logger.warn(`[FixInstaller] RAR format not supported (use ZIP instead)`, 'fix-installer')
+        return {
+          success: false,
+          error: 'RAR format not supported. Please download ZIP version from DepotBox.',
+        }
       }
 
       return {
