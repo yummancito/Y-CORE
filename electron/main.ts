@@ -909,13 +909,11 @@ if (gotTheLock) {
 
   registerStoreHandlers(invalidateGamesCache)
 
-  // Only show splash in dev mode (electron:dev). Production starts directly with minimal logo.
-  if (!app.isPackaged) {
-    createSplashWindow()
-  }
+  // No splash screen — go directly to main window (both dev and production)
+  // Splash was removed to improve startup UX
   createWindow()
   createTray()
-  logger.info(`App initialized ${app.isPackaged ? '(production - no splash)' : '(dev - splash shown)'}`, 'app')
+  logger.info(`App initialized (splash disabled - direct launch)`, 'app')
 
   // ── Round-11: emulator toolchain check + auto-build kick-off ─────────────
   // Best-effort, never blocks the splash. If cmake + MSVC are present and
