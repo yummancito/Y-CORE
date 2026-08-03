@@ -1107,7 +1107,7 @@ if (gotTheLock) {
   // silently downgrade installed clients.
   if (app.isPackaged) {
     autoUpdater.autoDownload = true
-    autoUpdater.autoInstallOnAppQuit = false
+    autoUpdater.autoInstallOnAppQuit = true
 
     autoUpdater.on('update-available', (info: { version?: string }) => {
       logger.info(`Update available: ${info.version ?? 'unknown'} — downloading silently`, 'updater')
