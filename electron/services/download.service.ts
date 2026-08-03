@@ -6,8 +6,10 @@
 import { logger } from '../logger'
 import { exec, spawn } from 'child_process'
 import path from 'path'
-import { getSteamPath, closeSteamProcess } from '../modules/steam-helpers'
+import fs from 'fs'
+import { getSteamPath, closeSteamProcess, getSteamLibraryFolders, parseVdf } from '../modules/steam-helpers'
 import { checkAndUpdateOpenSteamTool } from '../modules/opensteamtool-updater'
+import { patchGameFolderWithGoldberg } from '../modules/local-steam-emulator'
 import { installHookDll } from '../modules/dll-inject'
 import { installGameCore } from '../modules/manifest-sync'
 import { getDownloadEngine, DownloadPriority } from '../modules/download-engine'
@@ -175,6 +177,52 @@ export const downloadService = {
       // saw the game and showed "No hay licencias" when the user hit Play —
       // a false success with nothing actually downloaded.
       logger.info(`[DownloadService] Setup complete. Restarting Steam so it picks up the new appmanifest...`, 'services')
+
+      // PASO 3: Patch game folder with Goldberg Lite (post-download)
+      // Se ejecuta en background después de que Steam se reinicia
+      setImmediate(async () => {
+        try {
+          const acfPath = path.join(steamPath, 'steamapps', `appmanifest_${appId}.acf`)
+          if (!fs.existsSync(acfPath)) {
+            logger.warn(`[DownloadService] ACF no encontrado para patching: ${acfPath}`, 'services')
+            return
+          }
+
+          const acfContent = fs.readFileSync(acfPath, 'utf-8')
+          const parsed = parseVdf(acfContent)
+          const installDir = parsed['AppState']?.['installdir'] as string
+          if (!installDir) {
+            logger.warn(`[DownloadService] installdir no encontrado en ACF para ${appId}`, 'services')
+            return
+          }
+
+          const folders = getSteamLibraryFolders()
+          let gameFolder: string | null = null
+          for (const folder of folders) {
+            const candidate = path.join(folder, 'common', installDir)
+            if (fs.existsSync(candidate)) {
+              gameFolder = candidate
+              break
+            }
+          }
+
+          if (!gameFolder) {
+            logger.warn(`[DownloadService] Game folder no encontrado para ${appId}`, 'services')
+            return
+          }
+
+          logger.info(`[DownloadService] Patching game folder con Goldberg: ${gameFolder}`, 'services')
+          const patchResult = await patchGameFolderWithGoldberg(gameFolder, String(appId))
+          if (patchResult.success) {
+            logger.info(`[DownloadService] Goldberg patch exitoso para ${appId}`, 'services')
+          } else {
+            logger.warn(`[DownloadService] Goldberg patch falló: ${patchResult.error}`, 'services')
+          }
+        } catch (err: any) {
+          logger.error(`[DownloadService] Error patching con Goldberg: ${err?.message}`, 'services')
+        }
+      })
+
       try {
         const closeResult = await closeSteamProcess()
         if (closeResult.success) {
